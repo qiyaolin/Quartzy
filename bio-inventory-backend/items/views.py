@@ -1,6 +1,9 @@
 from rest_framework import viewsets, permissions
+from rest_framework.filters import SearchFilter # Import SearchFilter
+from django_filters import rest_framework as filters # Import django_filters
 from .models import Vendor, Location, ItemType, Item
 from .serializers import VendorSerializer, LocationSerializer, ItemTypeSerializer, ItemSerializer
+from .filters import ItemFilter # Import our filter class
 
 class VendorViewSet(viewsets.ModelViewSet):
     """
@@ -29,6 +32,6 @@ class ItemViewSet(viewsets.ModelViewSet):
     """
     queryset = Item.objects.filter(is_archived=False)
     serializer_class = ItemSerializer
-
-    # You can add filtering logic here later
-    # For example: /api/items/?vendor=1
+    filterset_class = ItemFilter # Connect the filter class
+    filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter
+    search_fields = ['name', 'catalog_number', 'vendor__name'] # Define fields that the SearchFilter will search across
