@@ -59,22 +59,22 @@ const AuthProvider = ({ children }) => {
 const SidebarFilter = ({ title, options, selected, onFilterChange }) => {
     const [isOpen, setIsOpen] = useState(true);
     return (
-        <div className="py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
-                <h4 className="font-semibold text-gray-700">{title}</h4>
-                <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <div className="py-4 border-b border-secondary-200">
+            <div className="flex justify-between items-center cursor-pointer group" onClick={() => setIsOpen(!isOpen)}>
+                <h4 className="font-semibold text-secondary-700 group-hover:text-secondary-900 transition-colors">{title}</h4>
+                <ChevronDown className={`w-5 h-5 text-secondary-400 group-hover:text-secondary-600 transition-all duration-200 ${isOpen ? 'rotate-180' : ''}`} />
             </div>
             {isOpen && (
-                <div className="mt-3 max-h-48 overflow-y-auto">
+                <div className="mt-3 max-h-48 overflow-y-auto space-y-2 animate-slide-up">
                     {options.map(option => (
-                        <div key={option.id} className="flex items-center my-2">
+                        <div key={option.id} className="flex items-center group">
                             <input 
                                 type="checkbox" 
                                 id={`${title}-${option.id}`} 
                                 checked={selected.includes(option.id)}
                                 onChange={() => onFilterChange(option.id)}
-                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                            <label htmlFor={`${title}-${option.id}`} className="ml-2 text-gray-600">{option.name}</label>
+                                className="checkbox" />
+                            <label htmlFor={`${title}-${option.id}`} className="ml-2 text-secondary-600 group-hover:text-secondary-900 cursor-pointer transition-colors text-sm">{option.name}</label>
                         </div>
                     ))}
                 </div>
@@ -134,16 +134,59 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center"><div className="bg-white rounded-lg shadow-xl w-full max-w-2xl">
             <div className="p-6 border-b flex justify-between items-center"><h2 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Item' : 'Add New Item'}</h2><button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200"><X className="w-6 h-6 text-gray-600" /></button></div>
-            <form onSubmit={handleSubmit}><div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[60vh] overflow-y-auto">
-                <div className="col-span-2"><label htmlFor="name" className="block text-sm font-medium text-gray-700">Item Name *</label><input type="text" name="name" id="name" value={formData.name} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" /></div>
-                <div><label htmlFor="item_type_id" className="block text-sm font-medium text-gray-700">Type *</label><select name="item_type_id" id="item_type_id" value={formData.item_type_id} onChange={handleChange} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"><option value="">Select...</option>{dropdownData.itemTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}</select></div>
-                <div><label htmlFor="vendor_id" className="block text-sm font-medium text-gray-700">Vendor</label><select name="vendor_id" id="vendor_id" value={formData.vendor_id} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"><option value="">Select...</option>{dropdownData.vendors.map(vendor => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}</select></div>
-                <div><label htmlFor="location_id" className="block text-sm font-medium text-gray-700">Location</label><select name="location_id" id="location_id" value={formData.location_id} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"><option value="">Select...</option>{dropdownData.locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}</select></div>
-                <div><label htmlFor="quantity" className="block text-sm font-medium text-gray-700">Quantity</label><input type="number" name="quantity" id="quantity" value={formData.quantity} onChange={handleChange} step="0.01" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" /></div>
-                <div><label htmlFor="unit" className="block text-sm font-medium text-gray-700">Unit</label><input type="text" name="unit" id="unit" placeholder="e.g., box, kg, mL" value={formData.unit} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" /></div>
-                <div><label htmlFor="price" className="block text-sm font-medium text-gray-700">Unit Price</label><input type="number" name="price" id="price" placeholder="0.00" value={formData.price} onChange={handleChange} step="0.01" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" /></div>
-            </div>{error && <div className="px-6 pb-4 text-red-600 text-sm">{error}</div>}<div className="p-6 bg-gray-50 rounded-b-lg flex justify-end space-x-4"><button type="button" onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancel</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300 flex items-center">{isSubmitting && <Loader className="w-4 h-4 mr-2 animate-spin" />}Save Item</button></div></form>
-        </div></div>
+                <form onSubmit={handleSubmit}>
+                    <div className="card-body grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 max-h-[60vh] overflow-y-auto">
+                        <div className="col-span-2">
+                            <label htmlFor="name" className="block text-sm font-medium text-secondary-700 mb-2">Item Name *</label>
+                            <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} required className="input" placeholder="Enter item name" />
+                        </div>
+                        <div>
+                            <label htmlFor="item_type_id" className="block text-sm font-medium text-secondary-700 mb-2">Type *</label>
+                            <select name="item_type_id" id="item_type_id" value={formData.item_type_id} onChange={handleChange} required className="select">
+                                <option value="">Select type...</option>
+                                {dropdownData.itemTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="vendor_id" className="block text-sm font-medium text-secondary-700 mb-2">Vendor</label>
+                            <select name="vendor_id" id="vendor_id" value={formData.vendor_id} onChange={handleChange} className="select">
+                                <option value="">Select vendor...</option>
+                                {dropdownData.vendors.map(vendor => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="location_id" className="block text-sm font-medium text-secondary-700 mb-2">Location</label>
+                            <select name="location_id" id="location_id" value={formData.location_id} onChange={handleChange} className="select">
+                                <option value="">Select location...</option>
+                                {dropdownData.locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="quantity" className="block text-sm font-medium text-secondary-700 mb-2">Quantity</label>
+                            <input type="number" name="quantity" id="quantity" value={formData.quantity} onChange={handleChange} step="0.01" className="input" placeholder="1.00" />
+                        </div>
+                        <div>
+                            <label htmlFor="unit" className="block text-sm font-medium text-secondary-700 mb-2">Unit</label>
+                            <input type="text" name="unit" id="unit" placeholder="e.g., box, kg, mL" value={formData.unit} onChange={handleChange} className="input" />
+                        </div>
+                        <div>
+                            <label htmlFor="price" className="block text-sm font-medium text-secondary-700 mb-2">Unit Price</label>
+                            <input type="number" name="price" id="price" placeholder="0.00" value={formData.price} onChange={handleChange} step="0.01" className="input" />
+                        </div>
+                    </div>
+                    {error && <div className="px-6 pb-4 text-danger-600 text-sm bg-danger-50 rounded-lg mx-6 mb-4 p-3">{error}</div>}
+                    <div className="p-6 bg-secondary-50 border-t border-secondary-200 rounded-b-xl flex justify-end space-x-3">
+                        <button type="button" onClick={onClose} className="btn btn-secondary">
+                            Cancel
+                        </button>
+                        <button type="submit" disabled={isSubmitting} className="btn btn-primary">
+                            {isSubmitting && <div className="loading-spinner w-4 h-4 mr-2"></div>}
+                            {isEditMode ? 'Update Item' : 'Save Item'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
 };
 const ConfirmDeleteModal = ({ isOpen, onClose, onConfirm, itemName }) => {
@@ -371,34 +414,132 @@ const ConfirmDeleteUserModal = ({ isOpen, onClose, onConfirm, userName }) => {
 const Pagination = ({ currentPage, totalItems, itemsPerPage, onPageChange }) => {
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     if (totalPages <= 1) return null;
-    return <div className="flex items-center justify-between text-sm text-gray-600"><div>Showing {Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)} to {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} results</div><div className="flex items-center space-x-2"><button onClick={() => onPageChange(1)} disabled={currentPage === 1} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronsLeft className="w-5 h-5" /></button><button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronLeft className="w-5 h-5" /></button><span className="px-2">Page {currentPage} of {totalPages}</span><button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronRight className="w-5 h-5" /></button><button onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"><ChevronsRight className="w-5 h-5" /></button></div></div>;
+    
+    return (
+        <div className="flex items-center justify-between text-sm">
+            <div className="text-secondary-600">
+                Showing <span className="font-medium text-secondary-900">{Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}</span> to{' '}
+                <span className="font-medium text-secondary-900">{Math.min(currentPage * itemsPerPage, totalItems)}</span> of{' '}
+                <span className="font-medium text-secondary-900">{totalItems}</span> results
+            </div>
+            <div className="flex items-center space-x-1">
+                <button 
+                    onClick={() => onPageChange(1)} 
+                    disabled={currentPage === 1} 
+                    className="p-2 rounded-lg hover:bg-secondary-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-secondary-600 hover:text-secondary-900"
+                    title="First page"
+                >
+                    <ChevronsLeft className="w-4 h-4" />
+                </button>
+                <button 
+                    onClick={() => onPageChange(currentPage - 1)} 
+                    disabled={currentPage === 1} 
+                    className="p-2 rounded-lg hover:bg-secondary-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-secondary-600 hover:text-secondary-900"
+                    title="Previous page"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="px-4 py-2 text-secondary-700">
+                    <span className="font-medium">Page {currentPage}</span>
+                    <span className="text-secondary-500"> of {totalPages}</span>
+                </div>
+                <button 
+                    onClick={() => onPageChange(currentPage + 1)} 
+                    disabled={currentPage === totalPages} 
+                    className="p-2 rounded-lg hover:bg-secondary-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-secondary-600 hover:text-secondary-900"
+                    title="Next page"
+                >
+                    <ChevronRight className="w-4 h-4" />
+                </button>
+                <button 
+                    onClick={() => onPageChange(totalPages)} 
+                    disabled={currentPage === totalPages} 
+                    className="p-2 rounded-lg hover:bg-secondary-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-secondary-600 hover:text-secondary-900"
+                    title="Last page"
+                >
+                    <ChevronsRight className="w-4 h-4" />
+                </button>
+            </div>
+        </div>
+    );
 };
 
 // --- SHARED & LAYOUT COMPONENTS ---
 const Header = ({ activePage, onNavigate }) => {
     const { user, logout } = useContext(AuthContext);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    
     return (
-        <header className="bg-white h-16 flex items-center justify-between px-6 border-b border-gray-200 sticky top-0 z-30">
-            <div className="flex items-center">
-                <div className="flex items-center space-x-2 mr-6"><div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md"></div><span className="font-bold text-lg text-gray-800">Hayer Lab</span><ChevronDown className="w-5 h-5 text-gray-500" /></div>
-                <nav className="flex items-center space-x-1">
-                    <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('requests')}} className={`flex items-center px-3 py-2 text-sm font-medium ${activePage === 'requests' ? 'text-gray-900 bg-gray-100 rounded-md' : 'text-gray-500 hover:text-gray-900'}`}><FileText className="w-4 h-4 mr-2"/>Requests</a>
-                    <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('orders')}} className={`flex items-center px-3 py-2 text-sm font-medium ${activePage === 'orders' ? 'text-gray-900 bg-gray-100 rounded-md' : 'text-gray-500 hover:text-gray-900'}`}><ShoppingCart className="w-4 h-4 mr-2"/>Orders</a>
-                    <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('inventory')}} className={`flex items-center px-3 py-2 text-sm font-medium ${activePage === 'inventory' ? 'text-gray-900 bg-gray-100 rounded-md' : 'text-gray-500 hover:text-gray-900'}`}><Inbox className="w-4 h-4 mr-2"/>Inventory</a>
-                    {user?.is_staff && <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('users')}} className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 hover:text-gray-900"><Users className="w-4 h-4 mr-2"/>Manage Users</a>}
-                </nav>
-            </div>
-            <div className="flex items-center flex-grow max-w-md mx-4"><div className="relative w-full"><input type="text" placeholder="Search Quartzy" className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-md" /><Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" /></div></div>
-            <div className="flex items-center space-x-4">
-                <div className="relative">
-                    <button className="w-8 h-8 bg-red-200 rounded-full flex items-center justify-center text-red-700 font-bold text-sm" onClick={() => document.getElementById('logout-menu').classList.toggle('hidden')}>
-                        {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
+        <header className="bg-white/95 backdrop-blur-sm border-b border-secondary-200 sticky top-0 z-30 shadow-soft">
+            <div className="h-16 flex items-center justify-between px-4 md:px-6">
+                <div className="flex items-center">
+                    <div className="flex items-center space-x-3 mr-4 md:mr-8">
+                        <div className="w-9 h-9 gradient-primary rounded-xl flex items-center justify-center shadow-soft">
+                            <div className="w-5 h-5 bg-white rounded-sm opacity-90"></div>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="font-bold text-lg text-secondary-900">Hayer Lab</span>
+                            <span className="text-xs text-secondary-500 -mt-1 hidden sm:block">Bio Inventory</span>
+                        </div>
+                    </div>
+                    
+                    {/* Mobile menu button */}
+                    <button 
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                        className="md:hidden p-2 rounded-lg hover:bg-secondary-100 transition-colors"
+                    >
+                        <MoreVertical className="w-5 h-5 text-secondary-600" />
                     </button>
-                    <div id="logout-menu" className="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border">
-                        <a href="#" onClick={(e) => {e.preventDefault(); logout();}} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><LogOut className="w-4 h-4 mr-2" /> Logout</a>
+                    
+                    <nav className="hidden md:flex items-center space-x-1">
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('requests')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'requests' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><FileText className="w-4 h-4 mr-2"/>Requests</a>
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('orders')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'orders' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><ShoppingCart className="w-4 h-4 mr-2"/>Orders</a>
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('inventory')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'inventory' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Package className="w-4 h-4 mr-2"/>Inventory</a>
+                        {user?.is_staff && <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('users')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'users' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Users className="w-4 h-4 mr-2"/>Users</a>}
+                    </nav>
+                </div>
+                
+                <div className="hidden lg:flex items-center flex-grow max-w-md mx-6">
+                    <div className="relative w-full">
+                        <input type="text" placeholder="Search everything..." className="input pl-10 bg-secondary-50/50 border-secondary-200 placeholder-secondary-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
+                    </div>
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                    <div className="relative group">
+                        <button className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center text-white font-semibold text-sm shadow-soft hover:shadow-medium transition-all duration-200 group-hover:scale-105" onClick={() => document.getElementById('logout-menu').classList.toggle('hidden')}>
+                            {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
+                        </button>
+                        <div id="logout-menu" className="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-strong border border-secondary-200 overflow-hidden animate-slide-up">
+                            <div className="px-4 py-3 border-b border-secondary-100">
+                                <p className="text-sm font-medium text-secondary-900">{user?.username}</p>
+                                <p className="text-xs text-secondary-500">{user?.email || 'No email'}</p>
+                            </div>
+                            <a href="#" onClick={(e) => {e.preventDefault(); logout();}} className="flex items-center px-4 py-3 text-sm text-secondary-700 hover:bg-secondary-50 transition-colors"><LogOut className="w-4 h-4 mr-3 text-secondary-400" /> Logout</a>
+                        </div>
                     </div>
                 </div>
             </div>
+            
+            {/* Mobile navigation menu */}
+            {isMobileMenuOpen && (
+                <div className="md:hidden border-t border-secondary-200 bg-white">
+                    <nav className="px-4 py-4 space-y-2">
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('requests'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'requests' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><FileText className="w-4 h-4 mr-3"/>Requests</a>
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('orders'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'orders' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><ShoppingCart className="w-4 h-4 mr-3"/>Orders</a>
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('inventory'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'inventory' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Package className="w-4 h-4 mr-3"/>Inventory</a>
+                        {user?.is_staff && <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('users'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'users' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Users className="w-4 h-4 mr-3"/>Users</a>}
+                        
+                        <div className="pt-4 mt-4 border-t border-secondary-200">
+                            <div className="relative">
+                                <input type="text" placeholder="Search everything..." className="input pl-10 bg-secondary-50/50 border-secondary-200 placeholder-secondary-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
+                            </div>
+                        </div>
+                    </nav>
+                </div>
+            )}
         </header>
     );
 };
@@ -406,23 +547,41 @@ const Header = ({ activePage, onNavigate }) => {
 
 // --- INVENTORY PAGE COMPONENTS ---
 const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptions }) => (
-    <aside className="w-72 bg-gray-50 border-r border-gray-200 p-6 flex flex-col h-full">
-        <div className="flex-grow overflow-y-auto -mr-6 pr-6">
-            <button onClick={onAddItemClick} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"><PlusCircle className="w-5 h-5" /><span>Add Item</span></button>
-            <div className="relative my-4">
-                <form onSubmit={(e) => { e.preventDefault(); onFilterChange('search', e.target.elements.search.value); }}>
-                    <input type="text" name="search" placeholder="Search inventory" className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md" />
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                </form>
+    <aside className="sidebar w-80 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
+        <div className="flex-grow overflow-y-auto space-y-6">
+            <div className="space-y-4">
+                <button onClick={onAddItemClick} className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5">
+                    <PlusCircle className="w-5 h-5 mr-2" />
+                    <span>Add New Item</span>
+                </button>
+                
+                <div className="relative">
+                    <form onSubmit={(e) => { e.preventDefault(); onFilterChange('search', e.target.elements.search.value); }}>
+                        <input type="text" name="search" placeholder="Search inventory..." className="input pl-10 bg-secondary-50/50 border-secondary-200" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
+                    </form>
+                </div>
             </div>
-            <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider">Filters</h3>
-            <SidebarFilter title="Location" options={filterOptions.locations} selected={filters.location} onFilterChange={(id) => onFilterChange('location', id)} />
-            <SidebarFilter title="Type" options={filterOptions.itemTypes} selected={filters.item_type} onFilterChange={(id) => onFilterChange('item_type', id)} />
-            <SidebarFilter title="Vendor" options={filterOptions.vendors} selected={filters.vendor} onFilterChange={(id) => onFilterChange('vendor', id)} />
+            
+            <div>
+                <h3 className="text-xs font-bold uppercase text-secondary-400 tracking-wider mb-4">Filters</h3>
+                <div className="space-y-1">
+                    <SidebarFilter title="Location" options={filterOptions.locations} selected={filters.location} onFilterChange={(id) => onFilterChange('location', id)} />
+                    <SidebarFilter title="Type" options={filterOptions.itemTypes} selected={filters.item_type} onFilterChange={(id) => onFilterChange('item_type', id)} />
+                    <SidebarFilter title="Vendor" options={filterOptions.vendors} selected={filters.vendor} onFilterChange={(id) => onFilterChange('vendor', id)} />
+                </div>
+            </div>
         </div>
-        <div className="pt-4 border-t border-gray-200">
-            <button className="w-full text-gray-600 hover:bg-gray-200 font-medium py-2 px-4 rounded-md flex items-center justify-center space-x-2 my-1"><Upload className="w-5 h-5" /><span>Import Inventory</span></button>
-            <button className="w-full text-gray-600 hover:bg-gray-200 font-medium py-2 px-4 rounded-md flex items-center justify-center space-x-2 my-1"><Download className="w-5 h-5" /><span>Export Inventory</span></button>
+        
+        <div className="pt-6 border-t border-secondary-200 space-y-2">
+            <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+                <Upload className="w-4 h-4 mr-2" />
+                <span>Import Data</span>
+            </button>
+            <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+                <Download className="w-4 h-4 mr-2" />
+                <span>Export Data</span>
+            </button>
         </div>
     </aside>
 );
@@ -430,43 +589,78 @@ const InventoryTable = ({ groupedData, onEdit, onDelete }) => {
     const [expandedGroups, setExpandedGroups] = useState({});
     const toggleGroup = (groupId) => { setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] })); };
     return (
-        <table className="min-w-full bg-white">
-            <thead className="bg-gray-50"><tr>
-                <th className="p-4 w-12"><input type="checkbox" className="h-4 w-4 rounded border-gray-300" /></th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Item Name</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Vendor</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total Amount</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="p-4 w-24"></th>
-            </tr></thead>
-            <tbody className="divide-y divide-gray-200">
-                {Object.values(groupedData).map(group => (
-                    <React.Fragment key={group.id}>
-                        <tr className="bg-gray-50 hover:bg-gray-100">
-                            <td className="p-4"><input type="checkbox" className="h-4 w-4 rounded border-gray-300" /></td>
-                            <td className="p-4 text-sm text-gray-900 font-medium"><button onClick={() => toggleGroup(group.id)} className="flex items-center"><ChevronDown className={`w-4 h-4 mr-2 transition-transform ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />{group.name}</button></td>
-                            <td className="p-4 text-sm text-gray-500">{group.vendor.name}</td>
-                            <td className="p-4 text-sm text-gray-500">{group.totalQuantity.toFixed(2)} {group.instances[0].unit}</td>
-                            <td className="p-4 text-sm text-gray-500">{group.item_type.name}</td>
-                            <td></td>
-                        </tr>
-                        {expandedGroups[group.id] && group.instances.map(instance => (
-                            <tr key={instance.id} className="bg-white hover:bg-gray-50">
-                                <td></td>
-                                <td className="pl-16 pr-4 py-2 text-sm text-gray-700">In: {instance.location?.name || 'N/A'}</td>
-                                <td className="p-2 text-sm text-gray-500">Owner: {instance.owner?.username || 'N/A'}</td>
-                                <td className="p-2 text-sm text-gray-500">{parseFloat(instance.quantity).toFixed(2)} {instance.unit}</td>
-                                <td className="p-2 text-sm text-gray-500">Updated: {new Date(instance.updated_at).toLocaleDateString()}</td>
-                                <td className="p-2 text-sm text-right pr-4">
-                                    <button onClick={() => onEdit(instance)} className="p-1 hover:bg-gray-200 rounded-full"><Edit className="w-4 h-4 text-gray-600" /></button>
-                                    <button onClick={() => onDelete(instance)} className="p-1 hover:bg-gray-200 rounded-full"><Trash2 className="w-4 h-4 text-red-600" /></button>
+        <div className="overflow-x-auto">
+            <table className="table">
+                <thead className="table-header"><tr>
+                    <th className="table-header-cell w-12"><input type="checkbox" className="checkbox" /></th>
+                    <th className="table-header-cell">Item Name</th>
+                    <th className="table-header-cell">Vendor</th>
+                    <th className="table-header-cell">Total Amount</th>
+                    <th className="table-header-cell">Type</th>
+                    <th className="table-header-cell w-24">Actions</th>
+                </tr></thead>
+                <tbody className="table-body">
+                    {Object.values(groupedData).map(group => (
+                        <React.Fragment key={group.id}>
+                            <tr className="bg-secondary-25 hover:bg-secondary-50 transition-colors duration-150">
+                                <td className="table-cell"><input type="checkbox" className="checkbox" /></td>
+                                <td className="table-cell">
+                                    <button onClick={() => toggleGroup(group.id)} className="flex items-center font-medium text-secondary-900 hover:text-primary-700 transition-colors group">
+                                        <ChevronDown className={`w-4 h-4 mr-2 text-secondary-400 group-hover:text-primary-500 transition-all duration-200 ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />
+                                        {group.name}
+                                    </button>
                                 </td>
+                                <td className="table-cell text-secondary-600">{group.vendor?.name || 'N/A'}</td>
+                                <td className="table-cell">
+                                    <span className="font-medium text-secondary-900">{group.totalQuantity.toFixed(2)}</span>
+                                    <span className="text-secondary-500 ml-1">{group.instances[0]?.unit}</span>
+                                </td>
+                                <td className="table-cell">
+                                    <span className="badge badge-secondary">{group.item_type?.name || 'N/A'}</span>
+                                </td>
+                                <td className="table-cell"></td>
                             </tr>
-                        ))}
-                    </React.Fragment>
-                ))}
-            </tbody>
-        </table>
+                            {expandedGroups[group.id] && group.instances.map(instance => (
+                                <tr key={instance.id} className="table-row">
+                                    <td className="table-cell"></td>
+                                    <td className="table-cell pl-16">
+                                        <div className="text-sm text-secondary-700">
+                                            <span className="text-secondary-500">Location:</span> {instance.location?.name || 'N/A'}
+                                        </div>
+                                    </td>
+                                    <td className="table-cell">
+                                        <div className="text-sm text-secondary-600">
+                                            <span className="text-secondary-500">Owner:</span> {instance.owner?.username || 'N/A'}
+                                        </div>
+                                    </td>
+                                    <td className="table-cell">
+                                        <div className="text-sm">
+                                            <span className="font-medium text-secondary-900">{parseFloat(instance.quantity).toFixed(2)}</span>
+                                            <span className="text-secondary-500 ml-1">{instance.unit}</span>
+                                        </div>
+                                    </td>
+                                    <td className="table-cell">
+                                        <div className="text-sm text-secondary-500">
+                                            {new Date(instance.updated_at).toLocaleDateString()}
+                                        </div>
+                                    </td>
+                                    <td className="table-cell">
+                                        <div className="flex items-center space-x-1">
+                                            <button onClick={() => onEdit(instance)} className="p-2 hover:bg-primary-50 rounded-lg transition-colors group">
+                                                <Edit className="w-4 h-4 text-secondary-400 group-hover:text-primary-600" />
+                                            </button>
+                                            <button onClick={() => onDelete(instance)} className="p-2 hover:bg-danger-50 rounded-lg transition-colors group">
+                                                <Trash2 className="w-4 h-4 text-secondary-400 group-hover:text-danger-600" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </React.Fragment>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     );
 };
 const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters, filterOptions }) => {
@@ -510,15 +704,35 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters, filterOp
     }, [token, refreshKey, filters]);
 
     return (
-        <main className="flex-grow p-8 overflow-y-auto">
-            <div className="flex justify-between items-center mb-6"><h1 className="text-3xl font-bold text-gray-900">Inventory</h1></div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                {loading && <div className="flex justify-center items-center h-64"><Loader className="w-8 h-8 animate-spin text-blue-500" /><span className="ml-4 text-gray-500">Loading Inventory...</span></div>}
-                {error && <div className="flex flex-col justify-center items-center h-64 text-red-600 bg-red-50 p-4"><AlertTriangle className="w-12 h-12 mb-4" /><h3 className="text-lg font-semibold">Failed to load data</h3><p className="text-sm">{error}</p></div>}
+        <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold text-secondary-900 mb-2">Inventory</h1>
+                    <p className="text-secondary-600">Manage and track your laboratory inventory</p>
+                </div>
+            </div>
+            <div className="card overflow-hidden">
+                {loading && (
+                    <div className="flex justify-center items-center h-64">
+                        <div className="text-center">
+                            <div className="loading-spinner w-8 h-8 mx-auto mb-4"></div>
+                            <p className="text-secondary-600">Loading Inventory...</p>
+                        </div>
+                    </div>
+                )}
+                {error && (
+                    <div className="flex flex-col justify-center items-center h-64 text-danger-600 bg-danger-50 p-6 rounded-lg m-6">
+                        <AlertTriangle className="w-12 h-12 mb-4 text-danger-500" />
+                        <h3 className="text-lg font-semibold text-danger-800">Failed to load data</h3>
+                        <p className="text-sm text-danger-600 mt-2">{error}</p>
+                    </div>
+                )}
                 {!loading && !error && (
                     <>
                         <InventoryTable groupedData={groupedInventory} onEdit={onEditItem} onDelete={onDeleteItem} />
-                        <div className="p-4"><Pagination currentPage={currentPage} totalItems={Object.keys(groupedInventory).length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} /></div>
+                        <div className="p-6 border-t border-secondary-200 bg-secondary-50/50">
+                            <Pagination currentPage={currentPage} totalItems={Object.keys(groupedInventory).length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
+                        </div>
                     </>
                 )}
             </div>
@@ -529,60 +743,119 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters, filterOp
 
 // --- REQUESTS PAGE COMPONENTS ---
 const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOptions }) => (
-    <aside className="w-72 bg-gray-50 border-r border-gray-200 p-6 flex flex-col h-full">
-        <div className="flex-grow overflow-y-auto -mr-6 pr-6">
-            <button onClick={onAddRequestClick} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors">
-                <PlusCircle className="w-5 h-5" /><span>Add Request</span>
-            </button>
-            <div className="relative my-4">
-                <form onSubmit={(e) => { e.preventDefault(); onFilterChange('search', e.target.elements.search.value); }}>
-                    <input type="text" name="search" placeholder="Search requests" className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md" />
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                </form>
+    <aside className="sidebar w-80 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
+        <div className="flex-grow overflow-y-auto space-y-6">
+            <div className="space-y-4">
+                <button onClick={onAddRequestClick} className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5">
+                    <PlusCircle className="w-5 h-5 mr-2" />
+                    <span>New Request</span>
+                </button>
+                
+                <div className="relative">
+                    <form onSubmit={(e) => { e.preventDefault(); onFilterChange('search', e.target.elements.search.value); }}>
+                        <input type="text" name="search" placeholder="Search requests..." className="input pl-10 bg-secondary-50/50 border-secondary-200" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
+                    </form>
+                </div>
             </div>
-            <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider">Filters</h3>
-            <SidebarFilter title="Vendor" options={filterOptions.vendors} selected={filters.vendor} onFilterChange={(id) => onFilterChange('vendor', id)} />
-            <SidebarFilter title="Requested By" options={filterOptions.users} selected={filters.requested_by} onFilterChange={(id) => onFilterChange('requested_by', id)} />
+            
+            <div>
+                <h3 className="text-xs font-bold uppercase text-secondary-400 tracking-wider mb-4">Filters</h3>
+                <div className="space-y-1">
+                    <SidebarFilter title="Vendor" options={filterOptions.vendors} selected={filters.vendor} onFilterChange={(id) => onFilterChange('vendor', id)} />
+                    <SidebarFilter title="Requested By" options={filterOptions.users} selected={filters.requested_by} onFilterChange={(id) => onFilterChange('requested_by', id)} />
+                </div>
+            </div>
         </div>
-        <div className="pt-4 border-t border-gray-200">
-            <button className="w-full text-gray-600 hover:bg-gray-200 font-medium py-2 px-4 rounded-md flex items-center justify-center space-x-2 my-1"><Upload className="w-5 h-5" /><span>Import Requests</span></button>
-            <button className="w-full text-gray-600 hover:bg-gray-200 font-medium py-2 px-4 rounded-md flex items-center justify-center space-x-2 my-1"><Download className="w-5 h-5" /><span>Export Requests</span></button>
+        
+        <div className="pt-6 border-t border-secondary-200 space-y-2">
+            <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+                <Upload className="w-4 h-4 mr-2" />
+                <span>Import Data</span>
+            </button>
+            <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+                <Download className="w-4 h-4 mr-2" />
+                <span>Export Data</span>
+            </button>
         </div>
     </aside>
 );
 const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onReorder, onShowHistory }) => {
-    const { user } = useContext(AuthContext); // Get user from context
+    const { user } = useContext(AuthContext);
+    
+    const getStatusBadge = (status) => {
+        const statusConfig = {
+            'NEW': { class: 'badge-warning', label: 'New' },
+            'APPROVED': { class: 'badge-success', label: 'Approved' },
+            'ORDERED': { class: 'badge-primary', label: 'Ordered' },
+            'RECEIVED': { class: 'badge-secondary', label: 'Received' }
+        };
+        const config = statusConfig[status] || { class: 'badge-secondary', label: status };
+        return <span className={`badge ${config.class}`}>{config.label}</span>;
+    };
+    
     return (
-        <table className="min-w-full bg-white">
-            <thead className="bg-gray-50"><tr>
-                <th className="p-4 w-8"><input type="checkbox" className="h-4 w-4 rounded border-gray-300" /></th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Item Name</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Vendor</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">From</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Updated</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr></thead>
-            <tbody className="divide-y divide-gray-200">
-                {requests.map(req => (
-                    <tr key={req.id} className="hover:bg-gray-50">
-                        <td className="p-4"><input type="checkbox" className="h-4 w-4 rounded border-gray-300" /></td>
-                        <td className="p-4 text-sm text-gray-900 font-medium">{req.item_name}{req.notes && <p className="text-xs text-gray-500 mt-1">{req.notes}</p>}</td>
-                        <td className="p-4 text-sm text-gray-500">{req.vendor?.name || 'N/A'}</td>
-                        <td className="p-4 text-sm text-gray-500">${req.unit_price}</td>
-                        <td className="p-4 text-sm text-gray-500">{req.requested_by?.username || 'N/A'}</td>
-                        <td className="p-4 text-sm text-gray-500">{new Date(req.updated_at).toLocaleDateString()}</td>
-                        <td className="p-4 text-sm text-gray-500 space-x-2">
-                            {user?.is_staff && req.status === 'NEW' && <button onClick={() => onApprove(req.id)} className="px-3 py-1 text-xs font-semibold text-green-700 bg-green-100 rounded-full hover:bg-green-200">Approve</button>}
-                            {req.status === 'APPROVED' && <button onClick={() => onPlaceOrder(req.id)} className="px-3 py-1 text-xs font-semibold text-yellow-700 bg-yellow-100 rounded-full hover:bg-yellow-200">Place Order</button>}
-                            {req.status === 'ORDERED' && <button onClick={() => onMarkReceived(req)} className="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200">Mark Received</button>}
-                            {req.status === 'RECEIVED' && <button onClick={() => onReorder(req.id)} className="px-3 py-1 text-xs font-semibold text-purple-700 bg-purple-100 rounded-full hover:bg-purple-200">Reorder</button>}
-                            <button onClick={() => onShowHistory(req.id)} className="p-1 hover:bg-gray-200 rounded-full"><History className="w-4 h-4 text-gray-600" /></button>
-                        </td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
+        <div className="overflow-x-auto">
+            <table className="table">
+                <thead className="table-header"><tr>
+                    <th className="table-header-cell w-12"><input type="checkbox" className="checkbox" /></th>
+                    <th className="table-header-cell">Item Details</th>
+                    <th className="table-header-cell">Vendor</th>
+                    <th className="table-header-cell">Price</th>
+                    <th className="table-header-cell">Requested By</th>
+                    <th className="table-header-cell">Status</th>
+                    <th className="table-header-cell">Actions</th>
+                </tr></thead>
+                <tbody className="table-body">
+                    {requests.map(req => (
+                        <tr key={req.id} className="table-row">
+                            <td className="table-cell"><input type="checkbox" className="checkbox" /></td>
+                            <td className="table-cell">
+                                <div>
+                                    <div className="font-medium text-secondary-900">{req.item_name}</div>
+                                    {req.notes && <p className="text-xs text-secondary-500 mt-1 line-clamp-2">{req.notes}</p>}
+                                    {req.catalog_number && <p className="text-xs text-secondary-400 mt-1">Cat: {req.catalog_number}</p>}
+                                </div>
+                            </td>
+                            <td className="table-cell text-secondary-600">{req.vendor?.name || 'N/A'}</td>
+                            <td className="table-cell">
+                                <div className="font-mono font-medium text-secondary-900">${req.unit_price}</div>
+                                {req.quantity > 1 && <div className="text-xs text-secondary-500">Qty: {req.quantity}</div>}
+                            </td>
+                            <td className="table-cell text-secondary-600">{req.requested_by?.username || 'N/A'}</td>
+                            <td className="table-cell">{getStatusBadge(req.status)}</td>
+                            <td className="table-cell">
+                                <div className="flex items-center space-x-2">
+                                    {user?.is_staff && req.status === 'NEW' && (
+                                        <button onClick={() => onApprove(req.id)} className="btn btn-success px-3 py-1 text-xs">
+                                            Approve
+                                        </button>
+                                    )}
+                                    {req.status === 'APPROVED' && (
+                                        <button onClick={() => onPlaceOrder(req.id)} className="btn btn-warning px-3 py-1 text-xs">
+                                            Place Order
+                                        </button>
+                                    )}
+                                    {req.status === 'ORDERED' && (
+                                        <button onClick={() => onMarkReceived(req)} className="btn btn-primary px-3 py-1 text-xs">
+                                            Mark Received
+                                        </button>
+                                    )}
+                                    {req.status === 'RECEIVED' && (
+                                        <button onClick={() => onReorder(req.id)} className="btn btn-secondary px-3 py-1 text-xs">
+                                            Reorder
+                                        </button>
+                                    )}
+                                    <button onClick={() => onShowHistory(req.id)} className="p-2 hover:bg-secondary-50 rounded-lg transition-colors group">
+                                        <History className="w-4 h-4 text-secondary-400 group-hover:text-secondary-600" />
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     );
 };
 const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }) => {
@@ -644,20 +917,60 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
 
     return (
         <>
-            <main className="flex-grow p-8 overflow-y-auto">
-                <div className="flex justify-between items-center mb-6"><h1 className="text-3xl font-bold text-gray-900">Requests</h1></div>
-                <div className="border-b border-gray-200"><nav className="-mb-px flex space-x-6">
-                    {statusTabs.map(tab => {
-                        const count = requests.filter(r => r.status === tab.key).length;
-                        return (<button key={tab.key} onClick={() => onFilterChange('status', tab.key)} className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${filters.status === tab.key ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`}>
-                            {tab.label} <span className={`ml-2 py-0.5 px-2 rounded-full text-xs font-medium ${filters.status === tab.key ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-900'}`}>{count}</span>
-                        </button>);
-                    })}
-                </nav></div>
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mt-6">
-                    {loading && <div className="flex justify-center items-center h-64"><Loader className="w-8 h-8 animate-spin text-blue-500" /><span className="ml-4 text-gray-500">Loading Requests...</span></div>}
-                    {error && <div className="flex flex-col justify-center items-center h-64 text-red-600 bg-red-50 p-4"><AlertTriangle className="w-12 h-12 mb-4" /><h3 className="text-lg font-semibold">Failed to load data</h3><p className="text-sm">{error}</p></div>}
-                    {!loading && !error && <RequestsTable requests={requests.filter(r => r.status === filters.status)} onApprove={handleApprove} onPlaceOrder={handlePlaceOrder} onMarkReceived={handleMarkReceived} onReorder={handleReorder} onShowHistory={handleShowHistory} />}
+            <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-secondary-900 mb-2">Requests</h1>
+                        <p className="text-secondary-600">Track and manage purchase requests</p>
+                    </div>
+                </div>
+                
+                <div className="bg-white rounded-xl border border-secondary-200 overflow-hidden shadow-soft mb-6">
+                    <nav className="flex border-b border-secondary-200 bg-secondary-50/30">
+                        {statusTabs.map(tab => {
+                            const count = requests.filter(r => r.status === tab.key).length;
+                            return (
+                                <button 
+                                    key={tab.key} 
+                                    onClick={() => onFilterChange('status', tab.key)} 
+                                    className={`flex items-center px-6 py-4 text-sm font-medium transition-all duration-200 border-b-2 ${filters.status === tab.key ? 'border-primary-500 text-primary-700 bg-white' : 'border-transparent text-secondary-600 hover:text-secondary-900 hover:bg-white/50'}`}
+                                >
+                                    <span>{tab.label}</span>
+                                    <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${filters.status === tab.key ? 'bg-primary-100 text-primary-700' : 'bg-secondary-100 text-secondary-600'}`}>
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </div>
+                
+                <div className="card overflow-hidden">
+                    {loading && (
+                        <div className="flex justify-center items-center h-64">
+                            <div className="text-center">
+                                <div className="loading-spinner w-8 h-8 mx-auto mb-4"></div>
+                                <p className="text-secondary-600">Loading Requests...</p>
+                            </div>
+                        </div>
+                    )}
+                    {error && (
+                        <div className="flex flex-col justify-center items-center h-64 text-danger-600 bg-danger-50 p-6 rounded-lg m-6">
+                            <AlertTriangle className="w-12 h-12 mb-4 text-danger-500" />
+                            <h3 className="text-lg font-semibold text-danger-800">Failed to load data</h3>
+                            <p className="text-sm text-danger-600 mt-2">{error}</p>
+                        </div>
+                    )}
+                    {!loading && !error && (
+                        <RequestsTable 
+                            requests={requests.filter(r => r.status === filters.status)} 
+                            onApprove={handleApprove} 
+                            onPlaceOrder={handlePlaceOrder} 
+                            onMarkReceived={handleMarkReceived} 
+                            onReorder={handleReorder} 
+                            onShowHistory={handleShowHistory} 
+                        />
+                    )}
                 </div>
             </main>
             <MarkReceivedModal isOpen={isReceivedModalOpen} onClose={() => setIsReceivedModalOpen(false)} onSave={handleSaveReceived} token={token} request={selectedRequest} />
@@ -697,17 +1010,69 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="flex items-center justify-center h-screen bg-gray-100">
-            <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-md">
-                <div className="text-center"><h2 className="text-3xl font-bold text-gray-900">Sign in to your account</h2></div>
-                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-                    <div className="rounded-md shadow-sm -space-y-px">
-                        <div><input id="username" name="username" type="text" required value={username} onChange={(e) => setUsername(e.target.value)} className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Username" /></div>
-                        <div><input id="password" name="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Password" /></div>
+        <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md animate-fade-in">
+                <div className="card p-8">
+                    <div className="text-center mb-8">
+                        <div className="w-16 h-16 gradient-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-soft">
+                            <div className="w-8 h-8 bg-white rounded-lg opacity-90"></div>
+                        </div>
+                        <h2 className="text-3xl font-bold text-secondary-900 mb-2">Welcome Back</h2>
+                        <p className="text-secondary-600">Sign in to access Hayer Lab Bio Inventory</p>
                     </div>
-                    {error && <p className="text-sm text-red-600">{error}</p>}
-                    <div><button type="submit" disabled={isLoggingIn} className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300">{isLoggingIn ? 'Signing in...' : 'Sign in'}</button></div>
-                </form>
+                    
+                    <form className="space-y-6" onSubmit={handleSubmit}>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="username" className="block text-sm font-medium text-secondary-700 mb-2">Username</label>
+                                <input 
+                                    id="username" 
+                                    name="username" 
+                                    type="text" 
+                                    required 
+                                    value={username} 
+                                    onChange={(e) => setUsername(e.target.value)} 
+                                    className="input" 
+                                    placeholder="Enter your username" 
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="password" className="block text-sm font-medium text-secondary-700 mb-2">Password</label>
+                                <input 
+                                    id="password" 
+                                    name="password" 
+                                    type="password" 
+                                    required 
+                                    value={password} 
+                                    onChange={(e) => setPassword(e.target.value)} 
+                                    className="input" 
+                                    placeholder="Enter your password" 
+                                />
+                            </div>
+                        </div>
+                        
+                        {error && (
+                            <div className="bg-danger-50 border border-danger-200 text-danger-700 px-4 py-3 rounded-lg text-sm">
+                                {error}
+                            </div>
+                        )}
+                        
+                        <button 
+                            type="submit" 
+                            disabled={isLoggingIn} 
+                            className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5"
+                        >
+                            {isLoggingIn && <div className="loading-spinner w-4 h-4 mr-2"></div>}
+                            {isLoggingIn ? 'Signing in...' : 'Sign in'}
+                        </button>
+                    </form>
+                </div>
+                
+                <div className="text-center mt-6">
+                    <p className="text-sm text-secondary-500">
+                        Powered by Hayer Lab Bio Inventory System
+                    </p>
+                </div>
             </div>
         </div>
     );
@@ -719,37 +1084,68 @@ const UserManagementSidebar = ({ onAddUserClick, users = [] }) => {
     const adminUsers = users.filter(user => user.is_staff).length;
     
     return (
-        <aside className="w-72 bg-gray-50 border-r border-gray-200 p-6 flex flex-col h-full">
-            <div className="flex-grow overflow-y-auto -mr-6 pr-6">
-                <button onClick={onAddUserClick} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors">
-                    <UserPlus className="w-5 h-5" /><span>Add User</span>
-                </button>
-                <div className="relative my-4">
-                    <input type="text" placeholder="Search users" className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md" />
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <aside className="sidebar w-80 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
+            <div className="flex-grow overflow-y-auto space-y-6">
+                <div className="space-y-4">
+                    <button onClick={onAddUserClick} className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5">
+                        <UserPlus className="w-5 h-5 mr-2" />
+                        <span>Add New User</span>
+                    </button>
+                    
+                    <div className="relative">
+                        <input type="text" placeholder="Search users..." className="input pl-10 bg-secondary-50/50 border-secondary-200" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
+                    </div>
                 </div>
-                <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider">User Statistics</h3>
-                <div className="mt-4 space-y-3">
-                    <div className="p-3 bg-white rounded-lg border">
-                        <div className="text-2xl font-bold text-gray-900">{activeUsers}</div>
-                        <div className="text-xs text-gray-500">Active Users</div>
-                    </div>
-                    <div className="p-3 bg-white rounded-lg border">
-                        <div className="text-2xl font-bold text-gray-900">{adminUsers}</div>
-                        <div className="text-xs text-gray-500">Administrators</div>
-                    </div>
-                    <div className="p-3 bg-white rounded-lg border">
-                        <div className="text-2xl font-bold text-gray-900">{users.length}</div>
-                        <div className="text-xs text-gray-500">Total Users</div>
+                
+                <div>
+                    <h3 className="text-xs font-bold uppercase text-secondary-400 tracking-wider mb-4">Statistics</h3>
+                    <div className="grid gap-3">
+                        <div className="card-body p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-2xl font-bold text-secondary-900">{activeUsers}</div>
+                                    <div className="text-xs text-secondary-500 font-medium">Active Users</div>
+                                </div>
+                                <div className="w-10 h-10 bg-success-100 rounded-xl flex items-center justify-center">
+                                    <Users className="w-5 h-5 text-success-600" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="card-body p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-2xl font-bold text-secondary-900">{adminUsers}</div>
+                                    <div className="text-xs text-secondary-500 font-medium">Administrators</div>
+                                </div>
+                                <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center">
+                                    <Shield className="w-5 h-5 text-primary-600" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="card-body p-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-2xl font-bold text-secondary-900">{users.length}</div>
+                                    <div className="text-xs text-secondary-500 font-medium">Total Users</div>
+                                </div>
+                                <div className="w-10 h-10 bg-secondary-100 rounded-xl flex items-center justify-center">
+                                    <Users className="w-5 h-5 text-secondary-600" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div className="pt-4 border-t border-gray-200">
-                <button className="w-full text-gray-600 hover:bg-gray-200 font-medium py-2 px-4 rounded-md flex items-center justify-center space-x-2 my-1">
-                    <Upload className="w-5 h-5" /><span>Import Users</span>
+            
+            <div className="pt-6 border-t border-secondary-200 space-y-2">
+                <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+                    <Upload className="w-4 h-4 mr-2" />
+                    <span>Import Users</span>
                 </button>
-                <button className="w-full text-gray-600 hover:bg-gray-200 font-medium py-2 px-4 rounded-md flex items-center justify-center space-x-2 my-1">
-                    <Download className="w-5 h-5" /><span>Export Users</span>
+                <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+                    <Download className="w-4 h-4 mr-2" />
+                    <span>Export Users</span>
                 </button>
             </div>
         </aside>
@@ -757,76 +1153,90 @@ const UserManagementSidebar = ({ onAddUserClick, users = [] }) => {
 };
 
 const UsersTable = ({ users, onEdit, onDelete, onToggleStatus }) => (
-    <table className="min-w-full bg-white">
-        <thead className="bg-gray-50">
-            <tr>
-                <th className="p-4 w-12"><input type="checkbox" className="h-4 w-4 rounded border-gray-300" /></th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="p-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
-                <th className="p-4 w-32 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-            {users.map(user => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="p-4"><input type="checkbox" className="h-4 w-4 rounded border-gray-300" /></td>
-                    <td className="p-4">
-                        <div className="flex items-center">
-                            <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-bold text-sm mr-3">
-                                {user.username.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                                <div className="text-sm font-medium text-gray-900">{user.username}</div>
-                                {(user.first_name || user.last_name) && (
-                                    <div className="text-sm text-gray-500">{user.first_name} {user.last_name}</div>
-                                )}
-                            </div>
-                        </div>
-                    </td>
-                    <td className="p-4 text-sm text-gray-500">{user.email || 'No email'}</td>
-                    <td className="p-4">
-                        {user.is_staff ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                <Shield className="w-3 h-3 mr-1" />Administrator
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                User
-                            </span>
-                        )}
-                    </td>
-                    <td className="p-4">
-                        {user.is_active ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Active
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                Inactive
-                            </span>
-                        )}
-                    </td>
-                    <td className="p-4 text-sm text-gray-500">{new Date(user.date_joined).toLocaleDateString()}</td>
-                    <td className="p-4 text-center">
-                        <div className="flex justify-center space-x-2">
-                            <button onClick={() => onToggleStatus(user)} className={`p-1 hover:bg-gray-200 rounded-full ${user.is_active ? 'text-red-600' : 'text-green-600'}`} title={user.is_active ? 'Deactivate user' : 'Activate user'}>
-                                {user.is_active ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-                            </button>
-                            <button onClick={() => onEdit(user)} className="p-1 hover:bg-gray-200 rounded-full text-gray-600" title="Edit user">
-                                <Edit className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => onDelete(user)} className="p-1 hover:bg-gray-200 rounded-full text-red-600" title="Delete user">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </td>
+    <div className="overflow-hidden">
+        <table className="table">
+            <thead className="table-header">
+                <tr>
+                    <th className="table-header-cell w-12"><input type="checkbox" className="checkbox" /></th>
+                    <th className="table-header-cell">User</th>
+                    <th className="table-header-cell">Email</th>
+                    <th className="table-header-cell">Role</th>
+                    <th className="table-header-cell">Status</th>
+                    <th className="table-header-cell">Joined</th>
+                    <th className="table-header-cell text-center">Actions</th>
                 </tr>
-            ))}
-        </tbody>
-    </table>
+            </thead>
+            <tbody className="table-body">
+                {users.map(user => (
+                    <tr key={user.id} className="table-row">
+                        <td className="table-cell"><input type="checkbox" className="checkbox" /></td>
+                        <td className="table-cell">
+                            <div className="flex items-center">
+                                <div className="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center text-white font-semibold text-sm mr-3 shadow-soft">
+                                    {user.username.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                    <div className="font-medium text-secondary-900">{user.username}</div>
+                                    {(user.first_name || user.last_name) && (
+                                        <div className="text-sm text-secondary-500">{user.first_name} {user.last_name}</div>
+                                    )}
+                                </div>
+                            </div>
+                        </td>
+                        <td className="table-cell text-secondary-600">{user.email || <span className="text-secondary-400 italic">No email</span>}</td>
+                        <td className="table-cell">
+                            {user.is_staff ? (
+                                <span className="badge badge-primary">
+                                    <Shield className="w-3 h-3 mr-1" />Administrator
+                                </span>
+                            ) : (
+                                <span className="badge badge-secondary">
+                                    User
+                                </span>
+                            )}
+                        </td>
+                        <td className="table-cell">
+                            {user.is_active ? (
+                                <span className="badge badge-success">
+                                    Active
+                                </span>
+                            ) : (
+                                <span className="badge badge-danger">
+                                    Inactive
+                                </span>
+                            )}
+                        </td>
+                        <td className="table-cell text-secondary-600">{new Date(user.date_joined).toLocaleDateString()}</td>
+                        <td className="table-cell">
+                            <div className="flex justify-center space-x-1">
+                                <button 
+                                    onClick={() => onToggleStatus(user)} 
+                                    className={`p-2 rounded-lg transition-colors ${user.is_active ? 'hover:bg-danger-50 text-secondary-400 hover:text-danger-600' : 'hover:bg-success-50 text-secondary-400 hover:text-success-600'}`} 
+                                    title={user.is_active ? 'Deactivate user' : 'Activate user'}
+                                >
+                                    {user.is_active ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                </button>
+                                <button 
+                                    onClick={() => onEdit(user)} 
+                                    className="p-2 hover:bg-primary-50 rounded-lg transition-colors text-secondary-400 hover:text-primary-600" 
+                                    title="Edit user"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => onDelete(user)} 
+                                    className="p-2 hover:bg-danger-50 rounded-lg transition-colors text-secondary-400 hover:text-danger-600" 
+                                    title="Delete user"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    </div>
 );
 
 const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUsers }) => {
@@ -873,22 +1283,27 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
     };
 
     return (
-        <main className="flex-grow p-8 overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+        <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold text-secondary-900 mb-2">User Management</h1>
+                    <p className="text-secondary-600">Manage system users and permissions</p>
+                </div>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="card overflow-hidden">
                 {loading && (
                     <div className="flex justify-center items-center h-64">
-                        <Loader className="w-8 h-8 animate-spin text-blue-500" />
-                        <span className="ml-4 text-gray-500">Loading Users...</span>
+                        <div className="text-center">
+                            <div className="loading-spinner w-8 h-8 mx-auto mb-4"></div>
+                            <p className="text-secondary-600">Loading Users...</p>
+                        </div>
                     </div>
                 )}
                 {error && (
-                    <div className="flex flex-col justify-center items-center h-64 text-red-600 bg-red-50 p-4">
-                        <AlertTriangle className="w-12 h-12 mb-4" />
-                        <h3 className="text-lg font-semibold">Failed to load users</h3>
-                        <p className="text-sm">{error}</p>
+                    <div className="flex flex-col justify-center items-center h-64 text-danger-600 bg-danger-50 p-6 rounded-lg m-6">
+                        <AlertTriangle className="w-12 h-12 mb-4 text-danger-500" />
+                        <h3 className="text-lg font-semibold text-danger-800">Failed to load users</h3>
+                        <p className="text-sm text-danger-600 mt-2">{error}</p>
                     </div>
                 )}
                 {!loading && !error && (
@@ -899,7 +1314,7 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
                             onDelete={onDeleteUser}
                             onToggleStatus={handleToggleStatus}
                         />
-                        <div className="p-4">
+                        <div className="p-6 border-t border-secondary-200 bg-secondary-50/50">
                             <Pagination 
                                 currentPage={currentPage} 
                                 totalItems={users.length} 
@@ -1003,9 +1418,9 @@ const MainApp = () => {
     }
 
     return (
-        <div className="bg-gray-100 font-sans antialiased h-screen flex flex-col">
+        <div className="bg-secondary-50 font-sans antialiased h-screen flex flex-col">
             <Header activePage={activePage} onNavigate={setActivePage} />
-            <div className="flex flex-grow overflow-hidden">
+            <div className="flex flex-grow overflow-hidden relative">
                 {activePage === 'inventory' && <InventorySidebar onAddItemClick={handleOpenAddItemModal} filters={inventoryFilters} onFilterChange={handleInventoryFilterChange} filterOptions={filterOptions} />}
                 {activePage === 'requests' && <RequestsSidebar onAddRequestClick={() => setIsRequestFormModalOpen(true)} filters={requestFilters} onFilterChange={handleRequestFilterChange} filterOptions={filterOptions} />}
                 {activePage === 'users' && <UserManagementSidebar onAddUserClick={handleOpenAddUserModal} users={users} />}
