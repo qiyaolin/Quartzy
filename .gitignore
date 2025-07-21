@@ -1,0 +1,54 @@
+# Python
+bio-inventory-backend/venv/
+bio-inventory-backend/__pycache__/
+bio-inventory-backend/**/*.pyc
+bio-inventory-backend/**/*.pyo
+bio-inventory-backend/**/*.pyd
+bio-inventory-backend/.Python
+bio-inventory-backend/env/
+bio-inventory-backend/build/
+bio-inventory-backend/develop-eggs/
+bio-inventory-backend/dist/
+bio-inventory-backend/downloads/
+bio-inventory-backend/eggs/
+bio-inventory-backend/.eggs/
+bio-inventory-backend/lib/
+bio-inventory-backend/lib64/
+bio-inventory-backend/parts/
+bio-inventory-backend/sdist/
+bio-inventory-backend/var/
+bio-inventory-backend/*.egg-info/
+bio-inventory-backend/.mypy_cache/
+bio-inventory-backend/.pytest_cache/
+bio-inventory-backend/.coverage
+bio-inventory-backend/.tox/
+bio-inventory-backend/.env
+bio-inventory-backend/.env.*
+
+# Node
+bio-inventory-frontend/node_modules/
+bio-inventory-frontend/.next/
+bio-inventory-frontend/.env
+bio-inventory-frontend/.env.*
+bio-inventory-frontend/dist/
+bio-inventory-frontend/build/
+bio-inventory-frontend/npm-debug.log*
+bio-inventory-frontend/yarn-debug.log*
+bio-inventory-frontend/yarn-error.log*
+bio-inventory-frontend/.parcel-cache/
+
+# System
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
+
+# Others
+*.bak
+*.tmp 
