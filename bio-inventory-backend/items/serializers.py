@@ -36,6 +36,12 @@ class ItemSerializer(serializers.ModelSerializer):
     vendor_id = serializers.PrimaryKeyRelatedField(queryset=Vendor.objects.all(), source='vendor', write_only=True, allow_null=True)
     location_id = serializers.PrimaryKeyRelatedField(queryset=Location.objects.all(), source='location', write_only=True, allow_null=True)
     item_type_id = serializers.PrimaryKeyRelatedField(queryset=ItemType.objects.all(), source='item_type', write_only=True)
+    
+    # Computed fields for expiration and stock status
+    days_until_expiration = serializers.ReadOnlyField()
+    expiration_status = serializers.ReadOnlyField()
+    is_low_stock = serializers.ReadOnlyField()
+    needs_attention = serializers.ReadOnlyField()
 
     class Meta:
         model = Item
@@ -44,6 +50,9 @@ class ItemSerializer(serializers.ModelSerializer):
             'vendor', 'vendor_id', 'catalog_number', 'quantity', 'unit',
             'location', 'location_id', 'price', 'owner', 'owner_id', 'url',
             'low_stock_threshold', 'is_archived', 'created_at', 'updated_at',
-            'properties'
+            'properties', 'expiration_date', 'lot_number', 'received_date',
+            'expiration_alert_days', 'storage_temperature', 'storage_conditions',
+            'last_used_date', 'days_until_expiration', 'expiration_status',
+            'is_low_stock', 'needs_attention'
         ]
-        read_only_fields = ['serial_number', 'created_at', 'updated_at'] 
+        read_only_fields = ['serial_number', 'created_at', 'updated_at', 'days_until_expiration', 'expiration_status', 'is_low_stock', 'needs_attention'] 

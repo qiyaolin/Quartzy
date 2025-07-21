@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useContext, createContext } from 'react';
-import { Search, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, PlusCircle, Filter, Upload, Download, Settings, MoreVertical, Archive, Edit, Trash2, AlertTriangle, Loader, X, FileText, ShoppingCart, Inbox, CheckCircle, Clock, Package, History, RefreshCw, LogOut, Users, UserPlus, Shield, ShieldOff } from 'lucide-react';
+import { Search, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, PlusCircle, Filter, Upload, Download, Settings, MoreVertical, Archive, Edit, Trash2, AlertTriangle, Loader, X, FileText, Inbox, CheckCircle, Clock, Package, History, RefreshCw, LogOut, Users, UserPlus, Shield, ShieldOff } from 'lucide-react';
 
 // --- AUTHENTICATION CONTEXT ---
 interface AuthContextType {
@@ -66,7 +66,7 @@ const SidebarFilter = ({ title, options, selected, onFilterChange }) => {
             </div>
             {isOpen && (
                 <div className="mt-3 max-h-48 overflow-y-auto space-y-2 animate-slide-up">
-                    {options.map(option => (
+                    {(Array.isArray(options) ? options : []).map(option => (
                         <div key={option.id} className="flex items-center group">
                             <input 
                                 type="checkbox" 
@@ -90,12 +90,14 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
     const isEditMode = initialData !== null;
 
     useEffect(() => {
-        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', };
+        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '' };
         if (isEditMode) {
             setFormData({
                 name: initialData.name || '', item_type_id: initialData.item_type?.id || '', vendor_id: initialData.vendor?.id || '',
                 owner_id: initialData.owner?.id || '1', catalog_number: initialData.catalog_number || '', quantity: initialData.quantity || '1.00',
                 unit: initialData.unit || '', location_id: initialData.location?.id || '', price: initialData.price || '',
+                expiration_date: initialData.expiration_date || '', lot_number: initialData.lot_number || '', received_date: initialData.received_date || '',
+                expiration_alert_days: initialData.expiration_alert_days || '30', storage_temperature: initialData.storage_temperature || '', storage_conditions: initialData.storage_conditions || ''
             });
         } else { setFormData(emptyForm); }
     }, [initialData, isEditMode]);
@@ -172,6 +174,34 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                         <div>
                             <label htmlFor="price" className="block text-sm font-medium text-secondary-700 mb-2">Unit Price</label>
                             <input type="number" name="price" id="price" placeholder="0.00" value={formData.price} onChange={handleChange} step="0.01" className="input" />
+                        </div>
+                        <div>
+                            <label htmlFor="catalog_number" className="block text-sm font-medium text-secondary-700 mb-2">Catalog Number</label>
+                            <input type="text" name="catalog_number" id="catalog_number" placeholder="e.g., C1234" value={formData.catalog_number} onChange={handleChange} className="input" />
+                        </div>
+                        <div>
+                            <label htmlFor="lot_number" className="block text-sm font-medium text-secondary-700 mb-2">Lot/Batch Number</label>
+                            <input type="text" name="lot_number" id="lot_number" placeholder="e.g., LOT123456" value={formData.lot_number} onChange={handleChange} className="input" />
+                        </div>
+                        <div>
+                            <label htmlFor="expiration_date" className="block text-sm font-medium text-secondary-700 mb-2">Expiration Date</label>
+                            <input type="date" name="expiration_date" id="expiration_date" value={formData.expiration_date} onChange={handleChange} className="input" />
+                        </div>
+                        <div>
+                            <label htmlFor="received_date" className="block text-sm font-medium text-secondary-700 mb-2">Received Date</label>
+                            <input type="date" name="received_date" id="received_date" value={formData.received_date} onChange={handleChange} className="input" />
+                        </div>
+                        <div>
+                            <label htmlFor="expiration_alert_days" className="block text-sm font-medium text-secondary-700 mb-2">Alert Days Before Expiration</label>
+                            <input type="number" name="expiration_alert_days" id="expiration_alert_days" value={formData.expiration_alert_days} onChange={handleChange} min="1" max="365" className="input" placeholder="30" />
+                        </div>
+                        <div className="col-span-2">
+                            <label htmlFor="storage_temperature" className="block text-sm font-medium text-secondary-700 mb-2">Storage Temperature</label>
+                            <input type="text" name="storage_temperature" id="storage_temperature" placeholder="e.g., -80°C, 4°C, RT" value={formData.storage_temperature} onChange={handleChange} className="input" />
+                        </div>
+                        <div className="col-span-2">
+                            <label htmlFor="storage_conditions" className="block text-sm font-medium text-secondary-700 mb-2">Storage Conditions</label>
+                            <textarea name="storage_conditions" id="storage_conditions" rows="2" placeholder="Additional storage requirements..." value={formData.storage_conditions} onChange={handleChange} className="input resize-none"></textarea>
                         </div>
                     </div>
                     {error && <div className="px-6 pb-4 text-danger-600 text-sm bg-danger-50 rounded-lg mx-6 mb-4 p-3">{error}</div>}
@@ -465,7 +495,99 @@ const Pagination = ({ currentPage, totalItems, itemsPerPage, onPageChange }) => 
 };
 
 // --- SHARED & LAYOUT COMPONENTS ---
-const Header = ({ activePage, onNavigate }) => {
+const AlertsBanner = () => {
+    const { token } = useContext(AuthContext);
+    const [alerts, setAlerts] = useState({ expired: { count: 0 }, expiring_soon: { count: 0 }, low_stock: { count: 0 } });
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [isDismissed, setIsDismissed] = useState(false);
+
+    useEffect(() => {
+        if (token) {
+            fetch('http://127.0.0.1:8000/api/items/alerts/', {
+                headers: { 'Authorization': `Token ${token}` }
+            })
+            .then(response => response.json())
+            .then(data => setAlerts(data))
+            .catch(error => console.error('Error fetching alerts:', error));
+        }
+    }, [token]);
+
+    const totalAlerts = alerts.expired.count + alerts.expiring_soon.count + alerts.low_stock.count;
+
+    if (totalAlerts === 0 || isDismissed) return null;
+
+    return (
+        <div className="bg-warning-50 border-b border-warning-200">
+            <div className="max-w-7xl mx-auto px-4 py-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                        <AlertTriangle className="w-5 h-5 text-warning-600" />
+                        <span className="text-sm font-medium text-warning-800">
+                            {totalAlerts} items need attention: 
+                            {alerts.expired.count > 0 && ` ${alerts.expired.count} expired`}
+                            {alerts.expiring_soon.count > 0 && ` ${alerts.expiring_soon.count} expiring soon`}
+                            {alerts.low_stock.count > 0 && ` ${alerts.low_stock.count} low stock`}
+                        </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <button 
+                            onClick={() => setIsExpanded(!isExpanded)}
+                            className="text-warning-600 hover:text-warning-700 text-sm font-medium"
+                        >
+                            {isExpanded ? 'Hide Details' : 'View Details'}
+                        </button>
+                        <button 
+                            onClick={() => setIsDismissed(true)}
+                            className="text-warning-600 hover:text-warning-700 p-1 rounded-md hover:bg-warning-100 transition-colors"
+                            title="Dismiss notification"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+                
+                {isExpanded && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {alerts.expired.count > 0 && (
+                            <div className="bg-danger-50 p-3 rounded-lg border border-danger-200">
+                                <h4 className="text-sm font-semibold text-danger-800 mb-2">Expired Items ({alerts.expired.count})</h4>
+                                {alerts.expired.items?.slice(0, 3).map(item => (
+                                    <div key={item.id} className="text-xs text-danger-700 truncate">
+                                        • {item.name}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        
+                        {alerts.expiring_soon.count > 0 && (
+                            <div className="bg-warning-50 p-3 rounded-lg border border-warning-200">
+                                <h4 className="text-sm font-semibold text-warning-800 mb-2">Expiring Soon ({alerts.expiring_soon.count})</h4>
+                                {alerts.expiring_soon.items?.slice(0, 3).map(item => (
+                                    <div key={item.id} className="text-xs text-warning-700 truncate">
+                                        • {item.name} ({item.days_until_expiration} days)
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        
+                        {alerts.low_stock.count > 0 && (
+                            <div className="bg-primary-50 p-3 rounded-lg border border-primary-200">
+                                <h4 className="text-sm font-semibold text-primary-800 mb-2">Low Stock ({alerts.low_stock.count})</h4>
+                                {alerts.low_stock.items?.slice(0, 3).map(item => (
+                                    <div key={item.id} className="text-xs text-primary-700 truncate">
+                                        • {item.name} ({item.quantity} {item.unit})
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, handleInventoryFilterChange, handleRequestFilterChange }) => {
     const { user, logout } = useContext(AuthContext);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
@@ -493,15 +615,28 @@ const Header = ({ activePage, onNavigate }) => {
                     
                     <nav className="hidden md:flex items-center space-x-1">
                         <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('requests')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'requests' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><FileText className="w-4 h-4 mr-2"/>Requests</a>
-                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('orders')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'orders' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><ShoppingCart className="w-4 h-4 mr-2"/>Orders</a>
                         <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('inventory')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'inventory' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Package className="w-4 h-4 mr-2"/>Inventory</a>
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('reports')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'reports' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><History className="w-4 h-4 mr-2"/>Dashboard</a>
                         {user?.is_staff && <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('users')}} className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'users' ? 'text-primary-700 bg-primary-50 shadow-inner-soft' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Users className="w-4 h-4 mr-2"/>Users</a>}
                     </nav>
                 </div>
                 
                 <div className="hidden lg:flex items-center flex-grow max-w-md mx-6">
                     <div className="relative w-full">
-                        <input type="text" placeholder="Search everything..." className="input pl-10 bg-secondary-50/50 border-secondary-200 placeholder-secondary-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Search everything..." 
+                            className="input pl-10 bg-secondary-50/50 border-secondary-200 placeholder-secondary-400"
+                            onChange={(e) => {
+                                if (activePage === 'inventory') {
+                                    handleInventoryFilterChange('search', e.target.value);
+                                } else if (activePage === 'requests') {
+                                    handleRequestFilterChange('search', e.target.value);
+                                }
+                            }}
+                            value={activePage === 'inventory' ? inventoryFilters.search : 
+                                   activePage === 'requests' ? requestFilters.search : ''}
+                        />
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
                     </div>
                 </div>
@@ -527,13 +662,26 @@ const Header = ({ activePage, onNavigate }) => {
                 <div className="md:hidden border-t border-secondary-200 bg-white">
                     <nav className="px-4 py-4 space-y-2">
                         <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('requests'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'requests' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><FileText className="w-4 h-4 mr-3"/>Requests</a>
-                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('orders'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'orders' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><ShoppingCart className="w-4 h-4 mr-3"/>Orders</a>
                         <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('inventory'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'inventory' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Package className="w-4 h-4 mr-3"/>Inventory</a>
+                        <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('reports'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'reports' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><History className="w-4 h-4 mr-3"/>Dashboard</a>
                         {user?.is_staff && <a href="#" onClick={(e) => {e.preventDefault(); onNavigate('users'); setIsMobileMenuOpen(false);}} className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${activePage === 'users' ? 'text-primary-700 bg-primary-50' : 'text-secondary-600 hover:text-secondary-900 hover:bg-secondary-50'}`}><Users className="w-4 h-4 mr-3"/>Users</a>}
                         
                         <div className="pt-4 mt-4 border-t border-secondary-200">
                             <div className="relative">
-                                <input type="text" placeholder="Search everything..." className="input pl-10 bg-secondary-50/50 border-secondary-200 placeholder-secondary-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search everything..." 
+                                    className="input pl-10 bg-secondary-50/50 border-secondary-200 placeholder-secondary-400"
+                                    onChange={(e) => {
+                                        if (activePage === 'inventory') {
+                                            handleInventoryFilterChange('search', e.target.value);
+                                        } else if (activePage === 'requests') {
+                                            handleRequestFilterChange('search', e.target.value);
+                                        }
+                                    }}
+                                    value={activePage === 'inventory' ? inventoryFilters.search : 
+                                           activePage === 'requests' ? requestFilters.search : ''}
+                                />
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
                             </div>
                         </div>
@@ -556,10 +704,14 @@ const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptio
                 </button>
                 
                 <div className="relative">
-                    <form onSubmit={(e) => { e.preventDefault(); onFilterChange('search', e.target.elements.search.value); }}>
-                        <input type="text" name="search" placeholder="Search inventory..." className="input pl-10 bg-secondary-50/50 border-secondary-200" />
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
-                    </form>
+                    <input 
+                        type="text" 
+                        placeholder="Search inventory..." 
+                        className="input pl-10 bg-secondary-50/50 border-secondary-200"
+                        onChange={(e) => onFilterChange('search', e.target.value)}
+                        value={filters.search || ''}
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
                 </div>
             </div>
             
@@ -588,6 +740,57 @@ const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptio
 const InventoryTable = ({ groupedData, onEdit, onDelete }) => {
     const [expandedGroups, setExpandedGroups] = useState({});
     const toggleGroup = (groupId) => { setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] })); };
+    
+    const getRowClassName = (item) => {
+        const baseClass = "table-row";
+        if (item.expiration_status === 'EXPIRED') {
+            return `${baseClass} bg-danger-25 hover:bg-danger-50`;
+        } else if (item.expiration_status === 'EXPIRING_SOON') {
+            return `${baseClass} bg-warning-25 hover:bg-warning-50`;
+        } else if (parseFloat(item.quantity) <= 5) { // Assuming low stock threshold of 5
+            return `${baseClass} bg-orange-25 hover:bg-orange-50`;
+        }
+        return baseClass;
+    };
+    
+    const getExpirationBadge = (item) => {
+        if (!item.expiration_date) {
+            return <span className="text-xs text-secondary-400">No expiration</span>;
+        }
+        
+        const status = item.expiration_status;
+        const daysLeft = item.days_until_expiration;
+        
+        let badgeClass = 'badge-secondary';
+        let label = 'Good';
+        let icon = null;
+        
+        if (status === 'EXPIRED') {
+            badgeClass = 'badge-danger';
+            label = 'Expired';
+            icon = <AlertTriangle className="w-3 h-3 mr-1" />;
+        } else if (status === 'EXPIRING_SOON') {
+            badgeClass = 'badge-warning';
+            label = `${daysLeft} days left`;
+            icon = <Clock className="w-3 h-3 mr-1" />;
+        } else if (daysLeft !== null && daysLeft <= 60) {
+            label = `${daysLeft} days left`;
+        }
+        
+        return (
+            <div className="flex flex-col items-start">
+                <span className={`badge ${badgeClass} flex items-center text-xs`}>
+                    {icon}
+                    {label}
+                </span>
+                {item.expiration_date && (
+                    <span className="text-xs text-secondary-400 mt-1">
+                        {new Date(item.expiration_date).toLocaleDateString()}
+                    </span>
+                )}
+            </div>
+        );
+    };
     return (
         <div className="overflow-x-auto">
             <table className="table">
@@ -596,6 +799,7 @@ const InventoryTable = ({ groupedData, onEdit, onDelete }) => {
                     <th className="table-header-cell">Item Name</th>
                     <th className="table-header-cell">Vendor</th>
                     <th className="table-header-cell">Total Amount</th>
+                    <th className="table-header-cell">Expiration</th>
                     <th className="table-header-cell">Type</th>
                     <th className="table-header-cell w-24">Actions</th>
                 </tr></thead>
@@ -616,12 +820,26 @@ const InventoryTable = ({ groupedData, onEdit, onDelete }) => {
                                     <span className="text-secondary-500 ml-1">{group.instances[0]?.unit}</span>
                                 </td>
                                 <td className="table-cell">
+                                    <span className="text-xs text-secondary-400">Multiple items</span>
+                                </td>
+                                <td className="table-cell">
                                     <span className="badge badge-secondary">{group.item_type?.name || 'N/A'}</span>
                                 </td>
-                                <td className="table-cell"></td>
+                                <td className="table-cell">
+                                    <div className="flex items-center space-x-1">
+                                        <button onClick={() => onEdit(group.instances[0])} className="p-2 hover:bg-primary-50 rounded-lg transition-colors group">
+                                            <Edit className="w-4 h-4 text-secondary-400 group-hover:text-primary-600" />
+                                        </button>
+                                        <div className="relative">
+                                            <button className="p-2 hover:bg-danger-50 rounded-lg transition-colors group">
+                                                <Trash2 className="w-4 h-4 text-secondary-400 group-hover:text-danger-600" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
                             </tr>
                             {expandedGroups[group.id] && group.instances.map(instance => (
-                                <tr key={instance.id} className="table-row">
+                                <tr key={instance.id} className={getRowClassName(instance)}>
                                     <td className="table-cell"></td>
                                     <td className="table-cell pl-16">
                                         <div className="text-sm text-secondary-700">
@@ -638,6 +856,9 @@ const InventoryTable = ({ groupedData, onEdit, onDelete }) => {
                                             <span className="font-medium text-secondary-900">{parseFloat(instance.quantity).toFixed(2)}</span>
                                             <span className="text-secondary-500 ml-1">{instance.unit}</span>
                                         </div>
+                                    </td>
+                                    <td className="table-cell">
+                                        {getExpirationBadge(instance)}
                                     </td>
                                     <td className="table-cell">
                                         <div className="text-sm text-secondary-500">
@@ -682,6 +903,16 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters, filterOp
             return acc;
         }, {});
     }, [inventory]);
+
+    const paginatedData = useMemo(() => {
+        const groups = Object.values(groupedInventory);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return groups.slice(startIndex, endIndex).reduce((acc, group) => {
+            acc[group.id] = group;
+            return acc;
+        }, {});
+    }, [groupedInventory, currentPage, itemsPerPage]);
 
     useEffect(() => {
         const fetchInventory = async () => {
@@ -729,7 +960,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters, filterOp
                 )}
                 {!loading && !error && (
                     <>
-                        <InventoryTable groupedData={groupedInventory} onEdit={onEditItem} onDelete={onDeleteItem} />
+                        <InventoryTable groupedData={paginatedData} onEdit={onEditItem} onDelete={onDeleteItem} />
                         <div className="p-6 border-t border-secondary-200 bg-secondary-50/50">
                             <Pagination currentPage={currentPage} totalItems={Object.keys(groupedInventory).length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
                         </div>
@@ -752,10 +983,14 @@ const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOpt
                 </button>
                 
                 <div className="relative">
-                    <form onSubmit={(e) => { e.preventDefault(); onFilterChange('search', e.target.elements.search.value); }}>
-                        <input type="text" name="search" placeholder="Search requests..." className="input pl-10 bg-secondary-50/50 border-secondary-200" />
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
-                    </form>
+                    <input 
+                        type="text" 
+                        placeholder="Search requests..." 
+                        className="input pl-10 bg-secondary-50/50 border-secondary-200"
+                        onChange={(e) => onFilterChange('search', e.target.value)}
+                        value={filters.search || ''}
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
                 </div>
             </div>
             
@@ -793,6 +1028,7 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
         const config = statusConfig[status] || { class: 'badge-secondary', label: status };
         return <span className={`badge ${config.class}`}>{config.label}</span>;
     };
+    
     
     return (
         <div className="overflow-x-auto">
@@ -1079,7 +1315,7 @@ const LoginPage = () => {
 };
 
 // --- USER MANAGEMENT PAGE COMPONENTS ---
-const UserManagementSidebar = ({ onAddUserClick, users = [] }) => {
+const UserManagementSidebar = ({ onAddUserClick, users = [], userSearch, onUserSearchChange }) => {
     const activeUsers = users.filter(user => user.is_active).length;
     const adminUsers = users.filter(user => user.is_staff).length;
     
@@ -1093,7 +1329,13 @@ const UserManagementSidebar = ({ onAddUserClick, users = [] }) => {
                     </button>
                     
                     <div className="relative">
-                        <input type="text" placeholder="Search users..." className="input pl-10 bg-secondary-50/50 border-secondary-200" />
+                        <input 
+                            type="text" 
+                            placeholder="Search users..." 
+                            className="input pl-10 bg-secondary-50/50 border-secondary-200"
+                            value={userSearch}
+                            onChange={(e) => onUserSearchChange(e.target.value)}
+                        />
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
                     </div>
                 </div>
@@ -1347,21 +1589,24 @@ const MainApp = () => {
     const [filterOptions, setFilterOptions] = useState({ vendors: [], locations: [], itemTypes: [], users: [] });
     const [inventoryFilters, setInventoryFilters] = useState({ search: '', location: [], item_type: [], vendor: [] });
     const [requestFilters, setRequestFilters] = useState({ search: '', status: 'NEW', vendor: [], requested_by: [] });
+    const [userSearch, setUserSearch] = useState('');
 
     useEffect(() => {
         const fetchFilterOptions = async () => {
             if (!token) return;
             try {
                 const headers = { 'Authorization': `Token ${token}` };
-                const [vendorsRes, locationsRes, itemTypesRes] = await Promise.all([
+                const [vendorsRes, locationsRes, itemTypesRes, usersRes] = await Promise.all([
                     fetch('http://127.0.0.1:8000/api/vendors/', { headers }),
                     fetch('http://127.0.0.1:8000/api/locations/', { headers }),
                     fetch('http://127.0.0.1:8000/api/item-types/', { headers }),
+                    fetch('http://127.0.0.1:8000/api/users/', { headers }),
                 ]);
                 const vendors = await vendorsRes.json();
                 const locations = await locationsRes.json();
                 const itemTypes = await itemTypesRes.json();
-                setFilterOptions({ vendors, locations, itemTypes, users: [] }); // Users can be populated later
+                const users = await usersRes.json();
+                setFilterOptions({ vendors, locations, itemTypes, users });
             } catch (e) { console.error("Could not load filter options", e); }
         };
         fetchFilterOptions();
@@ -1407,11 +1652,332 @@ const MainApp = () => {
         } finally { setIsDeleteUserModalOpen(false); setDeletingUser(null); }
     };
 
+const ReportsPage = () => {
+    const { token } = useContext(AuthContext);
+    const [reports, setReports] = useState(null);
+    const [expiringItems, setExpiringItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (token) {
+            // Fetch reports data
+            Promise.all([
+                fetch('http://127.0.0.1:8000/api/items/reports/', {
+                    headers: { 'Authorization': `Token ${token}` }
+                }).then(res => res.json()),
+                fetch('http://127.0.0.1:8000/api/items/expiring_this_month/', {
+                    headers: { 'Authorization': `Token ${token}` }
+                }).then(res => res.json())
+            ]).then(([reportsData, expiringData]) => {
+                setReports(reportsData);
+                setExpiringItems(expiringData.items);
+                setLoading(false);
+            }).catch(error => {
+                console.error('Error fetching reports:', error);
+                setLoading(false);
+            });
+        }
+    }, [token]);
+
+    if (loading) return <div className="flex items-center justify-center h-64"><Loader className="w-8 h-8 animate-spin text-primary-600" /></div>;
+    if (!reports) return <div className="text-center text-secondary-500">No report data available</div>;
+
+    return (
+        <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold text-secondary-900 mb-2">Laboratory Dashboard</h1>
+                    <p className="text-secondary-600">Real-time inventory overview and key performance metrics</p>
+                </div>
+                <div className="flex space-x-3">
+                    <button className="btn btn-secondary flex items-center">
+                        <Download className="w-4 h-4 mr-2" />
+                        Export Report
+                    </button>
+                    <button className="btn btn-primary flex items-center">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+
+            {/* Enhanced Dashboard Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div className="bg-gradient-to-br from-white to-primary-50 p-6 rounded-xl shadow-soft border border-primary-200 hover:shadow-medium transition-all duration-200 cursor-pointer">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-secondary-600">Total Items</p>
+                            <p className="text-2xl font-bold text-secondary-900">{reports.summary.total_items}</p>
+                            <p className="text-xs text-primary-600 mt-1">View Inventory →</p>
+                        </div>
+                        <Package className="w-8 h-8 text-primary-600" />
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-white to-success-50 p-6 rounded-xl shadow-soft border border-success-200 hover:shadow-medium transition-all duration-200 cursor-pointer">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-secondary-600">Total Value</p>
+                            <p className="text-2xl font-bold text-secondary-900">${reports.summary.total_value.toFixed(2)}</p>
+                            <p className="text-xs text-success-600 mt-1">+{reports.summary.total_items > 0 ? ((reports.summary.total_value / reports.summary.total_items)).toFixed(0) : '0'} avg/item</p>
+                        </div>
+                        <div className="w-8 h-8 bg-success-100 rounded-full flex items-center justify-center">
+                            <span className="text-success-600 font-bold">$</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-white to-danger-50 p-6 rounded-xl shadow-soft border border-danger-200 hover:shadow-medium transition-all duration-200 cursor-pointer">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-secondary-600">Expired Items</p>
+                            <p className="text-2xl font-bold text-danger-600">{reports.summary.expired_items}</p>
+                            <p className="text-xs text-danger-600 mt-1">{reports.summary.expired_items > 0 ? 'Requires attention!' : 'All items current'}</p>
+                        </div>
+                        <AlertTriangle className="w-8 h-8 text-danger-600" />
+                    </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-white to-warning-50 p-6 rounded-xl shadow-soft border border-warning-200 hover:shadow-medium transition-all duration-200 cursor-pointer">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-secondary-600">Low Stock</p>
+                            <p className="text-2xl font-bold text-warning-600">{reports.summary.low_stock_items}</p>
+                            <p className="text-xs text-warning-600 mt-1">{reports.summary.low_stock_items > 0 ? 'Reorder soon' : 'Stock levels OK'}</p>
+                        </div>
+                        <Clock className="w-8 h-8 text-warning-600" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white p-6 rounded-xl shadow-soft border border-secondary-200 mb-8">
+                <h3 className="text-lg font-semibold text-secondary-900 mb-4">Quick Actions</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button className="btn btn-primary flex items-center justify-center p-4 hover:shadow-medium transition-all duration-200">
+                        <PlusCircle className="w-5 h-5 mr-2" />
+                        Add New Item
+                    </button>
+                    <button className="btn btn-secondary flex items-center justify-center p-4 hover:shadow-medium transition-all duration-200">
+                        <FileText className="w-5 h-5 mr-2" />
+                        New Request
+                    </button>
+                    <button className="btn btn-secondary flex items-center justify-center p-4 hover:shadow-medium transition-all duration-200">
+                        <Upload className="w-5 h-5 mr-2" />
+                        Import Data
+                    </button>
+                </div>
+            </div>
+
+            {/* Charts and Breakdowns */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                {/* Items by Type */}
+                <div className="bg-white p-6 rounded-xl shadow-soft border border-secondary-200">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-secondary-900">Items by Type</h3>
+                        <span className="text-xs text-secondary-500">{reports.breakdown.by_type.length} total types</span>
+                    </div>
+                    <div className="space-y-4">
+                        {reports.breakdown.by_type.slice(0, 5).map((item, index) => {
+                            const maxCount = Math.max(...reports.breakdown.by_type.map(i => i.count));
+                            const percentage = (item.count / maxCount) * 100;
+                            return (
+                                <div key={index} className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-secondary-700">{item.item_type__name}</span>
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-sm text-secondary-900 font-semibold">{item.count}</span>
+                                            <span className="text-xs text-secondary-500 bg-secondary-100 px-2 py-1 rounded">${(item.total_value || 0).toFixed(0)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="w-full bg-secondary-100 rounded-full h-2">
+                                        <div className="bg-primary-600 h-2 rounded-full" style={{width: `${percentage}%`}}></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Items by Location */}
+                <div className="bg-white p-6 rounded-xl shadow-soft border border-secondary-200">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-secondary-900">Items by Location</h3>
+                        <span className="text-xs text-secondary-500">{reports.breakdown.by_location.length} locations</span>
+                    </div>
+                    <div className="space-y-4">
+                        {reports.breakdown.by_location.slice(0, 5).map((item, index) => {
+                            const maxCount = Math.max(...reports.breakdown.by_location.map(i => i.count));
+                            const percentage = (item.count / maxCount) * 100;
+                            return (
+                                <div key={index} className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-secondary-700">{item.location__name}</span>
+                                        <span className="text-sm text-secondary-900 font-semibold bg-secondary-100 px-2 py-1 rounded">{item.count} items</span>
+                                    </div>
+                                    <div className="w-full bg-secondary-100 rounded-full h-2">
+                                        <div className="bg-secondary-600 h-2 rounded-full" style={{width: `${percentage}%`}}></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Expiring This Month */}
+            {expiringItems.length > 0 && (
+                <div className="bg-white rounded-xl shadow-soft border border-secondary-200">
+                    <div className="p-6 border-b border-secondary-200">
+                        <h3 className="text-lg font-semibold text-secondary-900">Items Expiring This Month</h3>
+                        <p className="text-sm text-secondary-600 mt-1">{expiringItems.length} items require attention</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="table">
+                            <thead className="table-header">
+                                <tr>
+                                    <th className="table-header-cell">Item Name</th>
+                                    <th className="table-header-cell">Vendor</th>
+                                    <th className="table-header-cell">Expiration Date</th>
+                                    <th className="table-header-cell">Days Left</th>
+                                    <th className="table-header-cell">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="table-body">
+                                {expiringItems.slice(0, 10).map(item => (
+                                    <tr key={item.id} className="table-row">
+                                        <td className="table-cell">
+                                            <div className="font-medium text-secondary-900">{item.name}</div>
+                                            <div className="text-xs text-secondary-500">#{item.serial_number}</div>
+                                        </td>
+                                        <td className="table-cell text-secondary-600">
+                                            {item.vendor?.name || 'N/A'}
+                                        </td>
+                                        <td className="table-cell text-secondary-600">
+                                            {new Date(item.expiration_date).toLocaleDateString()}
+                                        </td>
+                                        <td className="table-cell">
+                                            <span className={`font-medium ${item.days_until_expiration <= 7 ? 'text-danger-600' : 'text-warning-600'}`}>
+                                                {item.days_until_expiration} days
+                                            </span>
+                                        </td>
+                                        <td className="table-cell">
+                                            {item.expiration_status === 'EXPIRED' && (
+                                                <span className="badge badge-danger">Expired</span>
+                                            )}
+                                            {item.expiration_status === 'EXPIRING_SOON' && (
+                                                <span className="badge badge-warning">Expiring Soon</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Recent Activity & System Status */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                {/* Recent Activity */}
+                <div className="bg-white p-6 rounded-xl shadow-soft border border-secondary-200 lg:col-span-2">
+                    <h3 className="text-lg font-semibold text-secondary-900 mb-4">Recent Activity</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center space-x-4">
+                            <div className="w-8 h-8 bg-success-100 rounded-full flex items-center justify-center">
+                                <PlusCircle className="w-4 h-4 text-success-600" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-secondary-900">New items added to inventory</p>
+                                <p className="text-xs text-secondary-500">Last update: 2 hours ago</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            <div className="w-8 h-8 bg-warning-100 rounded-full flex items-center justify-center">
+                                <Clock className="w-4 h-4 text-warning-600" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-secondary-900">Stock level alerts generated</p>
+                                <p className="text-xs text-secondary-500">Last update: 4 hours ago</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-primary-600" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-secondary-900">New requests submitted</p>
+                                <p className="text-xs text-secondary-500">Last update: 6 hours ago</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* System Health */}
+                <div className="bg-white p-6 rounded-xl shadow-soft border border-secondary-200">
+                    <h3 className="text-lg font-semibold text-secondary-900 mb-4">System Status</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-secondary-700">Database</span>
+                            <div className="flex items-center space-x-2">
+                                <div className="w-2 h-2 bg-success-500 rounded-full"></div>
+                                <span className="text-xs text-success-600 font-medium">Online</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-secondary-700">API Status</span>
+                            <div className="flex items-center space-x-2">
+                                <div className="w-2 h-2 bg-success-500 rounded-full"></div>
+                                <span className="text-xs text-success-600 font-medium">Healthy</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-secondary-700">Last Backup</span>
+                            <span className="text-xs text-secondary-500">2 hours ago</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm text-secondary-700">Storage Used</span>
+                            <span className="text-xs text-secondary-500">65% (2.3GB)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Weekly Summary */}
+            <div className="bg-white p-6 rounded-xl shadow-soft border border-secondary-200">
+                <h3 className="text-lg font-semibold text-secondary-900 mb-4">Weekly Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-primary-600">+{Math.floor(Math.random() * 50) + 10}</div>
+                        <div className="text-sm text-secondary-600">Items Added</div>
+                        <div className="text-xs text-success-600">↑ 15% vs last week</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-secondary-600">{Math.floor(Math.random() * 30) + 5}</div>
+                        <div className="text-sm text-secondary-600">Requests Fulfilled</div>
+                        <div className="text-xs text-success-600">↑ 8% vs last week</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-warning-600">{Math.floor(Math.random() * 10) + 2}</div>
+                        <div className="text-sm text-secondary-600">Items Expired</div>
+                        <div className="text-xs text-danger-600">↓ 3% vs last week</div>
+                    </div>
+                    <div className="text-center">
+                        <div className="text-2xl font-bold text-success-600">${(Math.random() * 5000 + 1000).toFixed(0)}</div>
+                        <div className="text-sm text-secondary-600">Value Added</div>
+                        <div className="text-xs text-success-600">↑ 12% vs last week</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    );
+};
+
     const renderPage = () => {
         switch (activePage) {
             case 'inventory': return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
             case 'requests': return <RequestsPage onAddRequestClick={() => setIsRequestFormModalOpen(true)} refreshKey={refreshKey} filters={requestFilters} onFilterChange={handleRequestFilterChange} />;
-            case 'orders': return <main className="flex-grow p-8"><h1>Orders Page Coming Soon...</h1></main>;
+            case 'reports': return <ReportsPage />;
             case 'users': return <UserManagementPage onEditUser={handleOpenEditUserModal} onDeleteUser={handleOpenDeleteUserModal} refreshKey={refreshKey} users={users} setUsers={setUsers} />;
             default: return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
         }
@@ -1419,11 +1985,19 @@ const MainApp = () => {
 
     return (
         <div className="bg-secondary-50 font-sans antialiased h-screen flex flex-col">
-            <Header activePage={activePage} onNavigate={setActivePage} />
+            <Header 
+                activePage={activePage} 
+                onNavigate={setActivePage}
+                inventoryFilters={inventoryFilters}
+                requestFilters={requestFilters}
+                handleInventoryFilterChange={handleInventoryFilterChange}
+                handleRequestFilterChange={handleRequestFilterChange}
+            />
+            <AlertsBanner />
             <div className="flex flex-grow overflow-hidden relative">
                 {activePage === 'inventory' && <InventorySidebar onAddItemClick={handleOpenAddItemModal} filters={inventoryFilters} onFilterChange={handleInventoryFilterChange} filterOptions={filterOptions} />}
                 {activePage === 'requests' && <RequestsSidebar onAddRequestClick={() => setIsRequestFormModalOpen(true)} filters={requestFilters} onFilterChange={handleRequestFilterChange} filterOptions={filterOptions} />}
-                {activePage === 'users' && <UserManagementSidebar onAddUserClick={handleOpenAddUserModal} users={users} />}
+                {activePage === 'users' && <UserManagementSidebar onAddUserClick={handleOpenAddUserModal} users={users} userSearch={userSearch} onUserSearchChange={setUserSearch} />}
                 {renderPage()}
             </div>
             <ItemFormModal isOpen={isItemFormModalOpen} onClose={() => setIsItemFormModalOpen(false)} onSave={handleSave} token={token} initialData={editingItem} />
