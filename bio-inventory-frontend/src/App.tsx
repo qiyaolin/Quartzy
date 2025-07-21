@@ -547,7 +547,7 @@ const Header = ({ activePage, onNavigate }) => {
 
 // --- INVENTORY PAGE COMPONENTS ---
 const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptions }) => (
-    <aside className="sidebar w-80 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
+    <aside className="sidebar w-72 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
         <div className="flex-grow overflow-y-auto space-y-6">
             <div className="space-y-4">
                 <button onClick={onAddItemClick} className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5">
@@ -743,7 +743,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters, filterOp
 
 // --- REQUESTS PAGE COMPONENTS ---
 const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOptions }) => (
-    <aside className="sidebar w-80 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
+    <aside className="sidebar w-72 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
         <div className="flex-grow overflow-y-auto space-y-6">
             <div className="space-y-4">
                 <button onClick={onAddRequestClick} className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5">
@@ -799,12 +799,12 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
             <table className="table">
                 <thead className="table-header"><tr>
                     <th className="table-header-cell w-12"><input type="checkbox" className="checkbox" /></th>
-                    <th className="table-header-cell">Item Details</th>
-                    <th className="table-header-cell">Vendor</th>
-                    <th className="table-header-cell">Price</th>
-                    <th className="table-header-cell">Requested By</th>
-                    <th className="table-header-cell">Status</th>
-                    <th className="table-header-cell">Actions</th>
+                    <th className="table-header-cell w-80">Item Details</th>
+                    <th className="table-header-cell w-40">Vendor</th>
+                    <th className="table-header-cell w-24">Price</th>
+                    <th className="table-header-cell w-36">Requested By</th>
+                    <th className="table-header-cell w-24">Status</th>
+                    <th className="table-header-cell w-28">Actions</th>
                 </tr></thead>
                 <tbody className="table-body">
                     {requests.map(req => (
@@ -1084,7 +1084,7 @@ const UserManagementSidebar = ({ onAddUserClick, users = [] }) => {
     const adminUsers = users.filter(user => user.is_staff).length;
     
     return (
-        <aside className="sidebar w-80 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
+        <aside className="sidebar w-72 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
             <div className="flex-grow overflow-y-auto space-y-6">
                 <div className="space-y-4">
                     <button onClick={onAddUserClick} className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5">

@@ -129,6 +129,15 @@
   .table-cell {
     @apply px-6 py-4 whitespace-nowrap text-sm text-secondary-900;
   }
+
+  @media (max-width: 768px) {
+    .table-cell {
+      @apply px-3 py-3;
+    }
+    .table-header-cell {
+      @apply px-3 py-2;
+    }
+  }
   
   .sidebar {
     @apply bg-white border-r border-secondary-200 shadow-soft;
