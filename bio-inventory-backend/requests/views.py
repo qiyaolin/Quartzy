@@ -1,0 +1,107 @@
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.filters import SearchFilter # Import SearchFilter
+from django_filters import rest_framework as filters # Import django_filters
+from rest_framework.permissions import IsAdminUser # Import this
+from .models import Request, RequestHistory
+from .serializers import RequestSerializer, RequestHistorySerializer
+from .filters import RequestFilter # Import our filter class
+from items.models import Item, Location
+
+class RequestViewSet(viewsets.ModelViewSet):
+    queryset = Request.objects.all()
+    serializer_class = RequestSerializer
+    filterset_class = RequestFilter # Connect the filter class
+    filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter
+    search_fields = ['item_name', 'catalog_number', 'vendor__name'] # Define fields that the SearchFilter will search across
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser]) # Add this decorator
+    def approve(self, request, pk=None):
+        req_object = self.get_object()
+        if req_object.status == 'NEW':
+            req_object.status = 'APPROVED'
+            req_object.save()
+            return Response({'status': 'Request approved'})
+        return Response({'error': 'Request cannot be approved.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def place_order(self, request, pk=None):
+        """Custom action to mark an approved request as ordered."""
+        req_object = self.get_object()
+        if req_object.status == 'APPROVED':
+            req_object.status = 'ORDERED'
+            req_object.save()
+            return Response({'status': 'Request marked as ordered'})
+        return Response({'error': 'Only approved requests can be ordered.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def mark_received(self, request, pk=None):
+        """
+        Custom action to mark a request as received.
+        This action ALWAYS creates a new Item record.
+        """
+        req_object = self.get_object()
+        if req_object.status != 'ORDERED':
+            return Response({'error': 'Only ordered items can be marked as received.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        location_id = request.data.get('location_id')
+        quantity_received = int(request.data.get('quantity_received', 0))
+
+        if not location_id or quantity_received <= 0:
+            return Response({'error': 'Location and valid quantity are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # **MODIFIED LOGIC**: Always create a new inventory item for each reception.
+        Item.objects.create(
+            name=req_object.item_name,
+            vendor=req_object.vendor,
+            catalog_number=req_object.catalog_number,
+            item_type_id=1, # Default to a generic type, can be improved
+            owner=req_object.requested_by,
+            quantity=quantity_received,
+            unit=req_object.unit_size,
+            location_id=location_id,
+            price=req_object.unit_price
+        )
+
+        # Handle partial delivery
+        if quantity_received < req_object.quantity:
+            remaining_qty = req_object.quantity - quantity_received
+            Request.objects.create(
+                item_name=f"{req_object.item_name} (Back-ordered)",
+                requested_by=req_object.requested_by,
+                vendor=req_object.vendor,
+                catalog_number=req_object.catalog_number,
+                quantity=remaining_qty,
+                unit_price=req_object.unit_price,
+                status='ORDERED' # It's still on order
+            )
+
+        req_object.status = 'RECEIVED'
+        req_object.save()
+
+        return Response({'status': 'Item received and new inventory record created.'})
+
+    @action(detail=True, methods=['post'])
+    def reorder(self, request, pk=None):
+        original_request = self.get_object()
+        new_request = Request.objects.create(
+            item_name=original_request.item_name,
+            requested_by=request.user,
+            vendor=original_request.vendor,
+            catalog_number=original_request.catalog_number,
+            url=original_request.url,
+            quantity=original_request.quantity,
+            unit_size=original_request.unit_size,
+            unit_price=original_request.unit_price,
+            status='NEW'
+        )
+        serializer = self.get_serializer(new_request)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get'])
+    def history(self, request, pk=None):
+        req_object = self.get_object()
+        history_qs = RequestHistory.objects.filter(request=req_object)
+        serializer = RequestHistorySerializer(history_qs, many=True)
+        return Response(serializer.data)

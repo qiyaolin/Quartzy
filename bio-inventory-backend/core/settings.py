@@ -41,8 +41,11 @@ INSTALLED_APPS = [
     # Third-party apps
     'rest_framework',
     'rest_framework.authtoken',
+    'django_filters', # Add this
     # Our apps
     'items',
+    'requests', # Add our new app here
+    'users',
 ]
 
 MIDDLEWARE = [
@@ -148,5 +151,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend'
     ]
 }
