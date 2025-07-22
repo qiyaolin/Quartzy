@@ -10,24 +10,25 @@ def calculate_budget_health_score(fund):
     utilization = fund.utilization_percentage
     
     # Time-based scoring
-    time_score = 100
-    if fund.end_date:
-        total_duration = (fund.end_date - fund.start_date).days if fund.start_date else 365
+    time_score = 100.0
+    if fund.end_date and fund.start_date:
+        total_duration = (fund.end_date - fund.start_date).days
         remaining_days = (fund.end_date - timezone.now().date()).days
         
         if total_duration > 0:
             time_progress = (total_duration - remaining_days) / total_duration * 100
             # Ideal spending should match time progress
-            time_vs_spending_diff = abs(time_progress - utilization)
+            time_vs_spending_diff = abs(float(time_progress) - float(utilization))
             time_score = max(0, 100 - time_vs_spending_diff)
     
     # Utilization scoring (penalize both under and over-utilization)
-    if utilization < 50:
-        util_score = utilization * 1.5  # Under-utilization penalty
-    elif utilization > 90:
-        util_score = max(0, 100 - (utilization - 90) * 10)  # Over-utilization penalty
+    util_percentage = float(utilization)
+    if util_percentage < 50:
+        util_score = util_percentage * 1.5  # Under-utilization penalty
+    elif util_percentage > 90:
+        util_score = max(0, 100 - (util_percentage - 90) * 10)  # Over-utilization penalty
     else:
-        util_score = 100
+        util_score = 100.0
     
     # Combined score
     health_score = (time_score * 0.6 + util_score * 0.4)
@@ -64,14 +65,15 @@ def get_spending_predictions(fund, months_ahead=6):
     remaining_budget = fund.remaining_budget
     exhaustion_date = None
     if monthly_avg > 0:
-        months_until_exhaustion = remaining_budget / monthly_avg
+        months_until_exhaustion = float(remaining_budget) / float(monthly_avg)
         exhaustion_date = timezone.now() + timedelta(days=30 * months_until_exhaustion)
     
     # Determine risk level
+    utilization = float(fund.utilization_percentage)
     risk_level = 'low'
-    if fund.utilization_percentage > 90:
+    if utilization > 90:
         risk_level = 'critical'
-    elif fund.utilization_percentage > 75:
+    elif utilization > 75:
         risk_level = 'high'
     elif monthly_avg * 12 > remaining_budget:
         risk_level = 'medium'

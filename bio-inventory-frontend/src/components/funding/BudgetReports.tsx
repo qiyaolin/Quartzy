@@ -39,7 +39,8 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
         const monthlySpending = {};
         filteredTransactions.forEach(transaction => {
             const monthKey = new Date(transaction.transaction_date).toISOString().slice(0, 7);
-            monthlySpending[monthKey] = (monthlySpending[monthKey] || 0) + transaction.amount;
+            const amount = parseFloat(transaction.amount) || 0;
+            monthlySpending[monthKey] = (monthlySpending[monthKey] || 0) + amount;
         });
 
         // Convert to array for chart
@@ -57,14 +58,15 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
 
         const fundUtilization = activeFunds.map(fund => {
             const fundTransactions = filteredTransactions.filter(t => t.fund?.id === fund.id);
-            const spent = fundTransactions.reduce((sum, t) => sum + t.amount, 0);
-            const utilization = fund.total_budget > 0 ? (spent / fund.total_budget) * 100 : 0;
+            const spent = fundTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+            const totalBudget = parseFloat(fund.total_budget) || 0;
+            const utilization = totalBudget > 0 ? (spent / totalBudget) * 100 : 0;
             
             return {
                 fund: fund.name,
-                total_budget: fund.total_budget,
+                total_budget: totalBudget,
                 spent,
-                remaining: fund.total_budget - spent,
+                remaining: totalBudget - spent,
                 utilization: Math.min(utilization, 100)
             };
         });
@@ -72,7 +74,7 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
         return {
             spendingTrend,
             fundUtilization,
-            totalSpent: filteredTransactions.reduce((sum, t) => sum + t.amount, 0),
+            totalSpent: filteredTransactions.reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0),
             transactionCount: filteredTransactions.length
         };
     }, [funds, transactions, selectedPeriod, selectedFund]);
@@ -238,7 +240,7 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
                                                 {item.month}
                                             </span>
                                             <span className="text-sm font-bold text-success-600">
-                                                ${item.amount.toLocaleString()}
+                                                ${(parseFloat(item.amount) || 0).toLocaleString()}
                                             </span>
                                         </div>
                                         <div className="w-full bg-secondary-200 rounded-full h-3">
@@ -274,7 +276,7 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
                                     <div>
                                         <h5 className="font-medium text-secondary-900">{fund.fund}</h5>
                                         <p className="text-sm text-secondary-600">
-                                            ${fund.spent.toLocaleString()} of ${fund.total_budget.toLocaleString()}
+                                            ${(parseFloat(fund.spent) || 0).toLocaleString()} of ${(parseFloat(fund.total_budget) || 0).toLocaleString()}
                                         </p>
                                     </div>
                                     <div className="text-right">
@@ -295,7 +297,7 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
                                 </div>
                                 
                                 <div className="flex justify-between text-xs text-secondary-600">
-                                    <span>Remaining: ${fund.remaining.toLocaleString()}</span>
+                                    <span>Remaining: ${(parseFloat(fund.remaining) || 0).toLocaleString()}</span>
                                     <span>
                                         {fund.utilization >= 90 ? 'Critical' : 
                                          fund.utilization >= 75 ? 'Warning' : 'Healthy'}

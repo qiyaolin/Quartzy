@@ -62,10 +62,14 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     };
 
     const getFundUtilization = (fund) => {
-        const totalCost = request.unit_price * request.quantity;
-        const currentUtilization = fund.total_budget > 0 ? (fund.spent_amount / fund.total_budget) * 100 : 0;
-        const afterUtilization = fund.total_budget > 0 ? ((fund.spent_amount + totalCost) / fund.total_budget) * 100 : 0;
-        const remainingAfter = fund.total_budget - fund.spent_amount - totalCost;
+        const unitPrice = parseFloat(request.unit_price) || 0;
+        const quantity = parseFloat(request.quantity) || 0;
+        const totalCost = unitPrice * quantity;
+        const totalBudget = parseFloat(fund.total_budget) || 0;
+        const spentAmount = parseFloat(fund.spent_amount) || 0;
+        const currentUtilization = totalBudget > 0 ? (spentAmount / totalBudget) * 100 : 0;
+        const afterUtilization = totalBudget > 0 ? ((spentAmount + totalCost) / totalBudget) * 100 : 0;
+        const remainingAfter = totalBudget - spentAmount - totalCost;
 
         return {
             current: currentUtilization,
@@ -140,7 +144,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                             <div>
                                 <p className="text-sm font-medium text-primary-700">Total Cost</p>
                                 <p className="text-xl font-bold text-primary-900">
-                                    ${(request.unit_price * request.quantity).toLocaleString()}
+                                    ${((parseFloat(request.unit_price) || 0) * (parseFloat(request.quantity) || 0)).toLocaleString()}
                                 </p>
                             </div>
                         </div>
@@ -188,7 +192,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                                                     <div className="flex items-center justify-between mb-2">
                                                         <h4 className="font-medium text-secondary-900">{fund.name}</h4>
                                                         <span className="text-sm text-secondary-600">
-                                                            ${fund.spent_amount.toLocaleString()} / ${fund.total_budget.toLocaleString()}
+                                                            ${(parseFloat(fund.spent_amount) || 0).toLocaleString()} / ${(parseFloat(fund.total_budget) || 0).toLocaleString()}
                                                         </span>
                                                     </div>
                                                     

@@ -154,51 +154,72 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
         );
     };
     return (
-        <div className="overflow-x-auto">
+        <div className="card overflow-hidden">
+            {/* Enhanced Selection Bar */}
             {selectedItems.size > 0 && (
-                <div className="bg-primary-50 border-b border-primary-200 p-4 flex items-center justify-between">
-                    <span className="text-sm font-medium text-primary-700">
-                        {selectedItems.size} item(s) selected
-                    </span>
-                    <div className="flex space-x-2">
-                        <button 
-                            onClick={() => onBatchAction && onBatchAction('archive', Array.from(selectedItems))}
-                            className="btn btn-secondary btn-sm"
-                        >
-                            Archive Selected
-                        </button>
-                        <button 
-                            onClick={() => onBatchAction && onBatchAction('export', Array.from(selectedItems))}
-                            className="btn btn-secondary btn-sm"
-                        >
-                            Export Selected
-                        </button>
-                        <button 
-                            onClick={() => onBatchAction && onBatchAction('delete', Array.from(selectedItems))}
-                            className="btn btn-danger btn-sm"
-                        >
-                            Delete Selected
-                        </button>
+                <div className="bg-gradient-to-r from-primary-50 to-primary-100 border-b border-primary-200 p-6 animate-slide-down">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                            <div className="flex items-center justify-center w-10 h-10 bg-primary-500 rounded-2xl">
+                                <span className="text-white font-bold text-sm">{selectedItems.size}</span>
+                            </div>
+                            <div>
+                                <span className="text-lg font-semibold text-primary-900">
+                                    {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
+                                </span>
+                                <p className="text-sm text-primary-700">Choose an action to apply to selected items</p>
+                            </div>
+                        </div>
+                        <div className="flex space-x-3">
+                            <button 
+                                onClick={() => onBatchAction && onBatchAction('archive', Array.from(selectedItems))}
+                                className="btn btn-secondary btn-sm hover:scale-105 transition-transform"
+                            >
+                                Archive Selected
+                            </button>
+                            <button 
+                                onClick={() => onBatchAction && onBatchAction('export', Array.from(selectedItems))}
+                                className="btn btn-secondary btn-sm hover:scale-105 transition-transform"
+                            >
+                                Export Selected
+                            </button>
+                            <button 
+                                onClick={() => onBatchAction && onBatchAction('delete', Array.from(selectedItems))}
+                                className="btn btn-danger btn-sm hover:scale-105 transition-transform"
+                            >
+                                Delete Selected
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
-            <table className="table">
-                <thead className="table-header"><tr>
-                    <th className="table-header-cell w-12">
-                        <input 
-                            type="checkbox" 
-                            className="checkbox" 
-                            checked={selectAll}
-                            onChange={(e) => handleSelectAll(e.target.checked)}
-                        />
-                    </th>
-                    <th className="table-header-cell">Item Name</th>
-                    <th className="table-header-cell">Vendor</th>
-                    <th className="table-header-cell">Total Amount</th>
-                    <th className="table-header-cell">Expiration</th>
-                    <th className="table-header-cell">Type</th>
-                    <th className="table-header-cell w-24">Actions</th>
-                </tr></thead>
+            
+            {/* Enhanced Table */}
+            <div className="overflow-x-auto">
+                <table className="table">
+                    <thead className="table-header">
+                        <tr>
+                            <th className="table-header-cell w-12">
+                                <input 
+                                    type="checkbox" 
+                                    className="checkbox" 
+                                    checked={selectAll}
+                                    onChange={(e) => handleSelectAll(e.target.checked)}
+                                />
+                            </th>
+                            <th className="table-header-cell">
+                                <div className="flex items-center space-x-2">
+                                    <Package className="w-4 h-4 text-gray-500" />
+                                    <span>Item Name</span>
+                                </div>
+                            </th>
+                            <th className="table-header-cell">Vendor</th>
+                            <th className="table-header-cell">Total Amount</th>
+                            <th className="table-header-cell">Expiration Status</th>
+                            <th className="table-header-cell">Type</th>
+                            <th className="table-header-cell w-24">Actions</th>
+                        </tr>
+                    </thead>
                 <tbody className="table-body">
                     {Object.values(groupedData).map(group => (
                         <React.Fragment key={group.id}>
@@ -235,17 +256,26 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                 </td>
                                 <td className="table-cell">
                                     <div className="flex items-center space-x-1">
-                                        <button onClick={() => onEdit(group.instances[0])} className="p-2 hover:bg-primary-50 rounded-lg transition-colors group">
-                                            <Edit className="w-4 h-4 text-secondary-400 group-hover:text-primary-600" />
+                                        <button 
+                                            onClick={() => onEdit(group.instances[0])} 
+                                            className="p-2.5 hover:bg-primary-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
+                                            title="Edit item"
+                                        >
+                                            <Edit className="w-4 h-4 text-gray-400 group-hover:text-primary-600 transition-colors" />
                                         </button>
-                                        <button onClick={() => onViewRequestHistory && onViewRequestHistory(group.instances[0])} className="p-2 hover:bg-secondary-50 rounded-lg transition-colors group">
-                                            <History className="w-4 h-4 text-secondary-400 group-hover:text-secondary-600" />
+                                        <button 
+                                            onClick={() => onViewRequestHistory && onViewRequestHistory(group.instances[0])} 
+                                            className="p-2.5 hover:bg-info-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
+                                            title="View request history"
+                                        >
+                                            <History className="w-4 h-4 text-gray-400 group-hover:text-info-600 transition-colors" />
                                         </button>
-                                        <div className="relative">
-                                            <button className="p-2 hover:bg-danger-50 rounded-lg transition-colors group">
-                                                <Trash2 className="w-4 h-4 text-secondary-400 group-hover:text-danger-600" />
-                                            </button>
-                                        </div>
+                                        <button 
+                                            className="p-2.5 hover:bg-danger-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
+                                            title="Delete item"
+                                        >
+                                            <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-danger-600 transition-colors" />
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -283,14 +313,26 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                     </td>
                                     <td className="table-cell">
                                         <div className="flex items-center space-x-1">
-                                            <button onClick={() => onEdit(instance)} className="p-2 hover:bg-primary-50 rounded-lg transition-colors group">
-                                                <Edit className="w-4 h-4 text-secondary-400 group-hover:text-primary-600" />
+                                            <button 
+                                                onClick={() => onEdit(instance)} 
+                                                className="p-2.5 hover:bg-primary-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
+                                                title="Edit instance"
+                                            >
+                                                <Edit className="w-4 h-4 text-gray-400 group-hover:text-primary-600 transition-colors" />
                                             </button>
-                                            <button onClick={() => onViewRequestHistory && onViewRequestHistory(instance)} className="p-2 hover:bg-secondary-50 rounded-lg transition-colors group">
-                                                <History className="w-4 h-4 text-secondary-400 group-hover:text-secondary-600" />
+                                            <button 
+                                                onClick={() => onViewRequestHistory && onViewRequestHistory(instance)} 
+                                                className="p-2.5 hover:bg-info-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
+                                                title="View request history"
+                                            >
+                                                <History className="w-4 h-4 text-gray-400 group-hover:text-info-600 transition-colors" />
                                             </button>
-                                            <button onClick={() => onDelete(instance)} className="p-2 hover:bg-danger-50 rounded-lg transition-colors group">
-                                                <Trash2 className="w-4 h-4 text-secondary-400 group-hover:text-danger-600" />
+                                            <button 
+                                                onClick={() => onDelete(instance)} 
+                                                className="p-2.5 hover:bg-danger-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
+                                                title="Delete instance"
+                                            >
+                                                <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-danger-600 transition-colors" />
                                             </button>
                                         </div>
                                     </td>
@@ -298,8 +340,9 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                             ))}
                         </React.Fragment>
                     ))}
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };

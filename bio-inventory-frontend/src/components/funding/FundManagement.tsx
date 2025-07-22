@@ -45,8 +45,10 @@ const FundManagement = ({ funds, onRefresh, token }) => {
     };
 
     const getStatusBadge = (fund) => {
-        const remaining = fund.total_budget - fund.spent_amount;
-        const percentUsed = fund.total_budget > 0 ? (fund.spent_amount / fund.total_budget) * 100 : 0;
+        const totalBudget = parseFloat(fund.total_budget) || 0;
+        const spentAmount = parseFloat(fund.spent_amount) || 0;
+        const remaining = totalBudget - spentAmount;
+        const percentUsed = totalBudget > 0 ? (spentAmount / totalBudget) * 100 : 0;
 
         if (fund.is_archived) {
             return <span className="badge badge-secondary">Archived</span>;
@@ -62,7 +64,9 @@ const FundManagement = ({ funds, onRefresh, token }) => {
     };
 
     const getProgressBarColor = (fund) => {
-        const percentUsed = fund.total_budget > 0 ? (fund.spent_amount / fund.total_budget) * 100 : 0;
+        const totalBudget = parseFloat(fund.total_budget) || 0;
+        const spentAmount = parseFloat(fund.spent_amount) || 0;
+        const percentUsed = totalBudget > 0 ? (spentAmount / totalBudget) * 100 : 0;
         
         if (percentUsed >= 90) return 'bg-danger-500';
         if (percentUsed >= 75) return 'bg-warning-500';
@@ -88,8 +92,10 @@ const FundManagement = ({ funds, onRefresh, token }) => {
             {/* Funds Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {funds.map((fund) => {
-                    const remaining = fund.total_budget - fund.spent_amount;
-                    const percentUsed = fund.total_budget > 0 ? (fund.spent_amount / fund.total_budget) * 100 : 0;
+                    const totalBudget = parseFloat(fund.total_budget) || 0;
+                    const spentAmount = parseFloat(fund.spent_amount) || 0;
+                    const remaining = totalBudget - spentAmount;
+                    const percentUsed = totalBudget > 0 ? (spentAmount / totalBudget) * 100 : 0;
                     
                     return (
                         <div key={fund.id} className="bg-white border border-secondary-200 rounded-lg shadow-soft overflow-hidden">
@@ -127,14 +133,14 @@ const FundManagement = ({ funds, onRefresh, token }) => {
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm font-medium text-secondary-700">Total Budget</span>
                                         <span className="text-lg font-bold text-secondary-900">
-                                            ${fund.total_budget.toLocaleString()}
+                                            ${totalBudget.toLocaleString()}
                                         </span>
                                     </div>
                                     
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-secondary-600">Spent</span>
                                         <span className="text-sm font-medium text-warning-600">
-                                            ${fund.spent_amount.toLocaleString()}
+                                            ${spentAmount.toLocaleString()}
                                         </span>
                                     </div>
                                     

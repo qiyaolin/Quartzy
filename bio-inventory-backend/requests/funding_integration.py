@@ -34,7 +34,7 @@ def create_transaction_on_approval(sender, instance, created, **kwargs):
                     # Could add logging here or send notification
                     pass
                 
-                # Create transaction
+                # Create transaction (signals will automatically update fund spent amount)
                 Transaction.objects.create(
                     fund=fund,
                     amount=total_cost,

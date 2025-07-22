@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Sum
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
 from decimal import Decimal
@@ -46,6 +47,19 @@ class Fund(models.Model):
 
     def can_afford(self, amount):
         return self.remaining_budget >= amount
+
+    def recalculate_spent_amount(self):
+        """Recalculate spent amount from all transactions to ensure accuracy"""
+        purchases_and_adjustments = self.transactions.filter(
+            transaction_type__in=['purchase', 'adjustment']
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        refunds = self.transactions.filter(
+            transaction_type='refund'
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        self.spent_amount = purchases_and_adjustments - refunds
+        return self.spent_amount
 
 
 class Transaction(models.Model):

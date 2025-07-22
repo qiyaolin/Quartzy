@@ -85,7 +85,7 @@ class FundViewSet(viewsets.ModelViewSet):
             fund=fund,
             transaction_date__gte=six_months_ago
         ).extra(
-            select={'month': "DATE_FORMAT(transaction_date, '%%Y-%%m')"}
+            select={'month': "TO_CHAR(transaction_date, 'YYYY-MM')"}
         ).values('month').annotate(
             total=Sum('amount')
         ).order_by('month')
@@ -150,16 +150,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
         return Transaction.objects.filter(fund__is_archived=False)
 
     def perform_create(self, serializer):
+        # Transaction signals will automatically update fund spent amount
         transaction = serializer.save()
-        
-        # Update fund spent amount
-        fund = transaction.fund
-        if transaction.transaction_type in ['purchase', 'adjustment']:
-            fund.spent_amount += transaction.amount
-        elif transaction.transaction_type == 'refund':
-            fund.spent_amount = max(fund.spent_amount - transaction.amount, Decimal('0.00'))
-        
-        fund.save()
 
     @action(detail=False, methods=['get'])
     def summary(self, request):

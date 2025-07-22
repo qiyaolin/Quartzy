@@ -44,9 +44,9 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
                 case 'date_asc':
                     return new Date(a.transaction_date) - new Date(b.transaction_date);
                 case 'amount_desc':
-                    return b.amount - a.amount;
+                    return (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0);
                 case 'amount_asc':
-                    return a.amount - b.amount;
+                    return (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0);
                 case 'fund':
                     return (a.fund?.name || '').localeCompare(b.fund?.name || '');
                 default:
@@ -57,7 +57,10 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
         return filtered;
     }, [transactions, searchTerm, selectedFund, dateRange, sortBy]);
 
-    const totalAmount = filteredTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalAmount = filteredTransactions.reduce((sum, transaction) => {
+        const amount = parseFloat(transaction.amount) || 0;
+        return sum + amount;
+    }, 0);
 
     const exportTransactions = () => {
         const exportData = {
@@ -304,7 +307,7 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
                                     </td>
                                     <td className="table-cell">
                                         <span className="text-lg font-bold text-success-600">
-                                            ${transaction.amount.toLocaleString()}
+                                            ${(parseFloat(transaction.amount) || 0).toLocaleString()}
                                         </span>
                                     </td>
                                     <td className="table-cell">

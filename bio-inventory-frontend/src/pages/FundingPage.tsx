@@ -124,7 +124,7 @@ const FundingPage = () => {
                             <div>
                                 <p className="text-sm text-secondary-600">Total Budget</p>
                                 <p className="text-lg font-bold text-success-600">
-                                    ${budgetSummary?.total_budget || 0}
+                                    ${(parseFloat(budgetSummary?.total_budget) || 0).toLocaleString()}
                                 </p>
                             </div>
                         </div>
@@ -135,7 +135,7 @@ const FundingPage = () => {
                             <div>
                                 <p className="text-sm text-secondary-600">Spent</p>
                                 <p className="text-lg font-bold text-warning-600">
-                                    ${budgetSummary?.total_spent || 0}
+                                    ${(parseFloat(budgetSummary?.total_spent) || 0).toLocaleString()}
                                 </p>
                             </div>
                         </div>
