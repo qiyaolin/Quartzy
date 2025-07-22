@@ -44,14 +44,9 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     };
 
     const handlePlaceOrder = async () => {
-        if (!selectedFund) {
-            alert('Please select a fund for this order.');
-            return;
-        }
-
         setPlacing(true);
         try {
-            await onPlaceOrder(request.id, selectedFund);
+            await onPlaceOrder(request.id, selectedFund || null);
             onClose();
         } catch (error) {
             console.error('Error placing order:', error);
@@ -114,7 +109,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                 <div className="p-6 border-b border-secondary-200 flex justify-between items-center">
                     <div>
                         <h2 className="text-2xl font-bold text-secondary-900">Select Fund for Order</h2>
-                        <p className="text-secondary-600 mt-1">Choose which fund to use for this order</p>
+                        <p className="text-secondary-600 mt-1">Choose which fund to use for this order (optional)</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -281,7 +276,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     </div>
                 </div>
 
-                <div className="flex justify-end space-x-3 p-6 border-t border-secondary-200 bg-secondary-50">
+                <div className="flex justify-between items-center p-6 border-t border-secondary-200 bg-secondary-50">
                     <button
                         type="button"
                         onClick={onClose}
@@ -290,23 +285,47 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     >
                         Cancel
                     </button>
-                    <button
-                        onClick={handlePlaceOrder}
-                        className="btn btn-primary"
-                        disabled={placing || !selectedFund || funds.length === 0}
-                    >
-                        {placing ? (
-                            <div className="flex items-center">
-                                <div className="loading-spinner w-4 h-4 mr-2"></div>
-                                Placing Order...
-                            </div>
-                        ) : (
-                            <>
-                                <Package className="w-4 h-4 mr-2" />
-                                Place Order
-                            </>
+                    <div className="flex space-x-3">
+                        {funds.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    setSelectedFund('');
+                                    handlePlaceOrder();
+                                }}
+                                className="btn btn-secondary"
+                                disabled={placing}
+                            >
+                                {placing ? (
+                                    <div className="flex items-center">
+                                        <div className="loading-spinner w-4 h-4 mr-2"></div>
+                                        Placing Order...
+                                    </div>
+                                ) : (
+                                    <>
+                                        <Package className="w-4 h-4 mr-2" />
+                                        Place Order Without Fund
+                                    </>
+                                )}
+                            </button>
                         )}
-                    </button>
+                        <button
+                            onClick={handlePlaceOrder}
+                            className="btn btn-primary"
+                            disabled={placing || (funds.length > 0 && !selectedFund)}
+                        >
+                            {placing ? (
+                                <div className="flex items-center">
+                                    <div className="loading-spinner w-4 h-4 mr-2"></div>
+                                    Placing Order...
+                                </div>
+                            ) : (
+                                <>
+                                    <Package className="w-4 h-4 mr-2" />
+                                    {selectedFund ? 'Place Order with Fund' : 'Place Order'}
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

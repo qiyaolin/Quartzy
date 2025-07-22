@@ -61,6 +61,7 @@ class Item(models.Model):
     # Financial & Ownership
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_items")
+    fund_id = models.IntegerField(null=True, blank=True, help_text="ID of the fund used to purchase this item")
     
     # Expiration & Storage Management
     expiration_date = models.DateField(null=True, blank=True, help_text="Expiration date of the item")

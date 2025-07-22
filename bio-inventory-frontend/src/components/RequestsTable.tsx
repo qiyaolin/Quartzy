@@ -145,28 +145,22 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                             </td>
                             <td className="table-cell">
                                 <div 
-                                    className="cursor-pointer hover:bg-primary-50 p-3 rounded-xl transition-all duration-200 group hover:scale-[1.02] hover:shadow-sm"
+                                    className="cursor-pointer hover:bg-primary-50 py-1 px-2 rounded transition-colors group"
                                     onClick={() => onViewDetails && onViewDetails(req)}
                                 >
-                                    <div className="font-semibold text-gray-900 group-hover:text-primary-700 transition-colors">
+                                    <div className="font-medium text-gray-900 group-hover:text-primary-700 text-sm">
                                         {req.item_name}
                                     </div>
-                                    {req.notes && (
-                                        <p className="text-xs text-gray-500 mt-1.5 line-clamp-2 leading-relaxed">
-                                            {req.notes}
-                                        </p>
-                                    )}
                                     {req.catalog_number && (
-                                        <div className="flex items-center mt-2">
-                                            <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
-                                                Cat: {req.catalog_number}
-                                            </span>
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                            Cat: {req.catalog_number}
                                         </div>
                                     )}
-                                    <div className="flex items-center mt-2 text-xs text-primary-600 opacity-0 group-hover:opacity-100 transition-all duration-200">
-                                        <Eye className="w-3 h-3 mr-1" />
-                                        <span>Click to view details</span>
-                                    </div>
+                                    {req.notes && (
+                                        <div className="text-xs text-gray-400 mt-0.5 truncate" title={req.notes}>
+                                            {req.notes.length > 40 ? req.notes.substring(0, 40) + '...' : req.notes}
+                                        </div>
+                                    )}
                                 </div>
                             </td>
                             <td className="table-cell">

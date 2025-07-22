@@ -118,7 +118,8 @@ class RequestViewSet(viewsets.ModelViewSet):
             quantity=quantity_received,
             unit=req_object.unit_size,
             location_id=location_id,
-            price=req_object.unit_price
+            price=req_object.unit_price,
+            fund_id=req_object.fund_id  # Include fund_id from the request
         )
 
         # Handle partial delivery
@@ -131,7 +132,8 @@ class RequestViewSet(viewsets.ModelViewSet):
                 catalog_number=req_object.catalog_number,
                 quantity=remaining_qty,
                 unit_price=req_object.unit_price,
-                status='ORDERED' # It's still on order
+                status='ORDERED', # It's still on order
+                fund_id=req_object.fund_id  # Keep the same fund for back-orders
             )
 
         req_object.status = 'RECEIVED'

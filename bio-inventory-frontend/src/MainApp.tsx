@@ -33,7 +33,7 @@ const MainApp = () => {
     const [users, setUsers] = useState([]);
     const [refreshKey, setRefreshKey] = useState(0);
     const [filterOptions, setFilterOptions] = useState({ vendors: [], locations: [], itemTypes: [], users: [] });
-    const [inventoryFilters, setInventoryFilters] = useState({ search: '', location: [], item_type: [], vendor: [] });
+    const [inventoryFilters, setInventoryFilters] = useState({ search: '', location: [], item_type: [], vendor: [], expired: [], low_stock: [] });
     const [requestFilters, setRequestFilters] = useState({ search: '', status: 'NEW', vendor: [], requested_by: [] });
     const [userSearch, setUserSearch] = useState('');
 

@@ -30,6 +30,9 @@ class ItemSerializer(serializers.ModelSerializer):
     vendor = VendorSerializer(read_only=True)
     location = LocationSerializer(read_only=True)
     item_type = ItemTypeSerializer(read_only=True)
+    
+    # Fund information
+    fund_name = serializers.SerializerMethodField()
 
     # We also need fields that can accept a simple ID for writing (creating/updating)
     owner_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='owner', write_only=True)
@@ -42,6 +45,16 @@ class ItemSerializer(serializers.ModelSerializer):
     expiration_status = serializers.ReadOnlyField()
     is_low_stock = serializers.ReadOnlyField()
     needs_attention = serializers.ReadOnlyField()
+    
+    def get_fund_name(self, obj):
+        if obj.fund_id:
+            try:
+                from funding.models import Fund
+                fund = Fund.objects.get(id=obj.fund_id)
+                return fund.name
+            except Fund.DoesNotExist:
+                return f"Fund #{obj.fund_id} (Not Found)"
+        return None
 
     class Meta:
         model = Item
@@ -53,6 +66,6 @@ class ItemSerializer(serializers.ModelSerializer):
             'properties', 'expiration_date', 'lot_number', 'received_date',
             'expiration_alert_days', 'storage_temperature', 'storage_conditions',
             'last_used_date', 'days_until_expiration', 'expiration_status',
-            'is_low_stock', 'needs_attention'
+            'is_low_stock', 'needs_attention', 'fund_id', 'fund_name'
         ]
-        read_only_fields = ['serial_number', 'created_at', 'updated_at', 'days_until_expiration', 'expiration_status', 'is_low_stock', 'needs_attention'] 
+        read_only_fields = ['serial_number', 'created_at', 'updated_at', 'days_until_expiration', 'expiration_status', 'is_low_stock', 'needs_attention', 'fund_name'] 

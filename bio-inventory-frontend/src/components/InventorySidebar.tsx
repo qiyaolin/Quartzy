@@ -1,8 +1,36 @@
 import React from 'react';
-import { PlusCircle, Search, Upload, Download } from 'lucide-react';
+import { PlusCircle, Search, Upload, Download, RotateCcw } from 'lucide-react';
 import SidebarFilter from './SidebarFilter.tsx';
 
-const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptions }) => (
+const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptions }) => {
+    const hasActiveFilters = filters.search || 
+        filters.location?.length > 0 || 
+        filters.item_type?.length > 0 || 
+        filters.vendor?.length > 0 ||
+        filters.expired?.length > 0 ||
+        filters.low_stock?.length > 0;
+
+    const handleClearFilters = () => {
+        onFilterChange('search', '');
+        // Clear all array filters
+        if (filters.location?.length > 0) {
+            filters.location.forEach(id => onFilterChange('location', id));
+        }
+        if (filters.item_type?.length > 0) {
+            filters.item_type.forEach(id => onFilterChange('item_type', id));
+        }
+        if (filters.vendor?.length > 0) {
+            filters.vendor.forEach(id => onFilterChange('vendor', id));
+        }
+        if (filters.expired?.length > 0) {
+            filters.expired.forEach(val => onFilterChange('expired', val));
+        }
+        if (filters.low_stock?.length > 0) {
+            filters.low_stock.forEach(val => onFilterChange('low_stock', val));
+        }
+    };
+
+    return (
     <aside className="sidebar w-72 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
         <div className="flex-grow overflow-y-auto space-y-6">
             <div className="space-y-4">
@@ -24,7 +52,19 @@ const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptio
             </div>
             
             <div>
-                <h3 className="text-xs font-bold uppercase text-secondary-400 tracking-wider mb-4">Filters</h3>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold uppercase text-secondary-400 tracking-wider">Filters</h3>
+                    {hasActiveFilters && (
+                        <button 
+                            onClick={handleClearFilters}
+                            className="flex items-center text-xs text-primary-600 hover:text-primary-700 transition-colors"
+                            title="Clear all filters"
+                        >
+                            <RotateCcw className="w-3 h-3 mr-1" />
+                            Clear
+                        </button>
+                    )}
+                </div>
                 <div className="space-y-1">
                     <SidebarFilter title="Location" options={filterOptions.locations} selected={filters.location} onFilterChange={(id) => onFilterChange('location', id)} />
                     <SidebarFilter title="Type" options={filterOptions.itemTypes} selected={filters.item_type} onFilterChange={(id) => onFilterChange('item_type', id)} />
@@ -44,6 +84,7 @@ const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptio
             </button>
         </div>
     </aside>
-);
+    );
+};
 
 export default InventorySidebar;

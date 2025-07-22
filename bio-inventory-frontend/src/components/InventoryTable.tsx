@@ -214,6 +214,7 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                 </div>
                             </th>
                             <th className="table-header-cell">Vendor</th>
+                            <th className="table-header-cell">Fund</th>
                             <th className="table-header-cell">Total Amount</th>
                             <th className="table-header-cell">Expiration Status</th>
                             <th className="table-header-cell">Type</th>
@@ -239,6 +240,13 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                     </button>
                                 </td>
                                 <td className="table-cell text-secondary-600">{group.vendor?.name || 'N/A'}</td>
+                                <td className="table-cell">
+                                    {group.instances[0]?.fund_name ? (
+                                        <span className="badge badge-info text-xs">{group.instances[0].fund_name}</span>
+                                    ) : (
+                                        <span className="text-secondary-400 text-xs">No Fund</span>
+                                    )}
+                                </td>
                                 <td className="table-cell">
                                     <span className="font-medium text-secondary-900">{group.totalQuantity.toFixed(2)}</span>
                                     <span className="text-secondary-500 ml-1">{group.instances[0]?.unit}</span>
@@ -298,6 +306,13 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                         <div className="text-sm text-secondary-600">
                                             <span className="text-secondary-500">Owner:</span> {instance.owner?.username || 'N/A'}
                                         </div>
+                                    </td>
+                                    <td className="table-cell">
+                                        {instance.fund_name ? (
+                                            <span className="badge badge-info text-xs">{instance.fund_name}</span>
+                                        ) : (
+                                            <span className="text-secondary-400 text-xs">No Fund</span>
+                                        )}
                                     </td>
                                     <td className="table-cell">
                                         <div className="text-sm">

@@ -7,19 +7,19 @@ from .models import Request, RequestHistory
 @receiver(post_save, sender=Request)
 def create_transaction_on_approval(sender, instance, created, **kwargs):
     """Create a funding transaction when a request is approved or ordered"""
-    if not created and instance.fund_id:  # Only for existing requests with funding
+    if instance.fund_id:  # For both new and existing requests with funding
         # Check if status changed to APPROVED or ORDERED
         try:
             # Import here to avoid circular imports
             from funding.models import Fund, Transaction
             
-            # Get the latest history entry to see if status just changed
-            latest_history = RequestHistory.objects.filter(request=instance).first()
+            # Check if we already have a transaction for this request
+            existing_transaction = Transaction.objects.filter(request_id=instance.id).first()
+            if existing_transaction:
+                return  # Transaction already exists, don't create duplicate
             
-            if (latest_history and 
-                latest_history.new_status in ['APPROVED', 'ORDERED'] and 
-                latest_history.old_status not in ['APPROVED', 'ORDERED']):
-                
+            # Only create transaction if status is APPROVED or ORDERED
+            if instance.status in ['APPROVED', 'ORDERED']:
                 # Get the fund
                 try:
                     fund = Fund.objects.get(id=instance.fund_id)
@@ -32,7 +32,9 @@ def create_transaction_on_approval(sender, instance, created, **kwargs):
                 # Check if fund can afford this
                 if not fund.can_afford(total_cost):
                     # Could add logging here or send notification
-                    pass
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Fund {fund.name} cannot afford request {instance.id} (${total_cost})")
                 
                 # Create transaction (signals will automatically update fund spent amount)
                 Transaction.objects.create(
@@ -42,7 +44,7 @@ def create_transaction_on_approval(sender, instance, created, **kwargs):
                     item_name=instance.item_name,
                     description=f"Purchase of {instance.item_name} (Request #{instance.id})",
                     request_id=instance.id,
-                    created_by=latest_history.user or instance.requested_by
+                    created_by=instance.requested_by
                 )
                 
         except ImportError:

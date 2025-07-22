@@ -44,7 +44,14 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
             if (filters.search) params.append('search', filters.search);
             Object.keys(filters).forEach(key => {
                 if (key !== 'search' && filters[key].length > 0) {
-                    filters[key].forEach(value => params.append(key, value));
+                    if (key === 'expired' || key === 'low_stock') {
+                        // For boolean filters, send 'true' if the filter is active
+                        if (filters[key].includes('true')) {
+                            params.append(key, 'true');
+                        }
+                    } else {
+                        filters[key].forEach(value => params.append(key, value));
+                    }
                 }
             });
             try {
