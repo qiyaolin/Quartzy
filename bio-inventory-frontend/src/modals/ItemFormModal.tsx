@@ -6,6 +6,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
     const [dropdownData, setDropdownData] = useState<any>({ vendors: [], locations: [], itemTypes: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [customVendor, setCustomVendor] = useState('');
     const isEditMode = initialData !== null;
 
     useEffect(() => {
@@ -39,14 +40,62 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
         }
     }, [isOpen, token]);
 
-    const handleChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
+    const handleChange = (e) => { 
+        const { name, value } = e.target; 
+        setFormData(prev => ({ ...prev, [name]: value })); 
+        if (name === 'vendor_id' && value !== 'custom') {
+            setCustomVendor('');
+        }
+    };
+
+    const createVendor = async (vendorName) => {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/vendors/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Token ${token}`
+                },
+                body: JSON.stringify({ name: vendorName })
+            });
+            if (response.ok) {
+                const newVendor = await response.json();
+                return newVendor.id;
+            }
+            throw new Error('Failed to create vendor');
+        } catch (error) {
+            throw error;
+        }
+    };
     const handleSubmit = async (e) => {
         e.preventDefault(); setIsSubmitting(true); setError(null);
+        
+        let finalFormData = { ...formData };
+        
+        // Handle custom vendor creation
+        if (formData.vendor_id === 'custom' && customVendor.trim()) {
+            try {
+                const newVendorId = await createVendor(customVendor.trim());
+                finalFormData.vendor_id = newVendorId;
+            } catch (error) {
+                setError('Failed to create new vendor');
+                setIsSubmitting(false);
+                return;
+            }
+        }
+        
         const url = isEditMode ? `http://127.0.0.1:8000/api/items/${initialData.id}/` : 'http://127.0.0.1:8000/api/items/';
         const method = isEditMode ? 'PUT' : 'POST';
         try {
-            const response = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` }, body: JSON.stringify(formData) });
-            if (!response.ok) { const errorData = await response.json(); throw new Error(JSON.stringify(errorData)); }
+            const response = await fetch(url, { 
+                method: method, 
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` }, 
+                body: JSON.stringify(finalFormData) 
+            });
+            if (!response.ok) { 
+                const errorData = await response.json(); 
+                throw new Error(JSON.stringify(errorData)); 
+            }
             onSave(); onClose();
         } catch (e) { setError(`Submission failed: ${e.message}`); } finally { setIsSubmitting(false); }
     };
@@ -73,7 +122,20 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                             <select name="vendor_id" id="vendor_id" value={formData.vendor_id} onChange={handleChange} className="select">
                                 <option value="">Select vendor...</option>
                                 {dropdownData.vendors.map(vendor => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
+                                <option value="custom">+ Add New Vendor</option>
                             </select>
+                            {formData.vendor_id === 'custom' && (
+                                <div className="mt-2">
+                                    <input 
+                                        type="text" 
+                                        value={customVendor} 
+                                        onChange={(e) => setCustomVendor(e.target.value)}
+                                        placeholder="Enter new vendor name"
+                                        className="input"
+                                        required
+                                    />
+                                </div>
+                            )}
                         </div>
                         <div>
                             <label htmlFor="location_id" className="block text-sm font-medium text-secondary-700 mb-2">Location</label>

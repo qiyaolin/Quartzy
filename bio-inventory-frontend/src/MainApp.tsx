@@ -16,6 +16,7 @@ import InventoryPage from './pages/InventoryPage.tsx';
 import RequestsPage from './pages/RequestsPage.tsx';
 import ReportsPage from './pages/ReportsPage.tsx';
 import UserManagementPage from './pages/UserManagementPage.tsx';
+import FundingPage from './pages/FundingPage.tsx';
 
 const MainApp = () => {
     const { token } = useContext(AuthContext);
@@ -101,7 +102,13 @@ const MainApp = () => {
         switch (activePage) {
             case 'inventory': return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
             case 'requests': return <RequestsPage onAddRequestClick={() => setIsRequestFormModalOpen(true)} refreshKey={refreshKey} filters={requestFilters} onFilterChange={handleRequestFilterChange} />;
-            case 'reports': return <ReportsPage />;
+            case 'reports': return <ReportsPage 
+                onNavigateToInventory={() => setActivePage('inventory')}
+                onOpenAddItemModal={handleOpenAddItemModal}
+                onOpenNewRequestModal={() => setIsRequestFormModalOpen(true)}
+                onSetInventoryFilters={setInventoryFilters}
+            />;
+            case 'funding': return <FundingPage />;
             case 'users': return <UserManagementPage onEditUser={handleOpenEditUserModal} onDeleteUser={handleOpenDeleteUserModal} refreshKey={refreshKey} users={users} setUsers={setUsers} />;
             default: return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
         }

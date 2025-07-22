@@ -3,6 +3,7 @@ import { AlertTriangle, Clock, Package } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import InventoryTable from '../components/InventoryTable.tsx';
 import Pagination from '../components/Pagination.tsx';
+import ItemRequestHistoryModal from '../modals/ItemRequestHistoryModal.tsx';
 
 const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const { token } = useContext(AuthContext);
@@ -10,6 +11,8 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [isRequestHistoryOpen, setIsRequestHistoryOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
     const itemsPerPage = 10;
 
     const groupedInventory = useMemo(() => {
@@ -54,6 +57,78 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         if (token) { fetchInventory(); }
     }, [token, refreshKey, filters]);
 
+    const handleViewRequestHistory = (item) => {
+        setSelectedItem(item);
+        setIsRequestHistoryOpen(true);
+    };
+
+    const handleBatchAction = async (action, selectedIds) => {
+        if (selectedIds.length === 0) return;
+        
+        switch (action) {
+            case 'export':
+                // Filter selected items and export
+                const selectedItems = inventory.filter(item => selectedIds.includes(item.id));
+                const exportData = {
+                    exportDate: new Date().toISOString(),
+                    items: selectedItems,
+                    totalItems: selectedItems.length
+                };
+                
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = `inventory-export-${new Date().toISOString().split('T')[0]}.json`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+                break;
+                
+            case 'archive':
+                if (window.confirm(`Are you sure you want to archive ${selectedIds.length} item(s)?`)) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/api/items/batch_archive/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Token ${token}`
+                            },
+                            body: JSON.stringify({ item_ids: selectedIds })
+                        });
+                        if (response.ok) {
+                            // Refresh inventory
+                            window.location.reload();
+                        }
+                    } catch (error) {
+                        alert('Failed to archive items');
+                    }
+                }
+                break;
+                
+            case 'delete':
+                if (window.confirm(`Are you sure you want to delete ${selectedIds.length} item(s)? This action cannot be undone.`)) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/api/items/batch_delete/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Token ${token}`
+                            },
+                            body: JSON.stringify({ item_ids: selectedIds })
+                        });
+                        if (response.ok) {
+                            // Refresh inventory
+                            window.location.reload();
+                        }
+                    } catch (error) {
+                        alert('Failed to delete items');
+                    }
+                }
+                break;
+        }
+    };
+
     return (
         <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
             <div className="flex justify-between items-center mb-8">
@@ -80,13 +155,25 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                 )}
                 {!loading && !error && (
                     <>
-                        <InventoryTable groupedData={paginatedData} onEdit={onEditItem} onDelete={onDeleteItem} />
+                        <InventoryTable 
+                            groupedData={paginatedData} 
+                            onEdit={onEditItem} 
+                            onDelete={onDeleteItem} 
+                            onViewRequestHistory={handleViewRequestHistory}
+                            onBatchAction={handleBatchAction}
+                        />
                         <div className="p-6 border-t border-secondary-200 bg-secondary-50/50">
                             <Pagination currentPage={currentPage} totalItems={Object.keys(groupedInventory).length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
                         </div>
                     </>
                 )}
             </div>
+            <ItemRequestHistoryModal 
+                isOpen={isRequestHistoryOpen} 
+                onClose={() => setIsRequestHistoryOpen(false)} 
+                itemName={selectedItem?.name} 
+                token={token} 
+            />
         </main>
     );
 };

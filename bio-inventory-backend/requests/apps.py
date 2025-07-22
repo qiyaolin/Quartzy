@@ -7,3 +7,4 @@ class RequestsConfig(AppConfig):
 
     def ready(self):
         import requests.signals # Import signals here
+        import requests.funding_integration # Import funding integration

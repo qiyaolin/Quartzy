@@ -18,22 +18,79 @@ class RequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser]) # Add this decorator
     def approve(self, request, pk=None):
+        from .funding_integration import validate_fund_budget
+        
         req_object = self.get_object()
-        if req_object.status == 'NEW':
-            req_object.status = 'APPROVED'
-            req_object.save()
-            return Response({'status': 'Request approved'})
-        return Response({'error': 'Request cannot be approved.'}, status=status.HTTP_400_BAD_REQUEST)
+        if req_object.status != 'NEW':
+            return Response({'error': 'Request cannot be approved.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get fund_id from request data
+        fund_id = request.data.get('fund_id')
+        if fund_id:
+            # Validate budget if fund is specified
+            validation = validate_fund_budget(req_object, fund_id)
+            if not validation['valid']:
+                return Response({
+                    'error': 'Insufficient budget in selected fund',
+                    'details': validation
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Set the fund_id on the request
+            req_object.fund_id = fund_id
+        
+        # Create history record
+        RequestHistory.objects.create(
+            request=req_object,
+            user=request.user,
+            old_status=req_object.status,
+            new_status='APPROVED',
+            notes=request.data.get('notes', '')
+        )
+        
+        req_object.status = 'APPROVED'
+        req_object.save()
+        
+        return Response({
+            'status': 'Request approved',
+            'fund_id': req_object.fund_id,
+            'budget_validation': validation if fund_id else None
+        })
 
     @action(detail=True, methods=['post'])
     def place_order(self, request, pk=None):
         """Custom action to mark an approved request as ordered."""
         req_object = self.get_object()
-        if req_object.status == 'APPROVED':
-            req_object.status = 'ORDERED'
-            req_object.save()
-            return Response({'status': 'Request marked as ordered'})
-        return Response({'error': 'Only approved requests can be ordered.'}, status=status.HTTP_400_BAD_REQUEST)
+        if req_object.status != 'APPROVED':
+            return Response({'error': 'Only approved requests can be ordered.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get fund_id from request data if not already set
+        fund_id = request.data.get('fund_id') or req_object.fund_id
+        if fund_id and not req_object.fund_id:
+            from .funding_integration import validate_fund_budget
+            validation = validate_fund_budget(req_object, fund_id)
+            if not validation['valid']:
+                return Response({
+                    'error': 'Insufficient budget in selected fund',
+                    'details': validation
+                }, status=status.HTTP_400_BAD_REQUEST)
+            req_object.fund_id = fund_id
+        
+        # Create history record
+        RequestHistory.objects.create(
+            request=req_object,
+            user=request.user,
+            old_status=req_object.status,
+            new_status='ORDERED',
+            notes=request.data.get('notes', '')
+        )
+        
+        req_object.status = 'ORDERED'
+        req_object.save()
+        
+        return Response({
+            'status': 'Request marked as ordered',
+            'fund_id': req_object.fund_id
+        })
 
     @action(detail=True, methods=['post'])
     def mark_received(self, request, pk=None):

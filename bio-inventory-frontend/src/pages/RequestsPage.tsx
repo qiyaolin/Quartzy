@@ -4,6 +4,8 @@ import { AuthContext } from '../components/AuthContext.tsx';
 import RequestsTable from '../components/RequestsTable.tsx';
 import MarkReceivedModal from '../modals/MarkReceivedModal.tsx';
 import RequestHistoryModal from '../modals/RequestHistoryModal.tsx';
+import RequestDetailModal from '../modals/RequestDetailModal.tsx';
+import FundSelectionModal from '../modals/FundSelectionModal.tsx';
 
 const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }) => {
     const { token } = useContext(AuthContext);
@@ -12,6 +14,8 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
     const [error, setError] = useState(null);
     const [isReceivedModalOpen, setIsReceivedModalOpen] = useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+    const [isFundSelectionModalOpen, setIsFundSelectionModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
     const [historyData, setHistoryData] = useState([]);
 
@@ -46,7 +50,30 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
     };
 
     const handleApprove = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/approve/`);
-    const handlePlaceOrder = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/place_order/`);
+    const handlePlaceOrder = (id) => {
+        // Find the request and open fund selection modal
+        const request = requests.find(req => req.id === id);
+        if (request) {
+            setSelectedRequest(request);
+            setIsFundSelectionModalOpen(true);
+        }
+    };
+    const handlePlaceOrderWithFund = async (id, fundId) => {
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/api/requests/${id}/place_order/`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fund_id: fundId })
+            });
+            if (!response.ok) throw new Error('Failed to place order.');
+            fetchRequests(); // Refresh list on success
+        } catch (e) {
+            alert(e.message);
+        }
+    };
     const handleReorder = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/reorder/`);
     const handleMarkReceived = (req) => { setSelectedRequest(req); setIsReceivedModalOpen(true); };
     const handleSaveReceived = async (id, data) => {
@@ -58,6 +85,81 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
         const data = await response.json();
         setHistoryData(data);
         setIsHistoryModalOpen(true);
+    };
+    
+    const handleViewDetails = (request) => {
+        setSelectedRequest(request);
+        setIsDetailModalOpen(true);
+    };
+
+    const handleDetailSave = () => {
+        fetchRequests(); // Refresh the data
+        setIsDetailModalOpen(false);
+    };
+
+    const handleBatchAction = async (action, selectedIds) => {
+        if (selectedIds.length === 0) return;
+        
+        switch (action) {
+            case 'export':
+                // Filter selected requests and export
+                const selectedRequests = requests.filter(req => selectedIds.includes(req.id));
+                const exportData = {
+                    exportDate: new Date().toISOString(),
+                    requests: selectedRequests,
+                    totalRequests: selectedRequests.length
+                };
+                
+                const dataStr = JSON.stringify(exportData, null, 2);
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = `requests-export-${new Date().toISOString().split('T')[0]}.json`;
+                
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+                break;
+                
+            case 'approve':
+                if (window.confirm(`Are you sure you want to approve ${selectedIds.length} request(s)?`)) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/api/requests/batch_approve/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Token ${token}`
+                            },
+                            body: JSON.stringify({ request_ids: selectedIds })
+                        });
+                        if (response.ok) {
+                            fetchRequests(); // Refresh data
+                        }
+                    } catch (error) {
+                        alert('Failed to approve requests');
+                    }
+                }
+                break;
+                
+            case 'reject':
+                if (window.confirm(`Are you sure you want to reject ${selectedIds.length} request(s)?`)) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/api/requests/batch_reject/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Token ${token}`
+                            },
+                            body: JSON.stringify({ request_ids: selectedIds })
+                        });
+                        if (response.ok) {
+                            fetchRequests(); // Refresh data
+                        }
+                    } catch (error) {
+                        alert('Failed to reject requests');
+                    }
+                }
+                break;
+        }
     };
 
     const statusTabs = [ { key: 'NEW', label: 'New' }, { key: 'APPROVED', label: 'Approved' }, { key: 'ORDERED', label: 'Ordered' }, { key: 'RECEIVED', label: 'Received' } ];
@@ -116,12 +218,22 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
                             onMarkReceived={handleMarkReceived} 
                             onReorder={handleReorder} 
                             onShowHistory={handleShowHistory} 
+                            onViewDetails={handleViewDetails}
+                            onBatchAction={handleBatchAction}
                         />
                     )}
                 </div>
             </main>
             <MarkReceivedModal isOpen={isReceivedModalOpen} onClose={() => setIsReceivedModalOpen(false)} onSave={handleSaveReceived} token={token} request={selectedRequest} />
             <RequestHistoryModal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} history={historyData} />
+            <RequestDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} onSave={handleDetailSave} token={token} request={selectedRequest} />
+            <FundSelectionModal 
+                isOpen={isFundSelectionModalOpen} 
+                onClose={() => setIsFundSelectionModalOpen(false)} 
+                onPlaceOrder={handlePlaceOrderWithFund} 
+                token={token} 
+                request={selectedRequest} 
+            />
         </>
     );
 };
