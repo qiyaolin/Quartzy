@@ -2,6 +2,13 @@ import React, { useState } from 'react';
 import { Plus, Edit, Archive, AlertTriangle, DollarSign, Calendar, User, Building, TrendingUp, Eye, X } from 'lucide-react';
 import FundModal from './FundModal.tsx';
 
+const AGENCY_MAP = {
+    1: 'CIHR',
+    2: 'NSERC',
+    3: 'SSHRC',
+    4: 'Other'
+};
+
 const FundManagement = ({ funds, onRefresh, apiAvailable, token }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFund, setSelectedFund] = useState(null);
@@ -114,7 +121,7 @@ const FundManagement = ({ funds, onRefresh, apiAvailable, token }) => {
             </div>
 
             {/* Multi-Year Budget Management Panel */}
-            {funds.some(f => f.grant_duration_years > 1) && (
+            {funds.filter(f => !f.is_archived).some(f => f.grant_duration_years > 1) && (
                 <div className="bg-white border border-secondary-200 rounded-lg p-6 mb-6">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -127,7 +134,7 @@ const FundManagement = ({ funds, onRefresh, apiAvailable, token }) => {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {funds.filter(f => f.grant_duration_years > 1).map(fund => (
+                        {funds.filter(f => f.grant_duration_years > 1 && !f.is_archived).map(fund => (
                             <div key={fund.id} className="bg-gradient-to-br from-indigo-50 to-purple-100 border border-indigo-200 rounded-lg p-4">
                                 <div className="flex items-start justify-between mb-3">
                                     <div className="flex-1">
@@ -136,7 +143,7 @@ const FundManagement = ({ funds, onRefresh, apiAvailable, token }) => {
                                             <span className="badge badge-info text-xs">
                                                 Year {fund.current_year} of {fund.grant_duration_years}
                                             </span>
-                                            {fund.funding_agency && ['cihr', 'nserc', 'sshrc'].includes(fund.funding_agency) && (
+                                            {fund.funding_agency && [1,2,3].includes(fund.funding_agency) && (
                                                 <span className="badge badge-success text-xs">Tri-Agency</span>
                                             )}
                                         </div>
@@ -200,7 +207,7 @@ const FundManagement = ({ funds, onRefresh, apiAvailable, token }) => {
 
             {/* Funds Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {funds.map((fund) => {
+                {funds.filter(fund => !fund.is_archived).map((fund) => {
                     const totalBudget = parseFloat(fund.total_budget) || 0;
                     const spentAmount = parseFloat(fund.spent_amount) || 0;
                     const remaining = totalBudget - spentAmount;
@@ -306,7 +313,7 @@ const FundManagement = ({ funds, onRefresh, apiAvailable, token }) => {
                                             </span>
                                         </div>
                                     )}
-                                    {fund.funding_agency && ['cihr', 'nserc', 'sshrc'].includes(fund.funding_agency) && (
+                                    {fund.funding_agency && [1,2,3].includes(fund.funding_agency) && (
                                         <div className="flex items-center text-xs text-info-600 bg-info-50 rounded px-2 py-1">
                                             <TrendingUp className="w-3 h-3 mr-1" />
                                             Tri-Agency Compliance Enabled
@@ -331,7 +338,7 @@ const FundManagement = ({ funds, onRefresh, apiAvailable, token }) => {
                     );
                 })}
 
-                {funds.length === 0 && (
+                {funds.filter(fund => !fund.is_archived).length === 0 && (
                     <div className="col-span-full text-center py-12">
                         <DollarSign className="w-12 h-12 text-secondary-400 mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-secondary-900 mb-2">No Funds Available</h3>

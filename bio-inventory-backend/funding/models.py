@@ -8,10 +8,10 @@ from datetime import datetime
 
 class Fund(models.Model):
     FUNDING_AGENCY_CHOICES = [
-        ('cihr', 'Canadian Institutes of Health Research (CIHR)'),
-        ('nserc', 'Natural Sciences and Engineering Research Council (NSERC)'),
-        ('sshrc', 'Social Sciences and Humanities Research Council (SSHRC)'),
-        ('other', 'Other Funding Source'),
+        (1, 'Canadian Institutes of Health Research (CIHR)'),
+        (2, 'Natural Sciences and Engineering Research Council (NSERC)'),
+        (3, 'Social Sciences and Humanities Research Council (SSHRC)'),
+        (4, 'Other Funding Source'),
     ]
     
     name = models.CharField(max_length=200)
@@ -27,10 +27,9 @@ class Fund(models.Model):
         default=Decimal('0.00')
     )
     funding_source = models.CharField(max_length=200, blank=True, null=True)
-    funding_agency = models.CharField(
-        max_length=10, 
-        choices=FUNDING_AGENCY_CHOICES, 
-        default='other',
+    funding_agency = models.IntegerField(
+        choices=FUNDING_AGENCY_CHOICES,
+        default=4,
         help_text='Canadian Tri-Agency or other funding source'
     )
     grant_number = models.CharField(max_length=100, blank=True, null=True)

@@ -104,9 +104,9 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     if (!isOpen || !request) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-                <div className="p-6 border-b border-secondary-200 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div className="p-6 border-b border-secondary-200 flex justify-between items-center flex-shrink-0">
                     <div>
                         <h2 className="text-2xl font-bold text-secondary-900">Select Fund for Order</h2>
                         <p className="text-secondary-600 mt-1">Choose which fund to use for this order (optional)</p>
@@ -120,7 +120,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <div className="p-6 overflow-y-auto flex-grow">
                     {/* Order Summary */}
                     <div className="bg-primary-50 rounded-lg p-4 mb-6">
                         <h3 className="text-lg font-semibold text-primary-900 mb-3 flex items-center">
@@ -152,7 +152,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     </div>
 
                     {/* Fund Selection */}
-                    <div className="mb-6">
+                    <div className="mb-8">
                         <h3 className="text-lg font-semibold text-secondary-900 mb-4">Available Funds</h3>
                         {loading ? (
                             <div className="flex items-center justify-center py-8">
@@ -276,7 +276,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center p-6 border-t border-secondary-200 bg-secondary-50">
+                <div className="flex justify-between items-center p-6 border-t border-secondary-200 bg-secondary-50 flex-shrink-0">
                     <button
                         type="button"
                         onClick={onClose}

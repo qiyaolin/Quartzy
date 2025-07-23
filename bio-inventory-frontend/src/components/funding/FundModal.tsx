@@ -7,7 +7,7 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, apiAvailable, token })
         description: '',
         total_budget: '',
         funding_source: '',
-        funding_agency: 'other',
+        funding_agency: 4, // 默认Other
         grant_number: '',
         principal_investigator: '',
         start_date: '',
@@ -28,7 +28,7 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, apiAvailable, token })
                     description: fund.description || '',
                     total_budget: fund.total_budget || '',
                     funding_source: fund.funding_source || '',
-                    funding_agency: fund.funding_agency || 'other',
+                    funding_agency: fund.funding_agency || 4,
                     grant_number: fund.grant_number || '',
                     principal_investigator: fund.principal_investigator || '',
                     start_date: fund.start_date || '',
@@ -44,7 +44,7 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, apiAvailable, token })
                     description: '',
                     total_budget: '',
                     funding_source: '',
-                    funding_agency: 'other',
+                    funding_agency: 4,
                     grant_number: '',
                     principal_investigator: '',
                     start_date: '',
@@ -150,6 +150,14 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, apiAvailable, token })
     };
 
     if (!isOpen) return null;
+
+    // Tri-Agency ID映射
+    const AGENCY_MAP = {
+        1: 'Canadian Institutes of Health Research (CIHR)',
+        2: 'Natural Sciences and Engineering Research Council (NSERC)',
+        3: 'Social Sciences and Humanities Research Council (SSHRC)',
+        4: 'Other Funding Source'
+    };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
@@ -272,14 +280,14 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, apiAvailable, token })
                             <select
                                 name="funding_agency"
                                 value={formData.funding_agency}
-                                onChange={handleInputChange}
+                                onChange={e => setFormData(prev => ({ ...prev, funding_agency: parseInt(e.target.value) }))}
                                 className="input w-full"
                                 disabled={loading}
                             >
-                                <option value="cihr">Canadian Institutes of Health Research (CIHR)</option>
-                                <option value="nserc">Natural Sciences and Engineering Research Council (NSERC)</option>
-                                <option value="sshrc">Social Sciences and Humanities Research Council (SSHRC)</option>
-                                <option value="other">Other Funding Source</option>
+                                <option value={1}>Canadian Institutes of Health Research (CIHR)</option>
+                                <option value={2}>Natural Sciences and Engineering Research Council (NSERC)</option>
+                                <option value={3}>Social Sciences and Humanities Research Council (SSHRC)</option>
+                                <option value={4}>Other Funding Source</option>
                             </select>
                         </div>
 
@@ -447,7 +455,7 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, apiAvailable, token })
                             </div>
                         )}
 
-                        {formData.funding_agency !== 'other' && (
+                        {AGENCY_MAP[formData.funding_agency] !== 'Other Funding Source' && (
                             <div className="md:col-span-2">
                                 <div className="bg-info-50 border border-info-200 rounded-lg p-4">
                                     <div className="flex items-start">

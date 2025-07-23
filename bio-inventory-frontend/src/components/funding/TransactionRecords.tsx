@@ -132,6 +132,13 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
         setSortBy('date_desc');
     };
 
+    const AGENCY_MAP = {
+        1: 'CIHR',
+        2: 'NSERC',
+        3: 'SSHRC',
+        4: 'Other'
+    };
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -334,7 +341,7 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
                     <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-4">
                         <div className="text-center">
                             <div className="text-2xl font-bold text-purple-700">
-                                {filteredTransactions.filter(t => t.fund?.funding_agency && ['cihr', 'nserc', 'sshrc'].includes(t.fund.funding_agency)).length}
+                                {filteredTransactions.filter(t => t.fund?.funding_agency && [1,2,3].includes(t.fund.funding_agency)).length}
                             </div>
                             <div className="text-xs font-medium text-purple-600 mb-1">Tri-Agency</div>
                             <div className="text-xs text-purple-500">Audit ready</div>
@@ -362,7 +369,7 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
             </div>
 
             {/* Compliance Notice for Tri-Agency Funds */}
-            {transactions.some(t => t.fund?.funding_agency && ['cihr', 'nserc', 'sshrc'].includes(t.fund.funding_agency)) && (
+            {transactions.some(t => t.fund?.funding_agency && [1,2,3].includes(t.fund.funding_agency)) && (
                 <div className="bg-info-50 border border-info-200 rounded-lg p-4 mb-6">
                     <div className="flex items-start">
                         <div className="flex-shrink-0">
@@ -537,7 +544,7 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
                                                     Req: {transaction.request_id}
                                                 </div>
                                             )}
-                                            {transaction.fund?.funding_agency && ['cihr', 'nserc', 'sshrc'].includes(transaction.fund.funding_agency) && (
+                                            {transaction.fund?.funding_agency && [1,2,3].includes(transaction.fund.funding_agency) && (
                                                 <div className="flex items-center">
                                                     <span className="w-2 h-2 bg-success-400 rounded-full mr-1"></span>
                                                     <span className="text-xs text-success-600">Audit Ready</span>

@@ -311,8 +311,7 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
 
     const triAgencyFunds = useMemo(() => {
         return funds.filter(fund => 
-            fund.funding_agency && 
-            ['cihr', 'nserc', 'sshrc'].includes(fund.funding_agency)
+            fund.funding_agency && [1,2,3].includes(fund.funding_agency)
         );
     }, [funds]);
 
@@ -440,12 +439,12 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
                         <p className="text-sm text-purple-800 mb-3">Track grant progress across multiple fiscal years with carry-over calculations and budget variance analysis.</p>
                         <div className="flex justify-between items-center">
                             <span className="text-xs text-purple-600">
-                                {funds.filter(f => f.grant_duration_years > 1).length > 0 ? `${funds.filter(f => f.grant_duration_years > 1).length} multi-year grants` : 'No multi-year grants - create funds with duration > 1 year'}
+                                {funds.filter(f => parseInt(f.grant_duration_years) > 1).length > 0 ? `${funds.filter(f => parseInt(f.grant_duration_years) > 1).length} multi-year grants` : 'No multi-year grants - create funds with duration > 1 year'}
                             </span>
                             <button
                                 onClick={() => setShowMultiyearModal(true)}
                                 className="px-3 py-1 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
-                                disabled={funds.filter(f => f.grant_duration_years > 1).length === 0}
+                                disabled={funds.filter(f => parseInt(f.grant_duration_years) > 1).length === 0}
                             >
                                 Generate
                             </button>
@@ -515,18 +514,18 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
             </div>
 
             {/* Fiscal Year Tracking Section */}
-            {funds.some(f => f.grant_duration_years > 1) && (
+            {funds.some(f => parseInt(f.grant_duration_years) > 1) && (
                 <div className="bg-gradient-to-r from-secondary-50 to-primary-50 border border-secondary-200 rounded-lg p-6 mb-6">
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <h4 className="text-lg font-semibold text-secondary-900 mb-2">
-                                Multi-Year Grant Tracking
-                            </h4>
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h4 className="text-lg font-semibold text-secondary-900 mb-2">
+                            Multi-Year Grant Tracking
+                        </h4>
                             <p className="text-sm text-secondary-700 mb-4">
                                 Monitor spending across fiscal years for multi-year grants with automatic carry-over calculations.
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {funds.filter(f => f.grant_duration_years > 1).map(fund => (
+                                {funds.filter(f => parseInt(f.grant_duration_years) > 1).map(fund => (
                                     <div key={fund.id} className="bg-white rounded-lg p-3 shadow-sm">
                                         <h5 className="font-medium text-secondary-900 mb-1">{fund.name}</h5>
                                         <div className="text-xs text-secondary-600 space-y-1">
@@ -874,7 +873,7 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
                                             />
                                             <span className="text-sm">{fund.name}</span>
                                             <span className="ml-auto text-xs text-secondary-500 capitalize">
-                                                {fund.funding_agency}
+                                                {AGENCY_MAP[fund.funding_agency]}
                                             </span>
                                         </label>
                                     ))}
@@ -1022,7 +1021,7 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
                                                     <div>
                                                         <h6 className="font-medium text-secondary-900">{fund.fund_name}</h6>
                                                         <p className="text-xs text-secondary-600">
-                                                            {fund.funding_agency && <span className="capitalize">{fund.funding_agency}</span>}
+                                                            {fund.funding_agency && <span className="capitalize">{AGENCY_MAP[fund.funding_agency]}</span>}
                                                             {fund.current_year && fund.total_years && (
                                                                 <span className="ml-2">Year {fund.current_year} of {fund.total_years}</span>
                                                             )}

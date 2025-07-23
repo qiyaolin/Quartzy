@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { DollarSign, Plus, BarChart3, Receipt, AlertTriangle, TrendingUp, Wallet, CreditCard, Calendar } from 'lucide-react';
+import { DollarSign, Plus, BarChart3, Receipt, AlertTriangle, TrendingUp, Wallet, CreditCard, Calendar, Archive } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import FundManagement from '../components/funding/FundManagement.tsx';
 import TransactionRecords from '../components/funding/TransactionRecords.tsx';
 import BudgetReports from '../components/funding/BudgetReports.tsx';
 import CarryOverManagement from '../components/funding/CarryOverManagement.tsx';
+import ArchivedFunds from '../components/funding/ArchivedFunds.tsx';
 
 const FundingPage = () => {
     const { token, user } = useContext(AuthContext);
@@ -75,6 +76,12 @@ const FundingPage = () => {
         fetchFundingData();
     };
 
+    const AGENCY_MAP = {
+        1: 'CIHR',
+        2: 'NSERC',
+        3: 'SSHRC',
+        4: 'Other'
+    };
 
     // Access control
     if (!isAdmin) {
@@ -171,7 +178,7 @@ const FundingPage = () => {
                             <div>
                                 <p className="text-sm text-secondary-600">Multi-Year Grants</p>
                                 <p className="text-lg font-bold text-warning-600">
-                                    {funds.filter(f => f.grant_duration_years > 1).length}
+                                    {funds.filter(f => f.grant_duration_years > 1 && !f.is_archived).length}
                                 </p>
                             </div>
                         </div>
@@ -180,7 +187,7 @@ const FundingPage = () => {
             </div>
 
             {/* Compliance Status Dashboard */}
-            {funds.some(f => f.funding_agency && ['cihr', 'nserc', 'sshrc'].includes(f.funding_agency)) && (
+            {funds.filter(f => !f.is_archived).some(f => f.funding_agency && [1,2,3].includes(f.funding_agency)) && (
                 <div className="bg-gradient-to-r from-info-50 to-success-50 border border-info-200 rounded-lg p-6 mb-8">
                     <div className="flex items-start justify-between mb-4">
                         <div>
@@ -224,7 +231,7 @@ const FundingPage = () => {
                                 <span className="w-3 h-3 bg-success-400 rounded-full"></span>
                             </div>
                             <p className="text-xs text-secondary-600 mb-1">Active grants</p>
-                            <p className="text-lg font-bold text-info-600">{funds.filter(f => f.grant_duration_years > 1).length}</p>
+                            <p className="text-lg font-bold text-info-600">{funds.filter(f => f.grant_duration_years > 1 && !f.is_archived).length}</p>
                             <p className="text-xs text-secondary-500">Across fiscal years</p>
                         </div>
                         
@@ -235,7 +242,7 @@ const FundingPage = () => {
                             </div>
                             <p className="text-xs text-secondary-600 mb-1">TAGFA compliant</p>
                             <p className="text-lg font-bold text-primary-600">
-                                {funds.filter(f => ['cihr', 'nserc', 'sshrc'].includes(f.funding_agency)).length}
+                                {funds.filter(f => [1,2,3].includes(f.funding_agency) && !f.is_archived).length}
                             </p>
                             <p className="text-xs text-secondary-500">Funds tracked</p>
                         </div>
@@ -308,6 +315,24 @@ const FundingPage = () => {
                                 <span>Carry-overs</span>
                             </div>
                         </button>
+                        <button
+                            onClick={() => setActiveTab('archived')}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                activeTab === 'archived'
+                                    ? 'border-primary-500 text-primary-600'
+                                    : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
+                            }`}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <Archive className="w-4 h-4" />
+                                <span>Archived Funds</span>
+                                {funds.filter(f => f.is_archived).length > 0 && (
+                                    <span className="bg-secondary-200 text-secondary-800 text-xs rounded-full px-2 py-0.5 ml-1">
+                                        {funds.filter(f => f.is_archived).length}
+                                    </span>
+                                )}
+                            </div>
+                        </button>
                     </nav>
                 </div>
 
@@ -340,6 +365,13 @@ const FundingPage = () => {
                     {activeTab === 'carryovers' && (
                         <CarryOverManagement 
                             funds={funds}
+                            token={token}
+                        />
+                    )}
+                    {activeTab === 'archived' && (
+                        <ArchivedFunds 
+                            funds={funds}
+                            onRefresh={refreshData}
                             token={token}
                         />
                     )}

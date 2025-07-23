@@ -10,10 +10,16 @@ const CarryOverManagement = ({ funds, token }) => {
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
 
+    const AGENCY_MAP = {
+        1: 'CIHR',
+        2: 'NSERC',
+        3: 'SSHRC',
+        4: 'Other'
+    };
+
     const triAgencyFunds = useMemo(() => {
         return funds.filter(fund => 
-            fund.funding_agency && 
-            ['cihr', 'nserc', 'sshrc'].includes(fund.funding_agency)
+            fund.funding_agency && [1,2,3].includes(fund.funding_agency)
         );
     }, [funds]);
 
@@ -243,7 +249,7 @@ const CarryOverManagement = ({ funds, token }) => {
                                                     {carryover.fund?.name}
                                                 </div>
                                                 <div className="text-xs text-secondary-500 capitalize">
-                                                    {carryover.fund?.funding_agency}
+                                                    {AGENCY_MAP[carryover.fund?.funding_agency]}
                                                 </div>
                                             </div>
                                         </td>
@@ -335,7 +341,7 @@ const CarryOverManagement = ({ funds, token }) => {
                                     <option value="">Choose a fund...</option>
                                     {triAgencyFunds.map(fund => (
                                         <option key={fund.id} value={fund.id}>
-                                            {fund.name} ({fund.funding_agency?.toUpperCase()})
+                                            {fund.name} ({AGENCY_MAP[fund.funding_agency]})
                                         </option>
                                     ))}
                                 </select>

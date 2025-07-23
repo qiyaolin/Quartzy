@@ -37,33 +37,6 @@ class FundViewSet(viewsets.ModelViewSet):
         return Fund.objects.filter(is_archived=False)
 
     def create(self, request, *args, **kwargs):
-        # Pre-process data to handle empty strings from frontend
-        if hasattr(request, 'data') and isinstance(request.data, dict):
-            # Create a mutable copy of the data
-            data = request.data.copy()
-            
-            # Convert empty strings to None for optional fields
-            optional_fields = ['description', 'funding_source', 'grant_number', 
-                              'principal_investigator', 'notes', 'start_date', 'end_date']
-            for field in optional_fields:
-                if field in data and data[field] == '':
-                    data[field] = None
-                    
-            # Ensure annual_budgets has a default value - handle both empty and missing cases
-            if 'annual_budgets' not in data or data['annual_budgets'] in [None, '', {}]:
-                data['annual_budgets'] = {}
-            
-            # Also ensure funding_agency, grant_duration_years, and current_year have defaults
-            if 'funding_agency' not in data or not data['funding_agency']:
-                data['funding_agency'] = 'other'
-            if 'grant_duration_years' not in data or not data['grant_duration_years']:
-                data['grant_duration_years'] = 1
-            if 'current_year' not in data or not data['current_year']:
-                data['current_year'] = 1
-            
-            # Update request data
-            request._full_data = data
-            
         return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])

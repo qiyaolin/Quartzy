@@ -31,14 +31,16 @@ class FundSerializer(serializers.ModelSerializer):
     end_date = NullableDateField(required=False, allow_null=True)
     
     # Explicitly define funding_agency and grant_duration_years as writable
-    funding_agency = serializers.CharField(required=False)
+    funding_agency = serializers.IntegerField(required=False)
+    funding_agency_display = serializers.SerializerMethodField(read_only=True)
     grant_duration_years = serializers.IntegerField(required=False)
+    current_year = serializers.IntegerField(required=False)
 
     class Meta:
         model = Fund
         fields = [
             'id', 'name', 'description', 'total_budget', 'spent_amount',
-            'funding_source', 'funding_agency', 'grant_number', 'principal_investigator',
+            'funding_source', 'funding_agency', 'funding_agency_display', 'grant_number', 'principal_investigator',
             'start_date', 'end_date', 'grant_duration_years', 'current_year', 'annual_budgets',
             'notes', 'is_archived', 'created_at', 'updated_at', 'created_by',
             'remaining_budget', 'utilization_percentage', 'current_fiscal_year',
@@ -55,6 +57,9 @@ class FundSerializer(serializers.ModelSerializer):
     def get_current_year_spending(self, obj):
         return obj.get_spending_by_fiscal_year(obj.get_current_fiscal_year())
 
+    def get_funding_agency_display(self, obj):
+        return obj.get_funding_agency_display() if hasattr(obj, 'get_funding_agency_display') else None
+
     def to_internal_value(self, data):
         # Clean up empty strings before validation
         if isinstance(data, dict):
@@ -70,6 +75,18 @@ class FundSerializer(serializers.ModelSerializer):
             # Ensure annual_budgets has a default value if not provided or empty
             if 'annual_budgets' not in cleaned_data or cleaned_data['annual_budgets'] in [None, '']:
                 cleaned_data['annual_budgets'] = {}
+                
+            # Handle funding_agency default value
+            if 'funding_agency' not in cleaned_data or cleaned_data['funding_agency'] in [None, '']:
+                cleaned_data['funding_agency'] = 'other'
+                
+            # Handle grant_duration_years default value
+            if 'grant_duration_years' not in cleaned_data or cleaned_data['grant_duration_years'] in [None, '', 0]:
+                cleaned_data['grant_duration_years'] = 1
+                
+            # Handle current_year default value
+            if 'current_year' not in cleaned_data or cleaned_data['current_year'] in [None, '', 0]:
+                cleaned_data['current_year'] = 1
                 
             return super().to_internal_value(cleaned_data)
         return super().to_internal_value(data)
