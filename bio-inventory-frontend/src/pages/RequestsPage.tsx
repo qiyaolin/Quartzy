@@ -6,6 +6,9 @@ import MarkReceivedModal from '../modals/MarkReceivedModal.tsx';
 import RequestHistoryModal from '../modals/RequestHistoryModal.tsx';
 import RequestDetailModal from '../modals/RequestDetailModal.tsx';
 import FundSelectionModal from '../modals/FundSelectionModal.tsx';
+import BatchReceivedModal from '../modals/BatchReceivedModal.tsx';
+import BatchFundSelectionModal from '../modals/BatchFundSelectionModal.tsx';
+import { exportToExcel } from '../utils/excelExport.ts';
 
 const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }) => {
     const { token } = useContext(AuthContext);
@@ -16,7 +19,10 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [isFundSelectionModalOpen, setIsFundSelectionModalOpen] = useState(false);
+    const [isBatchReceivedModalOpen, setIsBatchReceivedModalOpen] = useState(false);
+    const [isBatchFundSelectionModalOpen, setIsBatchFundSelectionModalOpen] = useState(false);
     const [selectedRequest, setSelectedRequest] = useState(null);
+    const [selectedRequests, setSelectedRequests] = useState([]);
     const [historyData, setHistoryData] = useState([]);
 
     const fetchRequests = useCallback(async () => {
@@ -102,22 +108,53 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
         
         switch (action) {
             case 'export':
-                // Filter selected requests and export
-                const selectedRequests = requests.filter(req => selectedIds.includes(req.id));
-                const exportData = {
-                    exportDate: new Date().toISOString(),
-                    requests: selectedRequests,
-                    totalRequests: selectedRequests.length
+                // Filter selected requests and export to Excel
+                const selectedRequestsData = requests.filter(req => selectedIds.includes(req.id));
+                
+                // Prepare formatted data for Excel
+                const formattedRequests = selectedRequestsData.map(req => ({
+                    'Request ID': req.id,
+                    'Product Name': req.product_name,
+                    'Specifications': req.specifications,
+                    'Quantity': req.quantity,
+                    'Unit Price': req.unit_price ? `$${req.unit_price}` : '',
+                    'Total Price': req.total_price ? `$${req.total_price}` : '',
+                    'Status': req.status === 'pending' ? 'Pending' : 
+                             req.status === 'approved' ? 'Approved' : 
+                             req.status === 'ordered' ? 'Ordered' : 
+                             req.status === 'received' ? 'Received' : 
+                             req.status === 'rejected' ? 'Rejected' : req.status,
+                    'Requester': req.requester_name,
+                    'Department': req.department,
+                    'Laboratory': req.lab,
+                    'Vendor': req.vendor,
+                    'Product Link': req.product_link,
+                    'Urgency': req.urgency === 'high' ? 'High' : 
+                              req.urgency === 'medium' ? 'Medium' : 
+                              req.urgency === 'low' ? 'Low' : req.urgency,
+                    'Request Date': req.requested_date ? new Date(req.requested_date).toLocaleDateString('en-US') : '',
+                    'Expected Delivery': req.expected_delivery_date ? new Date(req.expected_delivery_date).toLocaleDateString('en-US') : '',
+                    'Notes': req.notes || ''
+                }));
+                
+                const summary = {
+                    'Export Time': new Date().toLocaleString('en-US'),
+                    'Export Count': selectedRequestsData.length,
+                    'Pending': selectedRequestsData.filter(r => r.status === 'pending').length,
+                    'Approved': selectedRequestsData.filter(r => r.status === 'approved').length,
+                    'Ordered': selectedRequestsData.filter(r => r.status === 'ordered').length,
+                    'Received': selectedRequestsData.filter(r => r.status === 'received').length,
+                    'Rejected': selectedRequestsData.filter(r => r.status === 'rejected').length,
+                    'Total Value': `$${selectedRequestsData.reduce((sum, req) => sum + (parseFloat(req.total_price) || 0), 0).toFixed(2)}`
                 };
                 
-                const dataStr = JSON.stringify(exportData, null, 2);
-                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-                const exportFileDefaultName = `requests-export-${new Date().toISOString().split('T')[0]}.json`;
-                
-                const linkElement = document.createElement('a');
-                linkElement.setAttribute('href', dataUri);
-                linkElement.setAttribute('download', exportFileDefaultName);
-                linkElement.click();
+                exportToExcel({
+                    fileName: 'requests-export',
+                    sheetName: 'Purchase Requests',
+                    title: 'Laboratory Purchase Requests Export Report',
+                    data: formattedRequests,
+                    summary: summary
+                });
                 break;
                 
             case 'approve':
@@ -159,6 +196,93 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
                     }
                 }
                 break;
+                
+            case 'batch_place_order':
+                const selectedRequestsForOrder = requests.filter(req => selectedIds.includes(req.id));
+                setSelectedRequests(selectedRequestsForOrder);
+                setIsBatchFundSelectionModalOpen(true);
+                break;
+                
+            case 'batch_mark_received':
+                const selectedRequestsForReceived = requests.filter(req => selectedIds.includes(req.id));
+                setSelectedRequests(selectedRequestsForReceived);
+                setIsBatchReceivedModalOpen(true);
+                break;
+                
+            case 'batch_reorder':
+                if (window.confirm(`Are you sure you want to reorder ${selectedIds.length} request(s)?`)) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/api/requests/batch_reorder/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Token ${token}`
+                            },
+                            body: JSON.stringify({ request_ids: selectedIds })
+                        });
+                        if (response.ok) {
+                            const result = await response.json();
+                            alert(`Successfully created ${result.created_count} new requests`);
+                            fetchRequests(); // Refresh data
+                        }
+                    } catch (error) {
+                        alert('Failed to reorder requests');
+                    }
+                }
+                break;
+        }
+    };
+
+    // Batch operation handlers
+    const handleBatchPlaceOrder = async (selectedRequestsData, fundId) => {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/requests/batch_place_order/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Token ${token}`
+                },
+                body: JSON.stringify({ 
+                    request_ids: selectedRequestsData.map(req => req.id),
+                    fund_id: fundId 
+                })
+            });
+            if (response.ok) {
+                const result = await response.json();
+                alert(`Successfully placed orders for ${result.updated_count} requests`);
+                fetchRequests(); // Refresh data
+            } else {
+                const error = await response.json();
+                alert(`Failed to place orders: ${error.error}`);
+            }
+        } catch (error) {
+            alert('Failed to place orders');
+        }
+    };
+
+    const handleBatchMarkReceived = async (selectedRequestsData, data) => {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/requests/batch_mark_received/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Token ${token}`
+                },
+                body: JSON.stringify({ 
+                    request_ids: selectedRequestsData.map(req => req.id),
+                    location_id: data.location_id
+                })
+            });
+            if (response.ok) {
+                const result = await response.json();
+                alert(`Successfully marked ${result.updated_count} requests as received`);
+                fetchRequests(); // Refresh data
+            } else {
+                const error = await response.json();
+                alert(`Failed to mark as received: ${error.error}`);
+            }
+        } catch (error) {
+            alert('Failed to mark as received');
         }
     };
 
@@ -220,6 +344,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
                             onShowHistory={handleShowHistory} 
                             onViewDetails={handleViewDetails}
                             onBatchAction={handleBatchAction}
+                            currentStatus={filters.status}
                         />
                     )}
                 </div>
@@ -233,6 +358,20 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
                 onPlaceOrder={handlePlaceOrderWithFund} 
                 token={token} 
                 request={selectedRequest} 
+            />
+            <BatchReceivedModal 
+                isOpen={isBatchReceivedModalOpen} 
+                onClose={() => setIsBatchReceivedModalOpen(false)} 
+                onSave={handleBatchMarkReceived} 
+                token={token} 
+                selectedRequests={selectedRequests} 
+            />
+            <BatchFundSelectionModal 
+                isOpen={isBatchFundSelectionModalOpen} 
+                onClose={() => setIsBatchFundSelectionModalOpen(false)} 
+                onPlaceOrder={handleBatchPlaceOrder} 
+                token={token} 
+                selectedRequests={selectedRequests} 
             />
         </>
     );

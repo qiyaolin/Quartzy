@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Filter, Download, Calendar, DollarSign, Package, User, FileText } from 'lucide-react';
+import { exportToExcel } from '../../utils/excelExport.ts';
 
 const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -63,31 +64,35 @@ const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {
     }, 0);
 
     const exportTransactions = () => {
-        const exportData = {
-            export_date: new Date().toISOString(),
-            date_range: dateRange,
-            selected_fund: selectedFund ? funds.find(f => f.id === parseInt(selectedFund))?.name : 'All Funds',
-            total_transactions: filteredTransactions.length,
-            total_amount: totalAmount,
-            transactions: filteredTransactions.map(transaction => ({
-                date: transaction.transaction_date,
-                fund: transaction.fund?.name,
-                item: transaction.item_name,
-                description: transaction.description,
-                amount: transaction.amount,
-                request_id: transaction.request_id,
-                created_by: transaction.created_by?.username
-            }))
+        const transactionData = filteredTransactions.map(transaction => ({
+            Date: transaction.transaction_date,
+            Fund: transaction.fund?.name || 'N/A',
+            Item: transaction.item_name,
+            Description: transaction.description,
+            Amount: `$${parseFloat(transaction.amount || '0').toFixed(2)}`,
+            'Request ID': transaction.request_id,
+            'Created By': transaction.created_by?.username || 'N/A'
+        }));
+
+        const summaryInfo = {
+            'Export Date': new Date().toLocaleDateString(),
+            'Date Range': dateRange.start && dateRange.end 
+                ? `${dateRange.start} to ${dateRange.end}` 
+                : 'All Dates',
+            'Selected Fund': selectedFund 
+                ? funds.find(f => f.id === parseInt(selectedFund))?.name || 'Unknown Fund'
+                : 'All Funds',
+            'Total Transactions': filteredTransactions.length,
+            'Total Amount': `$${totalAmount.toFixed(2)}`
         };
 
-        const dataStr = JSON.stringify(exportData, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-        const exportFileDefaultName = `transaction-records-${new Date().toISOString().split('T')[0]}.json`;
-
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
+        exportToExcel({
+            fileName: 'transaction-records',
+            sheetName: 'Transaction Records',
+            title: 'Transaction Records Export',
+            data: transactionData,
+            summary: summaryInfo
+        });
     };
 
     const getTransactionTypeIcon = (transaction) => {

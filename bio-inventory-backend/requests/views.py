@@ -164,3 +164,152 @@ class RequestViewSet(viewsets.ModelViewSet):
         history_qs = RequestHistory.objects.filter(request=req_object)
         serializer = RequestHistorySerializer(history_qs, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
+    def batch_place_order(self, request):
+        """Batch place order for multiple approved requests."""
+        request_ids = request.data.get('request_ids', [])
+        fund_id = request.data.get('fund_id')
+        
+        if not request_ids:
+            return Response({'error': 'No request IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        requests_to_update = Request.objects.filter(id__in=request_ids, status='APPROVED')
+        updated_count = 0
+        errors = []
+        
+        for req_object in requests_to_update:
+            try:
+                # Validate budget if fund is specified
+                if fund_id and not req_object.fund_id:
+                    from .funding_integration import validate_fund_budget
+                    validation = validate_fund_budget(req_object, fund_id)
+                    if not validation['valid']:
+                        errors.append(f"Request {req_object.id}: Insufficient budget in selected fund")
+                        continue
+                    req_object.fund_id = fund_id
+                
+                # Create history record
+                RequestHistory.objects.create(
+                    request=req_object,
+                    user=request.user,
+                    old_status=req_object.status,
+                    new_status='ORDERED',
+                    notes=f"Batch place order operation"
+                )
+                
+                req_object.status = 'ORDERED'
+                req_object.save()
+                updated_count += 1
+                
+            except Exception as e:
+                errors.append(f"Request {req_object.id}: {str(e)}")
+        
+        response_data = {
+            'updated_count': updated_count,
+            'total_requested': len(request_ids),
+            'fund_id': fund_id
+        }
+        
+        if errors:
+            response_data['errors'] = errors
+        
+        return Response(response_data)
+
+    @action(detail=False, methods=['post'])
+    def batch_mark_received(self, request):
+        """Batch mark received for multiple ordered requests."""
+        request_ids = request.data.get('request_ids', [])
+        location_id = request.data.get('location_id')
+        
+        if not request_ids or not location_id:
+            return Response({'error': 'Request IDs and location are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        requests_to_update = Request.objects.filter(id__in=request_ids, status='ORDERED')
+        updated_count = 0
+        errors = []
+        
+        for req_object in requests_to_update:
+            try:
+                # Create inventory item
+                Item.objects.create(
+                    name=req_object.item_name,
+                    vendor=req_object.vendor,
+                    catalog_number=req_object.catalog_number,
+                    item_type_id=1,
+                    owner=req_object.requested_by,
+                    quantity=req_object.quantity,
+                    unit=req_object.unit_size,
+                    location_id=location_id,
+                    price=req_object.unit_price,
+                    fund_id=req_object.fund_id
+                )
+                
+                # Create history record
+                RequestHistory.objects.create(
+                    request=req_object,
+                    user=request.user,
+                    old_status=req_object.status,
+                    new_status='RECEIVED',
+                    notes=f"Batch mark received operation"
+                )
+                
+                req_object.status = 'RECEIVED'
+                req_object.save()
+                updated_count += 1
+                
+            except Exception as e:
+                errors.append(f"Request {req_object.id}: {str(e)}")
+        
+        response_data = {
+            'updated_count': updated_count,
+            'total_requested': len(request_ids)
+        }
+        
+        if errors:
+            response_data['errors'] = errors
+        
+        return Response(response_data)
+
+    @action(detail=False, methods=['post'])
+    def batch_reorder(self, request):
+        """Batch reorder for multiple received requests."""
+        request_ids = request.data.get('request_ids', [])
+        
+        if not request_ids:
+            return Response({'error': 'No request IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        original_requests = Request.objects.filter(id__in=request_ids, status='RECEIVED')
+        created_count = 0
+        errors = []
+        new_request_ids = []
+        
+        for original_request in original_requests:
+            try:
+                new_request = Request.objects.create(
+                    item_name=original_request.item_name,
+                    requested_by=request.user,
+                    vendor=original_request.vendor,
+                    catalog_number=original_request.catalog_number,
+                    url=original_request.url,
+                    quantity=original_request.quantity,
+                    unit_size=original_request.unit_size,
+                    unit_price=original_request.unit_price,
+                    status='NEW'
+                )
+                new_request_ids.append(new_request.id)
+                created_count += 1
+                
+            except Exception as e:
+                errors.append(f"Request {original_request.id}: {str(e)}")
+        
+        response_data = {
+            'created_count': created_count,
+            'total_requested': len(request_ids),
+            'new_request_ids': new_request_ids
+        }
+        
+        if errors:
+            response_data['errors'] = errors
+        
+        return Response(response_data)

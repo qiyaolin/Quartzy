@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(venvScriptsactivate.bat)",
+      "Bash(pip install:*)",
+      "Bash(venv/Scripts/python.exe -m pip install:*)",
+      "Bash(venv/Scripts/python.exe manage.py create_mock_data:*)",
+      "Bash(venv/Scripts/python.exe manage.py runserver:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run:*)",
+      "Bash(timeout 10 npm start)",
+      "Bash(python manage.py shell:*)",
+      "Bash(venvScripts:*)",
+      "Bash(venv\\Scripts\\activate.bat:*)",
+      "Bash(. venv/Scripts/activate)",
+      "Bash(python manage.py:*)",
+      "Bash(.venvScriptsactivate)",
+      "Bash(\"./venv/Scripts/python.exe\":*)",
+      "Bash(venv/Scripts/python manage.py check:*)",
+      "Bash(cd \"E:\\OneDrive - McGill University\\Documents\\GitHub\\Quartzy\\bio-inventory-frontend\")",
+      "Bash(npm install xlsx)"
+    ],
+    "deny": []
+  }
+}

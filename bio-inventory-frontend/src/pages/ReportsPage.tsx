@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { Download, RefreshCw, PlusCircle, FileText, Upload, Loader, AlertTriangle, Package, Clock, CheckCircle } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
+import { exportMultiSheetExcel } from '../utils/excelExport.ts';
 
 const ReportsPage = ({ 
     onNavigateToInventory, 
@@ -134,22 +135,95 @@ const ReportsPage = ({
     };
 
     const exportReport = () => {
-        const reportData = {
-            summary: reports.summary,
-            breakdown: reports.breakdown,
-            expiringItems: expiringItems,
-            exportDate: new Date().toISOString()
+        // Prepare data for multiple sheets
+        const now = new Date();
+        
+        // Summary data
+        const summaryData = Object.entries(reports.summary || {}).map(([key, value]) => ({
+            'Statistic Item': key === 'total_items' ? 'Total Items' :
+                      key === 'total_value' ? 'Total Value' :
+                      key === 'low_stock_items' ? 'Low Stock Items' :
+                      key === 'expired_items' ? 'Expired Items' :
+                      key === 'expiring_soon' ? 'Expiring Soon Items' : key,
+            'Value': typeof value === 'number' && key.includes('value') ? `$${value.toFixed(2)}` : value
+        }));
+        
+        // Breakdown data by type
+        const breakdownData = (reports.breakdown || []).map(item => ({
+            'Item Type': item.item_type__name || 'Uncategorized',
+            'Count': item.count,
+            'Total Value': `$${(item.total_value || 0).toFixed(2)}`,
+            'Percentage': `${((item.count / (reports.summary?.total_items || 1)) * 100).toFixed(1)}%`
+        }));
+        
+        // Expiring items data
+        const expiringData = expiringItems.map(item => ({
+            'Item Name': item.name,
+            'Specifications': item.specifications || '',
+            'Quantity': item.quantity,
+            'Location': item.location || '',
+            'Expiration Date': item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('en-US') : '',
+            'Days Remaining': item.expiration_date ? 
+                Math.ceil((new Date(item.expiration_date) - now) / (1000 * 60 * 60 * 24)) : '',
+            'Vendor': item.vendor?.name || '',
+            'Catalog Number': item.catalog_number || ''
+        }));
+        
+        // Monthly spending data
+        const spendingData = monthlySpending.map(item => ({
+            'Month': item.month,
+            'Amount Spent': `$${item.total_spend.toFixed(2)}`
+        }));
+        
+        // Items by type for selected month
+        const monthlyTypeData = filteredItemsByType.map(item => ({
+            'Item Type': item.item_type__name,
+            'New Count': item.count,
+            'New Value': `$${item.total_value.toFixed(2)}`
+        }));
+        
+        const summary = {
+            'Report Generated': now.toLocaleString('en-US'),
+            'Report Month': new Date(selectedMonth + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
+            'Total Items': reports.summary?.total_items || 0,
+            'Total Inventory Value': `$${(reports.summary?.total_value || 0).toFixed(2)}`,
+            'Low Stock Items': reports.summary?.low_stock_items || 0,
+            'Expired Items': reports.summary?.expired_items || 0,
+            'Expiring Soon Items': expiringItems.length,
+            'Current Month Spending': monthlySpending.length > 0 ? `$${monthlySpending[monthlySpending.length - 1]?.total_spend.toFixed(2) || '0.00'}` : '$0.00'
         };
         
-        const dataStr = JSON.stringify(reportData, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        
-        const exportFileDefaultName = `inventory-report-${new Date().toISOString().split('T')[0]}.json`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
+        exportMultiSheetExcel({
+            fileName: 'inventory-report',
+            summary: summary,
+            sheets: [
+                {
+                    name: 'Overall Statistics',
+                    title: 'Inventory Overall Statistics',
+                    data: summaryData
+                },
+                {
+                    name: 'Category Breakdown',
+                    title: 'Statistics by Item Type',
+                    data: breakdownData
+                },
+                {
+                    name: 'Expiring Items',
+                    title: 'Items Expiring Soon',
+                    data: expiringData
+                },
+                {
+                    name: 'Monthly Spending',
+                    title: 'Recent Monthly Spending Statistics',
+                    data: spendingData
+                },
+                {
+                    name: 'Monthly New Items',
+                    title: `${new Date(selectedMonth + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })} New Items Statistics`,
+                    data: monthlyTypeData
+                }
+            ]
+        });
     };
 
     const navigateToInventory = (filter = '') => {

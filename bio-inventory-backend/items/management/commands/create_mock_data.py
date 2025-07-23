@@ -65,10 +65,14 @@ class Command(BaseCommand):
             {'name': 'Antibody', 'custom_fields_schema': {'Clonality': 'text', 'Host Species': 'text', 'Isotype': 'text'}},
             {'name': 'Enzyme', 'custom_fields_schema': {'Activity': 'text', 'Buffer': 'text', 'Temperature': 'text'}},
             {'name': 'Chemical', 'custom_fields_schema': {'Purity': 'text', 'Formula': 'text', 'MW': 'text'}},
+            {'name': 'Reagent', 'custom_fields_schema': {'Concentration': 'text', 'Solvent': 'text', 'pH': 'text'}},
             {'name': 'Buffer', 'custom_fields_schema': {'pH': 'text', 'Concentration': 'text'}},
             {'name': 'Media', 'custom_fields_schema': {'Type': 'text', 'Supplements': 'text'}},
             {'name': 'Primer', 'custom_fields_schema': {'Sequence': 'text', 'Tm': 'text', 'Length': 'text'}},
             {'name': 'Plasmid', 'custom_fields_schema': {'Backbone': 'text', 'Resistance': 'text', 'Size': 'text'}},
+            {'name': 'Kit', 'custom_fields_schema': {'Components': 'text', 'Protocol': 'text', 'Storage Temp': 'text'}},
+            {'name': 'Cell Line', 'custom_fields_schema': {'Origin': 'text', 'Passage Number': 'text', 'Growth Conditions': 'text'}},
+            {'name': 'Consumable', 'custom_fields_schema': {'Material': 'text', 'Size': 'text', 'Sterile': 'text'}},
         ]
         
         item_types = []

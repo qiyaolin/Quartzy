@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { BarChart3, PieChart, TrendingUp, Download, Calendar, DollarSign, AlertTriangle, Target } from 'lucide-react';
+import { exportMultiSheetExcel } from '../../utils/excelExport.ts';
 
 const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
     const [selectedPeriod, setSelectedPeriod] = useState('6months');
@@ -80,28 +81,84 @@ const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {
     }, [funds, transactions, selectedPeriod, selectedFund]);
 
     const exportReport = () => {
-        const reportExport = {
-            generated_date: new Date().toISOString(),
-            period: selectedPeriod,
-            selected_fund: selectedFund ? funds.find(f => f.id === parseInt(selectedFund))?.name : 'All Funds',
-            summary: {
-                total_spent: reportData.totalSpent,
-                transaction_count: reportData.transactionCount,
-                funds_analyzed: reportData.fundUtilization.length
-            },
-            spending_trend: reportData.spendingTrend,
-            fund_utilization: reportData.fundUtilization,
-            budget_summary: budgetSummary
+        const now = new Date();
+        
+        // Summary data
+        const summaryData = [
+            { 'Metric': 'Total Spent', 'Value': `$${reportData.totalSpent.toFixed(2)}` },
+            { 'Metric': 'Transaction Count', 'Value': reportData.transactionCount },
+            { 'Metric': 'Funds Analyzed', 'Value': reportData.fundUtilization.length },
+            { 'Metric': 'Period', 'Value': selectedPeriod.replace(/(\d)([a-z])/, '$1 $2') },
+            { 'Metric': 'Selected Fund', 'Value': selectedFund ? funds.find(f => f.id === parseInt(selectedFund))?.name : 'All Funds' }
+        ];
+
+        // Spending trend data
+        const spendingData = reportData.spendingTrend.map(item => ({
+            'Month': item.month,
+            'Amount Spent': `$${item.amount.toFixed(2)}`
+        }));
+
+        // Fund utilization data
+        const utilizationData = reportData.fundUtilization.map(item => ({
+            'Fund Name': item.fund,
+            'Total Budget': `$${item.total_budget.toFixed(2)}`,
+            'Amount Spent': `$${item.spent.toFixed(2)}`,
+            'Remaining Budget': `$${item.remaining.toFixed(2)}`,
+            'Utilization Rate': `${item.utilization.toFixed(1)}%`,
+            'Status': item.utilization >= 90 ? 'Critical' : 
+                     item.utilization >= 75 ? 'Warning' : 'Good'
+        }));
+
+        // Budget summary data if available
+        const budgetSummaryData = budgetSummary ? [
+            { 'Summary Item': 'Total Budget', 'Amount': `$${budgetSummary.total_budget || 0}` },
+            { 'Summary Item': 'Total Spent', 'Amount': `$${budgetSummary.total_spent || 0}` },
+            { 'Summary Item': 'Total Remaining', 'Amount': `$${budgetSummary.total_remaining || 0}` },
+            { 'Summary Item': 'Active Funds', 'Amount': budgetSummary.active_funds || 0 }
+        ] : [];
+
+        const summary = {
+            'Report Generated': now.toLocaleString('en-US'),
+            'Time Period': selectedPeriod.replace(/(\d)([a-z])/, '$1 $2'),
+            'Fund Filter': selectedFund ? funds.find(f => f.id === parseInt(selectedFund))?.name : 'All Funds',
+            'Total Spent': `$${reportData.totalSpent.toFixed(2)}`,
+            'Transaction Count': reportData.transactionCount,
+            'Funds Analyzed': reportData.fundUtilization.length,
+            'Average Monthly Spending': spendingData.length > 0 ? 
+                `$${(reportData.totalSpent / spendingData.length).toFixed(2)}` : '$0.00'
         };
 
-        const dataStr = JSON.stringify(reportExport, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-        const exportFileDefaultName = `budget-report-${new Date().toISOString().split('T')[0]}.json`;
+        const sheets = [
+            {
+                name: 'Summary',
+                title: 'Budget Report Summary',
+                data: summaryData
+            },
+            {
+                name: 'Spending Trend',
+                title: 'Monthly Spending Trend',
+                data: spendingData
+            },
+            {
+                name: 'Fund Utilization',
+                title: 'Fund Utilization Analysis',
+                data: utilizationData
+            }
+        ];
 
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
+        if (budgetSummaryData.length > 0) {
+            sheets.push({
+                name: 'Budget Overview',
+                title: 'Overall Budget Summary',
+                data: budgetSummaryData
+            });
+        }
+
+        exportMultiSheetExcel({
+            fileName: 'budget-report',
+            summary: summary,
+            sheets: sheets
+        });
     };
 
     const getUtilizationColor = (utilization) => {

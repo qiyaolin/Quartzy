@@ -4,6 +4,7 @@ import { AuthContext } from '../components/AuthContext.tsx';
 import InventoryTable from '../components/InventoryTable.tsx';
 import Pagination from '../components/Pagination.tsx';
 import ItemRequestHistoryModal from '../modals/ItemRequestHistoryModal.tsx';
+import { exportToExcel } from '../utils/excelExport.ts';
 
 const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const { token } = useContext(AuthContext);
@@ -74,22 +75,54 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         
         switch (action) {
             case 'export':
-                // Filter selected items and export
+                // Filter selected items and export to Excel
                 const selectedItems = inventory.filter(item => selectedIds.includes(item.id));
-                const exportData = {
-                    exportDate: new Date().toISOString(),
-                    items: selectedItems,
-                    totalItems: selectedItems.length
+                
+                // Prepare formatted data for Excel
+                const formattedItems = selectedItems.map(item => ({
+                    'Item ID': item.id,
+                    'Item Name': item.name,
+                    'Specifications': item.specifications || '',
+                    'Quantity': item.quantity,
+                    'Unit': item.unit || '',
+                    'Unit Price': item.unit_price ? `$${item.unit_price}` : '',
+                    'Total Value': item.total_value ? `$${item.total_value}` : '',
+                    'Vendor': item.vendor?.name || '',
+                    'Catalog Number': item.catalog_number || '',
+                    'Location': item.location || '',
+                    'Item Type': item.item_type || '',
+                    'Expiration Date': item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('en-US') : '',
+                    'Minimum Stock': item.minimum_quantity || '',
+                    'Purchase Date': item.purchase_date ? new Date(item.purchase_date).toLocaleDateString('en-US') : '',
+                    'Status': item.quantity <= (item.minimum_quantity || 0) ? 'Low Stock' : 
+                           (item.expiration_date && new Date(item.expiration_date) < new Date()) ? 'Expired' : 'Normal',
+                    'Notes': item.notes || '',
+                    'Last Updated': item.updated_at ? new Date(item.updated_at).toLocaleString('en-US') : ''
+                }));
+                
+                const now = new Date();
+                const summary = {
+                    'Export Time': now.toLocaleString('en-US'),
+                    'Export Count': selectedItems.length,
+                    'Total Value': `$${selectedItems.reduce((sum, item) => sum + (parseFloat(item.total_value) || 0), 0).toFixed(2)}`,
+                    'Low Stock Items': selectedItems.filter(item => item.quantity <= (item.minimum_quantity || 0)).length,
+                    'Expired Items': selectedItems.filter(item => item.expiration_date && new Date(item.expiration_date) < now).length,
+                    'Expiring Soon Items': selectedItems.filter(item => {
+                        if (!item.expiration_date) return false;
+                        const expDate = new Date(item.expiration_date);
+                        const thirtyDaysFromNow = new Date();
+                        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+                        return expDate > now && expDate <= thirtyDaysFromNow;
+                    }).length
                 };
                 
-                const dataStr = JSON.stringify(exportData, null, 2);
-                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-                const exportFileDefaultName = `inventory-export-${new Date().toISOString().split('T')[0]}.json`;
-                
-                const linkElement = document.createElement('a');
-                linkElement.setAttribute('href', dataUri);
-                linkElement.setAttribute('download', exportFileDefaultName);
-                linkElement.click();
+                exportToExcel({
+                    fileName: 'inventory-export',
+                    sheetName: 'Inventory List',
+                    title: 'Laboratory Inventory Management Export Report',
+                    data: formattedItems,
+                    summary: summary
+                });
                 break;
                 
             case 'archive':

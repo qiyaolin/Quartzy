@@ -1,8 +1,8 @@
 import React, { useContext, useState } from 'react';
-import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock } from 'lucide-react';
+import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, ShoppingCart, RotateCcw } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 
-const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onReorder, onShowHistory, onViewDetails, onBatchAction }) => {
+const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onReorder, onShowHistory, onViewDetails, onBatchAction, currentStatus }) => {
     const { user } = useContext(AuthContext);
     const [selectedRequests, setSelectedRequests] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
@@ -58,7 +58,8 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                             </div>
                         </div>
                         <div className="flex space-x-3">
-                            {user?.is_staff && (
+                            {/* Status-specific batch actions */}
+                            {currentStatus === 'NEW' && user?.is_staff && (
                                 <>
                                     <button 
                                         onClick={() => onBatchAction && onBatchAction('approve', Array.from(selectedRequests))}
@@ -75,6 +76,37 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                     </button>
                                 </>
                             )}
+                            
+                            {currentStatus === 'APPROVED' && (
+                                <button 
+                                    onClick={() => onBatchAction && onBatchAction('batch_place_order', Array.from(selectedRequests))}
+                                    className="btn btn-warning btn-sm hover:scale-105 transition-transform"
+                                >
+                                    <ShoppingCart className="w-4 h-4 mr-1" />
+                                    Batch Place Order
+                                </button>
+                            )}
+                            
+                            {currentStatus === 'ORDERED' && (
+                                <button 
+                                    onClick={() => onBatchAction && onBatchAction('batch_mark_received', Array.from(selectedRequests))}
+                                    className="btn btn-primary btn-sm hover:scale-105 transition-transform"
+                                >
+                                    <Package className="w-4 h-4 mr-1" />
+                                    Batch Mark Received
+                                </button>
+                            )}
+                            
+                            {currentStatus === 'RECEIVED' && (
+                                <button 
+                                    onClick={() => onBatchAction && onBatchAction('batch_reorder', Array.from(selectedRequests))}
+                                    className="btn btn-secondary btn-sm hover:scale-105 transition-transform"
+                                >
+                                    <RotateCcw className="w-4 h-4 mr-1" />
+                                    Batch Reorder
+                                </button>
+                            )}
+                            
                             <button 
                                 onClick={() => onBatchAction && onBatchAction('export', Array.from(selectedRequests))}
                                 className="btn btn-secondary btn-sm hover:scale-105 transition-transform"

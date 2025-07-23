@@ -69,6 +69,36 @@ const InventorySidebar = ({ onAddItemClick, filters, onFilterChange, filterOptio
                     <SidebarFilter title="Location" options={filterOptions.locations} selected={filters.location} onFilterChange={(id) => onFilterChange('location', id)} />
                     <SidebarFilter title="Type" options={filterOptions.itemTypes} selected={filters.item_type} onFilterChange={(id) => onFilterChange('item_type', id)} />
                     <SidebarFilter title="Vendor" options={filterOptions.vendors} selected={filters.vendor} onFilterChange={(id) => onFilterChange('vendor', id)} />
+                    
+                    <div className="py-4 border-b border-secondary-200">
+                        <h4 className="font-semibold text-secondary-700 mb-3">Status Filters</h4>
+                        <div className="space-y-2">
+                            <div className="flex items-center group">
+                                <input
+                                    type="checkbox"
+                                    id="expired-filter"
+                                    checked={filters.expired?.includes('true')}
+                                    onChange={() => onFilterChange('expired', 'true')}
+                                    className="checkbox"
+                                />
+                                <label htmlFor="expired-filter" className="ml-2 text-secondary-600 group-hover:text-secondary-900 cursor-pointer transition-colors text-sm">
+                                    Expired Items
+                                </label>
+                            </div>
+                            <div className="flex items-center group">
+                                <input
+                                    type="checkbox"
+                                    id="low-stock-filter"
+                                    checked={filters.low_stock?.includes('true')}
+                                    onChange={() => onFilterChange('low_stock', 'true')}
+                                    className="checkbox"
+                                />
+                                <label htmlFor="low-stock-filter" className="ml-2 text-secondary-600 group-hover:text-secondary-900 cursor-pointer transition-colors text-sm">
+                                    Low Stock Items
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
