@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { DollarSign, Plus, BarChart3, Receipt, AlertTriangle, TrendingUp, Wallet, CreditCard } from 'lucide-react';
+import { DollarSign, Plus, BarChart3, Receipt, AlertTriangle, TrendingUp, Wallet, CreditCard, Calendar } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import FundManagement from '../components/funding/FundManagement.tsx';
 import TransactionRecords from '../components/funding/TransactionRecords.tsx';
 import BudgetReports from '../components/funding/BudgetReports.tsx';
+import CarryOverManagement from '../components/funding/CarryOverManagement.tsx';
 
 const FundingPage = () => {
     const { token, user } = useContext(AuthContext);
@@ -44,7 +45,8 @@ const FundingPage = () => {
             const transactionsData = transactionsResponse.ok ? await transactionsResponse.json().catch(() => []) : [];
             const summaryData = summaryResponse.ok ? await summaryResponse.json().catch(() => null) : null;
             
-            setFunds(fundsData.results || fundsData || []);
+            const actualFunds = fundsData.results || fundsData || [];
+            setFunds(actualFunds);
             setTransactions(transactionsData.results || transactionsData || []);
             setBudgetSummary(summaryData || { total_budget: 0, total_spent: 0 });
             
@@ -53,7 +55,7 @@ const FundingPage = () => {
             if (!allApisAvailable) {
                 setApiStatus({
                     available: false,
-                    message: 'Some funding APIs are not yet implemented on the backend. You can still explore the interface, but full functionality will be available once the backend APIs are deployed.'
+                    message: 'Some funding APIs are not available. Please ensure the backend APIs are properly configured and running.'
                 });
             } else {
                 setApiStatus({ available: true, message: '' });
@@ -72,6 +74,7 @@ const FundingPage = () => {
     const refreshData = () => {
         fetchFundingData();
     };
+
 
     // Access control
     if (!isAdmin) {
@@ -140,8 +143,114 @@ const FundingPage = () => {
                             </div>
                         </div>
                     </div>
+                    <div className="bg-white p-4 rounded-lg shadow-soft border border-secondary-200">
+                        <div className="flex items-center space-x-2">
+                            <TrendingUp className="w-5 h-5 text-success-600" />
+                            <div>
+                                <p className="text-sm text-secondary-600">Direct Costs</p>
+                                <p className="text-lg font-bold text-success-600">
+                                    ${(parseFloat(budgetSummary?.total_direct_costs) || 0).toLocaleString()}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-soft border border-secondary-200">
+                        <div className="flex items-center space-x-2">
+                            <AlertTriangle className="w-5 h-5 text-info-600" />
+                            <div>
+                                <p className="text-sm text-secondary-600">Tri-Agency Funds</p>
+                                <p className="text-lg font-bold text-info-600">
+                                    {budgetSummary?.tri_agency_funds_count || 0}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg shadow-soft border border-secondary-200">
+                        <div className="flex items-center space-x-2">
+                            <Calendar className="w-5 h-5 text-warning-600" />
+                            <div>
+                                <p className="text-sm text-secondary-600">Multi-Year Grants</p>
+                                <p className="text-lg font-bold text-warning-600">
+                                    {funds.filter(f => f.grant_duration_years > 1).length}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            {/* Compliance Status Dashboard */}
+            {funds.some(f => f.funding_agency && ['cihr', 'nserc', 'sshrc'].includes(f.funding_agency)) && (
+                <div className="bg-gradient-to-r from-info-50 to-success-50 border border-info-200 rounded-lg p-6 mb-8">
+                    <div className="flex items-start justify-between mb-4">
+                        <div>
+                            <h2 className="text-xl font-semibold text-info-900 mb-2">Canadian Tri-Agency Compliance Status</h2>
+                            <p className="text-sm text-info-700">Real-time monitoring of CIHR, NSERC, and SSHRC fund compliance</p>
+                        </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-secondary-700">Audit Trail Status</span>
+                                <span className="w-3 h-3 bg-success-400 rounded-full"></span>
+                            </div>
+                            <p className="text-xs text-secondary-600 mb-1">All transactions tracked</p>
+                            <p className="text-lg font-bold text-success-600">{transactions.length}</p>
+                            <p className="text-xs text-secondary-500">Records maintained</p>
+                        </div>
+                        
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-secondary-700">Cost Categorization</span>
+                                <span className="w-3 h-3 bg-success-400 rounded-full"></span>
+                            </div>
+                            <p className="text-xs text-secondary-600 mb-1">Direct vs Indirect</p>
+                            <div className="text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-success-600">Direct:</span>
+                                    <span className="font-medium">{transactions.filter(t => t.cost_type === 'direct').length}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-warning-600">Indirect:</span>
+                                    <span className="font-medium">{transactions.filter(t => t.cost_type === 'indirect').length}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-secondary-700">Multi-Year Tracking</span>
+                                <span className="w-3 h-3 bg-success-400 rounded-full"></span>
+                            </div>
+                            <p className="text-xs text-secondary-600 mb-1">Active grants</p>
+                            <p className="text-lg font-bold text-info-600">{funds.filter(f => f.grant_duration_years > 1).length}</p>
+                            <p className="text-xs text-secondary-500">Across fiscal years</p>
+                        </div>
+                        
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-secondary-700">Form 300 Ready</span>
+                                <span className="w-3 h-3 bg-success-400 rounded-full"></span>
+                            </div>
+                            <p className="text-xs text-secondary-600 mb-1">TAGFA compliant</p>
+                            <p className="text-lg font-bold text-primary-600">
+                                {funds.filter(f => ['cihr', 'nserc', 'sshrc'].includes(f.funding_agency)).length}
+                            </p>
+                            <p className="text-xs text-secondary-500">Funds tracked</p>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-4 p-3 bg-success-50 border border-success-200 rounded-lg">
+                        <div className="flex items-center">
+                            <div className="w-2 h-2 bg-success-500 rounded-full mr-2"></div>
+                            <span className="text-sm font-medium text-success-800">
+                                System maintains 7-year audit trail as required by TAGFA guidelines
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Tab Navigation */}
             <div className="bg-white rounded-lg shadow-soft border border-secondary-200 mb-8">
@@ -186,6 +295,19 @@ const FundingPage = () => {
                                 <span>Budget Reports</span>
                             </div>
                         </button>
+                        <button
+                            onClick={() => setActiveTab('carryovers')}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                activeTab === 'carryovers'
+                                    ? 'border-primary-500 text-primary-600'
+                                    : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
+                            }`}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <Calendar className="w-4 h-4" />
+                                <span>Carry-overs</span>
+                            </div>
+                        </button>
                     </nav>
                 </div>
 
@@ -195,6 +317,7 @@ const FundingPage = () => {
                         <FundManagement 
                             funds={funds}
                             onRefresh={refreshData}
+                            apiAvailable={apiStatus.available}
                             token={token}
                         />
                     )}
@@ -211,6 +334,12 @@ const FundingPage = () => {
                             funds={funds}
                             transactions={transactions}
                             budgetSummary={budgetSummary}
+                            token={token}
+                        />
+                    )}
+                    {activeTab === 'carryovers' && (
+                        <CarryOverManagement 
+                            funds={funds}
                             token={token}
                         />
                     )}

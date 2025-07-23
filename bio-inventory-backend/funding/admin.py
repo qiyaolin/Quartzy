@@ -1,14 +1,14 @@
 from django.contrib import admin
-from .models import Fund, Transaction, BudgetAllocation, FundingReport
+from .models import Fund, Transaction, BudgetAllocation, FundingReport, FundCarryOver
 
 
 @admin.register(Fund)
 class FundAdmin(admin.ModelAdmin):
     list_display = [
         'name', 'total_budget', 'spent_amount', 'remaining_budget',
-        'utilization_percentage', 'funding_source', 'is_archived', 'created_at'
+        'utilization_percentage', 'funding_agency', 'funding_source', 'is_archived', 'created_at'
     ]
-    list_filter = ['is_archived', 'funding_source', 'created_at', 'start_date', 'end_date']
+    list_filter = ['is_archived', 'funding_agency', 'funding_source', 'created_at', 'start_date', 'end_date']
     search_fields = ['name', 'description', 'funding_source', 'principal_investigator', 'grant_number']
     readonly_fields = ['spent_amount', 'remaining_budget', 'utilization_percentage', 'created_at', 'updated_at']
     
@@ -17,7 +17,10 @@ class FundAdmin(admin.ModelAdmin):
             'fields': ('name', 'description', 'total_budget', 'spent_amount')
         }),
         ('Funding Source', {
-            'fields': ('funding_source', 'grant_number', 'principal_investigator')
+            'fields': ('funding_agency', 'funding_source', 'grant_number', 'principal_investigator')
+        }),
+        ('Multi-year Grant Management', {
+            'fields': ('grant_duration_years', 'current_year', 'annual_budgets')
         }),
         ('Timeline', {
             'fields': ('start_date', 'end_date')
@@ -43,19 +46,22 @@ class FundAdmin(admin.ModelAdmin):
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
     list_display = [
-        'fund', 'amount', 'transaction_type', 'item_name', 
-        'transaction_date', 'created_by'
+        'fund', 'amount', 'transaction_type', 'cost_type', 'expense_category',
+        'fiscal_year', 'item_name', 'transaction_date', 'created_by'
     ]
-    list_filter = ['transaction_type', 'transaction_date', 'fund']
-    search_fields = ['fund__name', 'item_name', 'description', 'reference_number']
-    readonly_fields = ['transaction_date']
+    list_filter = ['transaction_type', 'cost_type', 'expense_category', 'fiscal_year', 'transaction_date', 'fund']
+    search_fields = ['fund__name', 'item_name', 'description', 'reference_number', 'invoice_number', 'vendor']
+    readonly_fields = ['transaction_date', 'fiscal_year']
     
     fieldsets = (
         ('Transaction Details', {
-            'fields': ('fund', 'amount', 'transaction_type')
+            'fields': ('fund', 'amount', 'transaction_type', 'cost_type', 'expense_category')
         }),
         ('Item Information', {
             'fields': ('item_name', 'description', 'request_id', 'reference_number')
+        }),
+        ('Audit Trail', {
+            'fields': ('invoice_number', 'vendor', 'fiscal_year')
         }),
         ('Metadata', {
             'fields': ('created_by', 'transaction_date'),
@@ -85,8 +91,45 @@ class BudgetAllocationAdmin(admin.ModelAdmin):
 
 @admin.register(FundingReport)
 class FundingReportAdmin(admin.ModelAdmin):
-    list_display = ['title', 'report_type', 'start_date', 'end_date', 'generated_at', 'generated_by']
-    list_filter = ['report_type', 'generated_at']
+    list_display = ['title', 'report_type', 'fiscal_year', 'is_tri_agency_compliant', 'start_date', 'end_date', 'generated_at', 'generated_by']
+    list_filter = ['report_type', 'is_tri_agency_compliant', 'fiscal_year', 'generated_at']
     search_fields = ['title']
-    readonly_fields = ['summary_data', 'generated_at', 'generated_by']
+    readonly_fields = ['summary_data', 'fiscal_year', 'is_tri_agency_compliant', 'generated_at', 'generated_by']
     filter_horizontal = ['funds']
+
+
+@admin.register(FundCarryOver)
+class FundCarryOverAdmin(admin.ModelAdmin):
+    list_display = [
+        'fund', 'carryover_amount', 'from_fiscal_year', 'to_fiscal_year',
+        'carryover_percentage', 'is_approved', 'is_processed', 'created_at'
+    ]
+    list_filter = ['is_approved', 'is_processed', 'from_fiscal_year', 'to_fiscal_year', 'fund']
+    search_fields = ['fund__name', 'notes']
+    readonly_fields = ['carryover_percentage', 'created_at', 'approved_at', 'processed_at']
+    
+    fieldsets = (
+        ('Carry-over Details', {
+            'fields': ('fund', 'from_fiscal_year', 'to_fiscal_year', 'carryover_amount')
+        }),
+        ('Budget Information', {
+            'fields': ('original_budget', 'spent_amount', 'carryover_percentage')
+        }),
+        ('Approval Status', {
+            'fields': ('is_approved', 'approved_by', 'approved_at')
+        }),
+        ('Processing Status', {
+            'fields': ('is_processed', 'processed_at')
+        }),
+        ('Additional Information', {
+            'fields': ('notes',)
+        }),
+        ('Metadata', {
+            'fields': ('created_by', 'created_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def carryover_percentage(self, obj):
+        return f"{obj.carryover_percentage:.1f}%"
+    carryover_percentage.short_description = 'Carry-over %'

@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Calendar, User, Building, FileText } from 'lucide-react';
 
-const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
+const FundModal = ({ isOpen, onClose, fund, mode, onSave, apiAvailable, token }) => {
     const [formData, setFormData] = useState({
         name: '',
         description: '',
         total_budget: '',
         funding_source: '',
+        funding_agency: 'other',
         grant_number: '',
         principal_investigator: '',
         start_date: '',
         end_date: '',
+        grant_duration_years: 1,
+        current_year: 1,
+        annual_budgets: {},
         notes: ''
     });
     const [loading, setLoading] = useState(false);
@@ -24,10 +28,14 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
                     description: fund.description || '',
                     total_budget: fund.total_budget || '',
                     funding_source: fund.funding_source || '',
+                    funding_agency: fund.funding_agency || 'other',
                     grant_number: fund.grant_number || '',
                     principal_investigator: fund.principal_investigator || '',
                     start_date: fund.start_date || '',
                     end_date: fund.end_date || '',
+                    grant_duration_years: fund.grant_duration_years || 1,
+                    current_year: fund.current_year || 1,
+                    annual_budgets: fund.annual_budgets || {},
                     notes: fund.notes || ''
                 });
             } else {
@@ -36,10 +44,14 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
                     description: '',
                     total_budget: '',
                     funding_source: '',
+                    funding_agency: 'other',
                     grant_number: '',
                     principal_investigator: '',
                     start_date: '',
                     end_date: '',
+                    grant_duration_years: 1,
+                    current_year: 1,
+                    annual_budgets: {},
                     notes: ''
                 });
             }
@@ -104,30 +116,34 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
                 },
                 body: JSON.stringify({
                     ...formData,
-                    total_budget: parseFloat(formData.total_budget)
+                    total_budget: parseFloat(formData.total_budget),
+                    grant_duration_years: parseInt(formData.grant_duration_years),
+                    current_year: parseInt(formData.current_year),
+                    // Convert empty strings to null for date fields
+                    start_date: formData.start_date === '' ? null : formData.start_date,
+                    end_date: formData.end_date === '' ? null : formData.end_date
                 })
-            });
+            }).catch(() => ({ ok: false, status: 404 }));
 
             if (response.ok) {
                 onSave();
                 onClose();
-            } else if (response.status === 404) {
-                setErrors({ general: 'Funding API is not yet implemented on the backend. Please contact your system administrator.' });
+                alert(`Fund ${mode === 'edit' ? 'updated' : 'created'} successfully!`);
             } else {
                 try {
                     const errorData = await response.json();
                     setErrors(errorData);
                 } catch {
-                    setErrors({ general: 'Server error. Please try again later.' });
+                    if (response.status === 404) {
+                        setErrors({ general: 'API endpoint not found. Please ensure the backend funding API is properly configured.' });
+                    } else {
+                        setErrors({ general: 'Server error. Please try again later.' });
+                    }
                 }
             }
         } catch (error) {
             console.error('Error saving fund:', error);
-            if (error.message.includes('Failed to fetch')) {
-                setErrors({ general: 'Cannot connect to server. Please check your internet connection and try again.' });
-            } else {
-                setErrors({ general: 'Failed to save fund. The funding system may not be fully implemented yet.' });
-            }
+            setErrors({ general: 'Network error. Please check your connection and try again.' });
         } finally {
             setLoading(false);
         }
@@ -251,7 +267,25 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
 
                         <div>
                             <label className="block text-sm font-medium text-secondary-700 mb-2">
-                                Funding Source
+                                Funding Agency
+                            </label>
+                            <select
+                                name="funding_agency"
+                                value={formData.funding_agency}
+                                onChange={handleInputChange}
+                                className="input w-full"
+                                disabled={loading}
+                            >
+                                <option value="cihr">Canadian Institutes of Health Research (CIHR)</option>
+                                <option value="nserc">Natural Sciences and Engineering Research Council (NSERC)</option>
+                                <option value="sshrc">Social Sciences and Humanities Research Council (SSHRC)</option>
+                                <option value="other">Other Funding Source</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                                Funding Source Details
                             </label>
                             <input
                                 type="text"
@@ -315,6 +349,124 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
                             />
                             {errors.end_date && <p className="text-danger-600 text-sm mt-1">{errors.end_date}</p>}
                         </div>
+
+                        {/* Multi-year Grant Management */}
+                        <div className="md:col-span-2 mt-6">
+                            <h3 className="text-lg font-semibold text-secondary-900 mb-4 flex items-center">
+                                <Calendar className="w-5 h-5 mr-2" />
+                                Multi-year Grant Management
+                            </h3>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                                Grant Duration (Years)
+                            </label>
+                            <input
+                                type="number"
+                                name="grant_duration_years"
+                                value={formData.grant_duration_years}
+                                onChange={handleInputChange}
+                                className="input w-full"
+                                min="1"
+                                max="10"
+                                disabled={loading}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-secondary-700 mb-2">
+                                Current Year
+                            </label>
+                            <input
+                                type="number"
+                                name="current_year"
+                                value={formData.current_year}
+                                onChange={handleInputChange}
+                                className="input w-full"
+                                min="1"
+                                max={formData.grant_duration_years}
+                                disabled={loading}
+                            />
+                            <p className="text-xs text-secondary-500 mt-1">
+                                Current active fiscal year of the grant
+                            </p>
+                        </div>
+
+                        {/* Annual Budget Allocation */}
+                        {formData.grant_duration_years > 1 && (
+                            <div className="md:col-span-2">
+                                <h4 className="text-md font-medium text-secondary-900 mb-3">Annual Budget Distribution</h4>
+                                <div className="bg-secondary-50 rounded-lg p-4">
+                                    {Array.from({ length: formData.grant_duration_years }, (_, index) => {
+                                        const year = index + 1;
+                                        const yearBudget = formData.annual_budgets[year] || (formData.total_budget / formData.grant_duration_years);
+                                        return (
+                                            <div key={year} className="flex items-center justify-between py-2 border-b border-secondary-200 last:border-0">
+                                                <div className="flex items-center space-x-2">
+                                                    <span className="text-sm font-medium text-secondary-700">
+                                                        Year {year}
+                                                    </span>
+                                                    {year === formData.current_year && (
+                                                        <span className="badge badge-primary text-xs">Current</span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <span className="text-sm text-secondary-500">$</span>
+                                                    <input
+                                                        type="number"
+                                                        value={yearBudget}
+                                                        onChange={(e) => {
+                                                            const value = parseFloat(e.target.value) || 0;
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                annual_budgets: {
+                                                                    ...prev.annual_budgets,
+                                                                    [year]: value
+                                                                }
+                                                            }));
+                                                        }}
+                                                        className="input w-32 text-sm"
+                                                        min="0"
+                                                        step="0.01"
+                                                        disabled={loading}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="mt-3 pt-3 border-t border-secondary-300">
+                                        <div className="flex justify-between text-sm font-medium">
+                                            <span>Total Allocated:</span>
+                                            <span className="text-primary-600">
+                                                ${Object.values(formData.annual_budgets).reduce((sum, amount) => sum + (parseFloat(amount) || 0), 0).toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {formData.funding_agency !== 'other' && (
+                            <div className="md:col-span-2">
+                                <div className="bg-info-50 border border-info-200 rounded-lg p-4">
+                                    <div className="flex items-start">
+                                        <div className="flex-shrink-0">
+                                            <svg className="h-5 w-5 text-info-400" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div className="ml-3">
+                                            <h4 className="text-sm font-medium text-info-800">Tri-Agency Compliance</h4>
+                                            <p className="text-sm text-info-700 mt-1">
+                                                This fund will be tracked for Canadian Tri-Agency compliance including Form 300 reporting, 
+                                                direct/indirect cost tracking, and multi-year fiscal management.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Additional Notes */}
                         <div className="md:col-span-2 mt-6">

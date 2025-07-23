@@ -32,7 +32,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     setSelectedFund(activeFunds[0].id.toString());
                 }
             } else if (response.status === 404) {
-                // API not implemented yet, set empty funds
+                // API endpoint not available, set empty funds
                 setFunds([]);
             }
         } catch (error) {
@@ -104,7 +104,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     if (!isOpen || !request) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
                 <div className="p-6 border-b border-secondary-200 flex justify-between items-center">
                     <div>
@@ -267,7 +267,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                                         <DollarSign className="w-12 h-12 mx-auto mb-3 text-secondary-300" />
                                         <p>No active funds available</p>
                                         <p className="text-sm mt-1">
-                                            {loading ? 'Loading funds...' : 'Please create a fund first to place orders, or the funding API may not be implemented yet.'}
+                                            {loading ? 'Loading funds...' : 'Please create a fund first to place orders.'}
                                         </p>
                                     </div>
                                 )}
