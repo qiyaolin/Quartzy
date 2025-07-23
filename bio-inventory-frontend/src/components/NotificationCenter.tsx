@@ -53,7 +53,7 @@ const NotificationCenter: React.FC = () => {
       if (filter.priority) params.append('priority', filter.priority);
       if (filter.is_read !== undefined) params.append('is_read', filter.is_read.toString());
 
-      const response = await fetch(`http://127.0.0.1:8000/api/notifications/?${params.toString()}`, {
+      const response = await fetch(`http://127.0.0.1:8000/api/notifications/notifications/?${params.toString()}`, {
         headers: { 'Authorization': `Token ${token}` }
       });
 
@@ -72,7 +72,7 @@ const NotificationCenter: React.FC = () => {
     if (!token) return;
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/notifications/summary/', {
+      const response = await fetch('http://127.0.0.1:8000/api/notifications/notifications/summary/', {
         headers: { 'Authorization': `Token ${token}` }
       });
 

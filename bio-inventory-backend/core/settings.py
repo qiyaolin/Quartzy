@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'users',
     'funding',
     'notifications',
+    'settings',
 ]
 
 MIDDLEWARE = [

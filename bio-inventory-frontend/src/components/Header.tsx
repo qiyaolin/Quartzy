@@ -192,7 +192,13 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
 
                                 {/* Menu Items */}
                                 <div className="p-2">
-                                    <button className="w-full flex items-center px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-xl transition-colors duration-200 group">
+                                    <button 
+                                        onClick={() => {
+                                            setIsUserMenuOpen(false);
+                                            onNavigate('settings');
+                                        }}
+                                        className="w-full flex items-center px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 rounded-xl transition-colors duration-200 group"
+                                    >
                                         <Settings className="w-4 h-4 mr-3 text-gray-400 group-hover:text-gray-600" />
                                         Settings
                                     </button>

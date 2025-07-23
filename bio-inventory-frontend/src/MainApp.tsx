@@ -18,6 +18,7 @@ import RequestsPage from './pages/RequestsPage.tsx';
 import ReportsPage from './pages/ReportsPage.tsx';
 import UserManagementPage from './pages/UserManagementPage.tsx';
 import FundingPage from './pages/FundingPage.tsx';
+import SettingsPage from './pages/SettingsPage.tsx';
 
 const MainApp = () => {
     const { token } = useContext(AuthContext);
@@ -112,6 +113,7 @@ const MainApp = () => {
             />;
             case 'funding': return <FundingPage />;
             case 'users': return <UserManagementPage onEditUser={handleOpenEditUserModal} onDeleteUser={handleOpenDeleteUserModal} refreshKey={refreshKey} users={users} setUsers={setUsers} />;
+            case 'settings': return <SettingsPage />;
             default: return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
         }
     }
