@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
 import { AlertTriangle, Loader } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
+import { useNotification } from '../contexts/NotificationContext.tsx';
 import RequestsTable from '../components/RequestsTable.tsx';
 import MarkReceivedModal from '../modals/MarkReceivedModal.tsx';
 import RequestHistoryModal from '../modals/RequestHistoryModal.tsx';
@@ -12,6 +13,7 @@ import { exportToExcel } from '../utils/excelExport.ts';
 
 const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }) => {
     const { token } = useContext(AuthContext);
+    const notification = useNotification();
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -52,7 +54,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
             const response = await fetch(url, { method: 'POST', headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }, ...options });
             if (!response.ok) throw new Error('Action failed.');
             fetchRequests(); // Refresh list on success
-        } catch (e) { alert(e.message); }
+        } catch (e) { notification.error(e.message); }
     };
 
     const handleApprove = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/approve/`);
@@ -77,7 +79,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
             if (!response.ok) throw new Error('Failed to place order.');
             fetchRequests(); // Refresh list on success
         } catch (e) {
-            alert(e.message);
+            notification.error(e.message);
         }
     };
     const handleReorder = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/reorder/`);
@@ -172,7 +174,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
                             fetchRequests(); // Refresh data
                         }
                     } catch (error) {
-                        alert('Failed to approve requests');
+                        notification.error('Failed to approve requests');
                     }
                 }
                 break;
@@ -192,7 +194,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
                             fetchRequests(); // Refresh data
                         }
                     } catch (error) {
-                        alert('Failed to reject requests');
+                        notification.error('Failed to reject requests');
                     }
                 }
                 break;
@@ -222,11 +224,11 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
                         });
                         if (response.ok) {
                             const result = await response.json();
-                            alert(`Successfully created ${result.created_count} new requests`);
+                            notification.success(`Successfully created ${result.created_count} new requests`);
                             fetchRequests(); // Refresh data
                         }
                     } catch (error) {
-                        alert('Failed to reorder requests');
+                        notification.error('Failed to reorder requests');
                     }
                 }
                 break;
@@ -249,14 +251,14 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
             });
             if (response.ok) {
                 const result = await response.json();
-                alert(`Successfully placed orders for ${result.updated_count} requests`);
+                notification.success(`Successfully placed orders for ${result.updated_count} requests`);
                 fetchRequests(); // Refresh data
             } else {
                 const error = await response.json();
-                alert(`Failed to place orders: ${error.error}`);
+                notification.error(`Failed to place orders: ${error.error}`);
             }
         } catch (error) {
-            alert('Failed to place orders');
+            notification.error('Failed to place orders');
         }
     };
 
@@ -275,14 +277,14 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
             });
             if (response.ok) {
                 const result = await response.json();
-                alert(`Successfully marked ${result.updated_count} requests as received`);
+                notification.success(`Successfully marked ${result.updated_count} requests as received`);
                 fetchRequests(); // Refresh data
             } else {
                 const error = await response.json();
-                alert(`Failed to mark as received: ${error.error}`);
+                notification.error(`Failed to mark as received: ${error.error}`);
             }
         } catch (error) {
-            alert('Failed to mark as received');
+            notification.error('Failed to mark as received');
         }
     };
 

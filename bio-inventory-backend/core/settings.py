@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'requests', # Add our new app here
     'users',
     'funding',
+    'notifications',
 ]
 
 MIDDLEWARE = [

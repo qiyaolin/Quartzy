@@ -56,7 +56,7 @@ class RequestViewSet(viewsets.ModelViewSet):
             'budget_validation': validation if fund_id else None
         })
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def place_order(self, request, pk=None):
         """Custom action to mark an approved request as ordered."""
         req_object = self.get_object()

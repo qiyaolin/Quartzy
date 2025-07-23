@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { AlertTriangle, Clock, Package } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
+import { useNotification } from '../contexts/NotificationContext.tsx';
 import InventoryTable from '../components/InventoryTable.tsx';
 import Pagination from '../components/Pagination.tsx';
 import ItemRequestHistoryModal from '../modals/ItemRequestHistoryModal.tsx';
@@ -8,6 +9,7 @@ import { exportToExcel } from '../utils/excelExport.ts';
 
 const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const { token } = useContext(AuthContext);
+    const notification = useNotification();
     const [inventory, setInventory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -141,7 +143,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                             window.location.reload();
                         }
                     } catch (error) {
-                        alert('Failed to archive items');
+                        notification.error('Failed to archive items');
                     }
                 }
                 break;
@@ -162,7 +164,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                             window.location.reload();
                         }
                     } catch (error) {
-                        alert('Failed to delete items');
+                        notification.error('Failed to delete items');
                     }
                 }
                 break;

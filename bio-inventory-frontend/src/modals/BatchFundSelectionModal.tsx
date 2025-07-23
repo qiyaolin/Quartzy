@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, AlertTriangle } from 'lucide-react';
+import { X, DollarSign, AlertTriangle, Package } from 'lucide-react';
+import { useNotification } from '../contexts/NotificationContext.tsx';
 
 const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selectedRequests }) => {
+    const notification = useNotification();
     const [funds, setFunds] = useState([]);
     const [selectedFundId, setSelectedFundId] = useState('');
     const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selecte
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedFundId) {
-            alert('Please select a fund');
+            notification.warning('Please select a fund');
             return;
         }
 
@@ -78,6 +80,20 @@ const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selecte
             setFundValidation(null);
         } catch (error) {
             console.error('Failed to place orders:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePlaceOrderWithoutFund = async () => {
+        setLoading(true);
+        try {
+            await onPlaceOrder(selectedRequests, null);
+            onClose();
+            setSelectedFundId('');
+            setFundValidation(null);
+        } catch (error) {
+            console.error('Failed to place orders without fund:', error);
         } finally {
             setLoading(false);
         }
@@ -119,13 +135,12 @@ const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selecte
                 <form onSubmit={handleSubmit}>
                     <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Select Fund *
+                            Select Fund (Optional)
                         </label>
                         <select
                             value={selectedFundId}
                             onChange={(e) => handleFundChange(e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                            required
                         >
                             <option value="">Select a fund...</option>
                             {funds.map(fund => (
@@ -153,22 +168,35 @@ const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selecte
                         </div>
                     )}
 
-                    <div className="flex space-x-3">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                            disabled={loading}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50"
-                            disabled={loading}
-                        >
-                            {loading ? 'Processing...' : 'Place Orders'}
-                        </button>
+                    <div className="flex flex-col space-y-3">
+                        {funds.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handlePlaceOrderWithoutFund}
+                                className="w-full px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors flex items-center justify-center space-x-2"
+                                disabled={loading}
+                            >
+                                <Package className="w-4 h-4" />
+                                <span>{loading ? 'Processing...' : 'Place Orders Without Fund'}</span>
+                            </button>
+                        )}
+                        <div className="flex space-x-3">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                                disabled={loading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:opacity-50"
+                                disabled={loading || !selectedFundId}
+                            >
+                                {loading ? 'Processing...' : 'Place Orders with Fund'}
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

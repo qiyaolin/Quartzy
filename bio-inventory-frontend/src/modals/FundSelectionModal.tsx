@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Package, TrendingUp, AlertTriangle } from 'lucide-react';
+import { useNotification } from '../contexts/NotificationContext.tsx';
 
 const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) => {
+    const notification = useNotification();
     const [funds, setFunds] = useState([]);
     const [selectedFund, setSelectedFund] = useState('');
     const [loading, setLoading] = useState(false);
@@ -50,7 +52,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
             onClose();
         } catch (error) {
             console.error('Error placing order:', error);
-            alert('Failed to place order. Please try again.');
+            notification.error('Failed to place order. Please try again.');
         } finally {
             setPlacing(false);
         }

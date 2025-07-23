@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { AuthContext } from './components/AuthContext.tsx';
+import { useNotification } from './contexts/NotificationContext.tsx';
 import AlertsBanner from './components/AlertsBanner.tsx';
 import Header from './components/Header.tsx';
 import InventorySidebar from './components/InventorySidebar.tsx';
@@ -20,6 +21,7 @@ import FundingPage from './pages/FundingPage.tsx';
 
 const MainApp = () => {
     const { token } = useContext(AuthContext);
+    const notification = useNotification();
     const [activePage, setActivePage] = useState('inventory');
     const [isItemFormModalOpen, setIsItemFormModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -94,7 +96,7 @@ const MainApp = () => {
             await fetch(`http://127.0.0.1:8000/api/users/${deletingUser.id}/`, { method: 'DELETE', headers: { 'Authorization': `Token ${token}` } });
             handleSave();
         } catch (e) { 
-            alert(e.message || 'Failed to delete user'); 
+            notification.error(e.message || 'Failed to delete user'); 
         } finally { setIsDeleteUserModalOpen(false); setDeletingUser(null); }
     };
 

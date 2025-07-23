@@ -226,7 +226,7 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                             Approve
                                         </button>
                                     )}
-                                    {req.status === 'APPROVED' && (
+                                    {req.status === 'APPROVED' && user?.is_staff && (
                                         <button 
                                             onClick={() => onPlaceOrder(req.id)} 
                                             className="btn btn-warning px-3 py-1.5 text-xs hover:scale-105 transition-transform"

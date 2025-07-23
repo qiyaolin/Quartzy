@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package, MapPin } from 'lucide-react';
+import { useNotification } from '../contexts/NotificationContext.tsx';
 
 const BatchReceivedModal = ({ isOpen, onClose, onSave, token, selectedRequests }) => {
+    const notification = useNotification();
     const [locations, setLocations] = useState([]);
     const [selectedLocationId, setSelectedLocationId] = useState('');
     const [loading, setLoading] = useState(false);
@@ -29,7 +31,7 @@ const BatchReceivedModal = ({ isOpen, onClose, onSave, token, selectedRequests }
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedLocationId) {
-            alert('Please select a location');
+            notification.warning('Please select a location');
             return;
         }
 

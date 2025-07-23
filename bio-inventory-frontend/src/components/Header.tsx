@@ -16,6 +16,7 @@ import {
     Zap
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
+import NotificationCenter from './NotificationCenter.tsx';
 
 const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, handleInventoryFilterChange, handleRequestFilterChange }) => {
     const { user, logout } = useContext(AuthContext);
@@ -139,10 +140,7 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
                 {/* Right Side Actions */}
                 <div className="flex items-center space-x-3">
                     {/* Notifications */}
-                    <button className="relative p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-200 group">
-                        <Bell className="w-5 h-5 text-gray-600 group-hover:text-gray-800" />
-                        <div className="absolute top-2 right-2 w-2 h-2 bg-danger-500 rounded-full animate-pulse"></div>
-                    </button>
+                    <NotificationCenter />
 
                     {/* User Menu */}
                     <div className="relative" ref={userMenuRef}>
