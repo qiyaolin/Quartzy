@@ -1,12 +1,15 @@
 import React from 'react';
 import { AuthProvider, AuthContext } from './components/AuthContext.tsx';
+import { NotificationProvider } from './contexts/NotificationContext.tsx';
 import MainApp from './MainApp.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 
 const App = () => (
-  <AuthProvider>
-    <AuthConsumer />
-  </AuthProvider>
+  <NotificationProvider>
+    <AuthProvider>
+      <AuthConsumer />
+    </AuthProvider>
+  </NotificationProvider>
 );
 
 const AuthConsumer = () => {

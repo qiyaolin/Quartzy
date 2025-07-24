@@ -1,15 +1,21 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { AlertTriangle, Clock, Package } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
+import { useNotification } from '../contexts/NotificationContext.tsx';
 import InventoryTable from '../components/InventoryTable.tsx';
 import Pagination from '../components/Pagination.tsx';
+import ItemRequestHistoryModal from '../modals/ItemRequestHistoryModal.tsx';
+import { exportToExcel } from '../utils/excelExport.ts';
 
 const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const { token } = useContext(AuthContext);
+    const notification = useNotification();
     const [inventory, setInventory] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [isRequestHistoryOpen, setIsRequestHistoryOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState(null);
     const itemsPerPage = 10;
 
     const groupedInventory = useMemo(() => {
@@ -41,7 +47,14 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
             if (filters.search) params.append('search', filters.search);
             Object.keys(filters).forEach(key => {
                 if (key !== 'search' && filters[key].length > 0) {
-                    filters[key].forEach(value => params.append(key, value));
+                    if (key === 'expired' || key === 'low_stock') {
+                        // For boolean filters, send 'true' if the filter is active
+                        if (filters[key].includes('true')) {
+                            params.append(key, 'true');
+                        }
+                    } else {
+                        filters[key].forEach(value => params.append(key, value));
+                    }
                 }
             });
             try {
@@ -53,6 +66,110 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         };
         if (token) { fetchInventory(); }
     }, [token, refreshKey, filters]);
+
+    const handleViewRequestHistory = (item) => {
+        setSelectedItem(item);
+        setIsRequestHistoryOpen(true);
+    };
+
+    const handleBatchAction = async (action, selectedIds) => {
+        if (selectedIds.length === 0) return;
+        
+        switch (action) {
+            case 'export':
+                // Filter selected items and export to Excel
+                const selectedItems = inventory.filter(item => selectedIds.includes(item.id));
+                
+                // Prepare formatted data for Excel
+                const formattedItems = selectedItems.map(item => ({
+                    'Item ID': item.id,
+                    'Item Name': item.name,
+                    'Specifications': item.specifications || '',
+                    'Quantity': item.quantity,
+                    'Unit': item.unit || '',
+                    'Unit Price': item.unit_price ? `$${item.unit_price}` : '',
+                    'Total Value': item.total_value ? `$${item.total_value}` : '',
+                    'Vendor': item.vendor?.name || '',
+                    'Catalog Number': item.catalog_number || '',
+                    'Location': item.location || '',
+                    'Item Type': item.item_type || '',
+                    'Expiration Date': item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('en-US') : '',
+                    'Minimum Stock': item.minimum_quantity || '',
+                    'Purchase Date': item.purchase_date ? new Date(item.purchase_date).toLocaleDateString('en-US') : '',
+                    'Status': item.quantity <= (item.minimum_quantity || 0) ? 'Low Stock' : 
+                           (item.expiration_date && new Date(item.expiration_date) < new Date()) ? 'Expired' : 'Normal',
+                    'Notes': item.notes || '',
+                    'Last Updated': item.updated_at ? new Date(item.updated_at).toLocaleString('en-US') : ''
+                }));
+                
+                const now = new Date();
+                const summary = {
+                    'Export Time': now.toLocaleString('en-US'),
+                    'Export Count': selectedItems.length,
+                    'Total Value': `$${selectedItems.reduce((sum, item) => sum + (parseFloat(item.total_value) || 0), 0).toFixed(2)}`,
+                    'Low Stock Items': selectedItems.filter(item => item.quantity <= (item.minimum_quantity || 0)).length,
+                    'Expired Items': selectedItems.filter(item => item.expiration_date && new Date(item.expiration_date) < now).length,
+                    'Expiring Soon Items': selectedItems.filter(item => {
+                        if (!item.expiration_date) return false;
+                        const expDate = new Date(item.expiration_date);
+                        const thirtyDaysFromNow = new Date();
+                        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+                        return expDate > now && expDate <= thirtyDaysFromNow;
+                    }).length
+                };
+                
+                exportToExcel({
+                    fileName: 'inventory-export',
+                    sheetName: 'Inventory List',
+                    title: 'Laboratory Inventory Management Export Report',
+                    data: formattedItems,
+                    summary: summary
+                });
+                break;
+                
+            case 'archive':
+                if (window.confirm(`Are you sure you want to archive ${selectedIds.length} item(s)?`)) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/api/items/batch_archive/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Token ${token}`
+                            },
+                            body: JSON.stringify({ item_ids: selectedIds })
+                        });
+                        if (response.ok) {
+                            // Refresh inventory
+                            window.location.reload();
+                        }
+                    } catch (error) {
+                        notification.error('Failed to archive items');
+                    }
+                }
+                break;
+                
+            case 'delete':
+                if (window.confirm(`Are you sure you want to delete ${selectedIds.length} item(s)? This action cannot be undone.`)) {
+                    try {
+                        const response = await fetch('http://127.0.0.1:8000/api/items/batch_delete/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Token ${token}`
+                            },
+                            body: JSON.stringify({ item_ids: selectedIds })
+                        });
+                        if (response.ok) {
+                            // Refresh inventory
+                            window.location.reload();
+                        }
+                    } catch (error) {
+                        notification.error('Failed to delete items');
+                    }
+                }
+                break;
+        }
+    };
 
     return (
         <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
@@ -80,13 +197,25 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                 )}
                 {!loading && !error && (
                     <>
-                        <InventoryTable groupedData={paginatedData} onEdit={onEditItem} onDelete={onDeleteItem} />
+                        <InventoryTable 
+                            groupedData={paginatedData} 
+                            onEdit={onEditItem} 
+                            onDelete={onDeleteItem} 
+                            onViewRequestHistory={handleViewRequestHistory}
+                            onBatchAction={handleBatchAction}
+                        />
                         <div className="p-6 border-t border-secondary-200 bg-secondary-50/50">
                             <Pagination currentPage={currentPage} totalItems={Object.keys(groupedInventory).length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
                         </div>
                     </>
                 )}
             </div>
+            <ItemRequestHistoryModal 
+                isOpen={isRequestHistoryOpen} 
+                onClose={() => setIsRequestHistoryOpen(false)} 
+                itemName={selectedItem?.name} 
+                token={token} 
+            />
         </main>
     );
 };

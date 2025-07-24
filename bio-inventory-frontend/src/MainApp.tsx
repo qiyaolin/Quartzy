@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { AuthContext } from './components/AuthContext.tsx';
+import { useNotification } from './contexts/NotificationContext.tsx';
 import AlertsBanner from './components/AlertsBanner.tsx';
 import Header from './components/Header.tsx';
 import InventorySidebar from './components/InventorySidebar.tsx';
@@ -16,9 +17,12 @@ import InventoryPage from './pages/InventoryPage.tsx';
 import RequestsPage from './pages/RequestsPage.tsx';
 import ReportsPage from './pages/ReportsPage.tsx';
 import UserManagementPage from './pages/UserManagementPage.tsx';
+import FundingPage from './pages/FundingPage.tsx';
+import SettingsPage from './pages/SettingsPage.tsx';
 
 const MainApp = () => {
     const { token } = useContext(AuthContext);
+    const notification = useNotification();
     const [activePage, setActivePage] = useState('inventory');
     const [isItemFormModalOpen, setIsItemFormModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -32,7 +36,7 @@ const MainApp = () => {
     const [users, setUsers] = useState([]);
     const [refreshKey, setRefreshKey] = useState(0);
     const [filterOptions, setFilterOptions] = useState({ vendors: [], locations: [], itemTypes: [], users: [] });
-    const [inventoryFilters, setInventoryFilters] = useState({ search: '', location: [], item_type: [], vendor: [] });
+    const [inventoryFilters, setInventoryFilters] = useState({ search: '', location: [], item_type: [], vendor: [], expired: [], low_stock: [] });
     const [requestFilters, setRequestFilters] = useState({ search: '', status: 'NEW', vendor: [], requested_by: [] });
     const [userSearch, setUserSearch] = useState('');
 
@@ -93,7 +97,7 @@ const MainApp = () => {
             await fetch(`http://127.0.0.1:8000/api/users/${deletingUser.id}/`, { method: 'DELETE', headers: { 'Authorization': `Token ${token}` } });
             handleSave();
         } catch (e) { 
-            alert(e.message || 'Failed to delete user'); 
+            notification.error(e.message || 'Failed to delete user'); 
         } finally { setIsDeleteUserModalOpen(false); setDeletingUser(null); }
     };
 
@@ -101,8 +105,15 @@ const MainApp = () => {
         switch (activePage) {
             case 'inventory': return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
             case 'requests': return <RequestsPage onAddRequestClick={() => setIsRequestFormModalOpen(true)} refreshKey={refreshKey} filters={requestFilters} onFilterChange={handleRequestFilterChange} />;
-            case 'reports': return <ReportsPage />;
+            case 'reports': return <ReportsPage 
+                onNavigateToInventory={() => setActivePage('inventory')}
+                onOpenAddItemModal={handleOpenAddItemModal}
+                onOpenNewRequestModal={() => setIsRequestFormModalOpen(true)}
+                onSetInventoryFilters={setInventoryFilters}
+            />;
+            case 'funding': return <FundingPage />;
             case 'users': return <UserManagementPage onEditUser={handleOpenEditUserModal} onDeleteUser={handleOpenDeleteUserModal} refreshKey={refreshKey} users={users} setUsers={setUsers} />;
+            case 'settings': return <SettingsPage />;
             default: return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
         }
     }

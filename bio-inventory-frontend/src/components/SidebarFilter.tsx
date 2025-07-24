@@ -16,7 +16,7 @@ const SidebarFilter = ({ title, options, selected, onFilterChange }) => {
                             <input 
                                 type="checkbox" 
                                 id={`${title}-${option.id}`} 
-                                checked={selected.includes(option.id)}
+                                checked={Array.isArray(selected) && selected.includes(option.id)}
                                 onChange={() => onFilterChange(option.id)}
                                 className="checkbox" />
                             <label htmlFor={`${title}-${option.id}`} className="ml-2 text-secondary-600 group-hover:text-secondary-900 cursor-pointer transition-colors text-sm">

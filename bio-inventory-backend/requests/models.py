@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from items.models import Vendor # We can link to models from other apps
+from items.models import Vendor, ItemType # We can link to models from other apps
 
 class Request(models.Model):
     # Enum for request status
@@ -14,6 +14,7 @@ class Request(models.Model):
 
     # Core Details
     item_name = models.CharField(max_length=255)
+    item_type = models.ForeignKey(ItemType, on_delete=models.SET_NULL, null=True, blank=True)
     requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="requests")
     status = models.CharField(
         max_length=10,
@@ -30,6 +31,9 @@ class Request(models.Model):
     quantity = models.PositiveIntegerField(default=1)
     unit_size = models.CharField(max_length=100, blank=True, help_text="e.g., 100 uL, 500 g")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # Funding
+    fund_id = models.IntegerField(null=True, blank=True, help_text="ID of the fund used for this request")
 
     # Notes and Timestamps
     notes = models.TextField(blank=True)

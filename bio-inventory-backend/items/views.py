@@ -34,7 +34,9 @@ class ItemViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows items to be viewed or edited.
     """
-    queryset = Item.objects.filter(is_archived=False)
+    queryset = Item.objects.filter(is_archived=False).select_related(
+        'vendor', 'location', 'item_type'
+    ).prefetch_related('request_set')
     serializer_class = ItemSerializer
     filterset_class = ItemFilter # Connect the filter class
     filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter

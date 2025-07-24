@@ -1,0 +1,42 @@
+{% extends "notifications/emails/base_email.html" %}
+
+{% block title %}New Request Submitted - Quartzy{% endblock %}
+
+{% block header_title %}New Request Submitted{% endblock %}
+
+{% block content %}
+<h2>New Request Requires Your Attention</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>A new request has been submitted and requires administrator approval.</p>
+
+<div class="highlight">
+    <h3>Request Details</h3>
+    <p><strong>Item:</strong> {{ request.item_name }}</p>
+    <p><strong>Requested by:</strong> {{ request.requested_by.get_full_name|default:request.requested_by.username }}</p>
+    <p><strong>Vendor:</strong> {{ request.vendor.name|default:"Not specified" }}</p>
+    <p><strong>Catalog Number:</strong> {{ request.catalog_number|default:"Not specified" }}</p>
+    <p><strong>Quantity:</strong> {{ request.quantity }} {{ request.unit_size|default:"units" }}</p>
+    <p><strong>Unit Price:</strong> ${{ request.unit_price|floatformat:2 }}</p>
+    <p><strong>Total Cost:</strong> ${{ total_cost|floatformat:2 }}</p>
+    <p><strong>Status:</strong> <span class="status status-new">{{ request.status }}</span></p>
+    <p><strong>Date Requested:</strong> {{ request.date_created|date:"F j, Y g:i A" }}</p>
+    {% if request.url %}
+    <p><strong>Product URL:</strong> <a href="{{ request.url }}">View Product</a></p>
+    {% endif %}
+</div>
+
+{% if request.notes %}
+<div class="highlight">
+    <h3>Additional Notes</h3>
+    <p>{{ request.notes }}</p>
+</div>
+{% endif %}
+
+<p>Please review this request and take appropriate action.</p>
+
+<a href="{{ base_url }}/requests?request_id={{ request.id }}" class="button">Review Request</a>
+
+<p>Best regards,<br>Hayerlab Inventory System</p>
+{% endblock %}
