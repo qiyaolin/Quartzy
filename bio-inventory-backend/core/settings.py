@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -94,12 +95,7 @@ DATABASES = {
         'PASSWORD': os.environ.get('DB_PASSWORD', '111111'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '5432'),
-        'OPTIONS': {
-            'MAX_CONNS': 20,
-            'OPTIONS': {
-                '-c': 'default_transaction_isolation=read_committed'
-            }
-        }
+        'CONN_MAX_AGE': 300,
     }
 }
 
@@ -212,6 +208,27 @@ SECURE_HSTS_PRELOAD = not DEBUG
 SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 SESSION_CACHE_ALIAS = 'default'
 SESSION_COOKIE_AGE = 86400  # 24 hours
+
+# Email Configuration
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='hayerlabaws@gmail.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Quartzy Bio-Inventory <hayerlabaws@gmail.com>')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Email settings for notifications
+EMAIL_SUBJECT_PREFIX = '[Quartzy Lab System] '
+EMAIL_TIMEOUT = 60
+
+# Additional email headers to improve deliverability
+EMAIL_USE_LOCALTIME = True
+
+# Frontend URL for email links
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')
 
 # Logging configuration
 LOGGING = {

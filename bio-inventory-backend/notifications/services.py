@@ -3,6 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from datetime import timedelta
 from .models import Notification, NotificationPreference
+from .email_service import EmailNotificationService
 
 
 class NotificationService:
@@ -197,7 +198,7 @@ class NotificationService:
         if user:
             message_config['message'] = f"{message_config['message']} (by {user.get_full_name() or user.username})"
         
-        return NotificationService.create_bulk_notification(
+        notifications = NotificationService.create_bulk_notification(
             recipients=recipients,
             title=message_config['title'],
             message=message_config['message'],
@@ -207,6 +208,14 @@ class NotificationService:
             action_url=f'/requests?request_id={request_obj.id}',
             metadata={'action': action, 'request_id': request_obj.id}
         )
+        
+        # Send email notifications based on action type
+        if action == 'ordered':
+            EmailNotificationService.send_order_placed_notification(request_obj, user)
+        elif action == 'received':
+            EmailNotificationService.send_item_received_notification(request_obj, user)
+        
+        return notifications
     
     @staticmethod
     def create_system_notification(
@@ -255,3 +264,33 @@ class NotificationService:
         """Get notification preferences for a user"""
         preferences, created = NotificationPreference.objects.get_or_create(user=user)
         return preferences
+    
+    @staticmethod
+    def notify_new_request_created(request_obj):
+        """
+        Send notifications when a new request is created
+        
+        Args:
+            request_obj: Request instance that was created
+        """
+        # Send email notification to admins
+        EmailNotificationService.send_new_request_notification(request_obj)
+        
+        # Create web notifications for admins
+        admin_users = User.objects.filter(
+            is_staff=True, is_active=True
+        )
+        
+        if admin_users.exists():
+            return NotificationService.create_bulk_notification(
+                recipients=admin_users,
+                title=f'New Request: {request_obj.item_name}',
+                message=f'A new request for "{request_obj.item_name}" has been submitted by {request_obj.requested_by.get_full_name() or request_obj.requested_by.username} and requires approval.',
+                notification_type='request_update',
+                priority='medium',
+                related_object=request_obj,
+                action_url=f'/requests?request_id={request_obj.id}',
+                metadata={'action': 'created', 'request_id': request_obj.id}
+            )
+        
+        return []

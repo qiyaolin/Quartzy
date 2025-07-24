@@ -1,0 +1,42 @@
+{% extends "notifications/emails/base_email.html" %}
+
+{% block title %}Item Received - Quartzy{% endblock %}
+
+{% block header_title %}Item Received{% endblock %}
+
+{% block content %}
+<h2>Your Item Has Arrived</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>Your requested item has been received and is now available in the inventory.</p>
+
+<div class="highlight">
+    <h3>Received Item Details</h3>
+    <p><strong>Item:</strong> {{ request.item_name }}</p>
+    <p><strong>Vendor:</strong> {{ request.vendor.name|default:"Not specified" }}</p>
+    <p><strong>Catalog Number:</strong> {{ request.catalog_number|default:"Not specified" }}</p>
+    <p><strong>Quantity Received:</strong> {{ quantity_received|default:request.quantity }} {{ request.unit_size|default:"units" }}</p>
+    <p><strong>Status:</strong> <span class="status status-received">{{ request.status }}</span></p>
+    <p><strong>Received Date:</strong> {{ request.updated_at|date:"F j, Y g:i A" }}</p>
+    {% if location %}
+    <p><strong>Location:</strong> {{ location.name }}</p>
+    {% endif %}
+    {% if received_by %}
+    <p><strong>Received by:</strong> {{ received_by.get_full_name|default:received_by.username }}</p>
+    {% endif %}
+</div>
+
+{% if partial_delivery %}
+<div class="highlight">
+    <h3>Partial Delivery Notice</h3>
+    <p><strong>Note:</strong> This was a partial delivery. A back-order has been created for the remaining {{ remaining_quantity }} {{ request.unit_size|default:"units" }}.</p>
+</div>
+{% endif %}
+
+<p>The item has been added to the inventory and is ready for use. You can find it in the inventory management system.</p>
+
+<a href="{{ base_url }}/inventory" class="button">View Inventory</a>
+
+<p>Best regards,<br>Hayerlab Inventory System</p>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "notifications/emails/base_email.html" %}
+
+{% block title %}Weekly Inventory Summary - Quartzy{% endblock %}
+
+{% block header_title %}Weekly Inventory Summary{% endblock %}
+
+{% block content %}
+<h2>Weekly Inventory Alert Summary</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>Here's your weekly summary of inventory alerts that require attention.</p>
+
+{% if expired_items %}
+<div class="highlight">
+    <h3>🚨 Expired Items ({{ expired_items|length }})</h3>
+    <p>The following items have expired and should be removed from inventory:</p>
+    <ul>
+        {% for item in expired_items %}
+        <li>
+            <strong>{{ item.name }}</strong> 
+            - Expired on {{ item.expiration_date|date:"M j, Y" }}
+            {% if item.location %}({{ item.location.name }}){% endif %}
+            - Qty: {{ item.quantity }} {{ item.unit|default:"units" }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if expiring_soon_items %}
+<div class="highlight">
+    <h3>⚠️ Items Expiring Soon ({{ expiring_soon_items|length }})</h3>
+    <p>The following items will expire within the next 30 days:</p>
+    <ul>
+        {% for item in expiring_soon_items %}
+        <li>
+            <strong>{{ item.name }}</strong> 
+            - Expires on {{ item.expiration_date|date:"M j, Y" }}
+            {% if item.location %}({{ item.location.name }}){% endif %}
+            - Qty: {{ item.quantity }} {{ item.unit|default:"units" }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if low_stock_items %}
+<div class="highlight">
+    <h3>📦 Low Stock Items ({{ low_stock_items|length }})</h3>
+    <p>The following items are running low and may need reordering:</p>
+    <ul>
+        {% for item in low_stock_items %}
+        <li>
+            <strong>{{ item.name }}</strong> 
+            - Current stock: {{ item.quantity }} {{ item.unit|default:"units" }}
+            {% if item.location %}({{ item.location.name }}){% endif %}
+            {% if item.vendor %}
+            <br><small>Vendor: {{ item.vendor.name }}</small>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if not expired_items and not expiring_soon_items and not low_stock_items %}
+<div class="highlight">
+    <h3>✅ All Good!</h3>
+    <p>No inventory alerts this week. Your inventory is in good shape!</p>
+</div>
+{% endif %}
+
+<div class="highlight">
+    <h3>📊 Quick Stats</h3>
+    <p><strong>Total Items:</strong> {{ total_items }}</p>
+    <p><strong>Items Needing Attention:</strong> {{ items_needing_attention }}</p>
+    <p><strong>Report Generated:</strong> {{ report_date|date:"F j, Y g:i A" }}</p>
+</div>
+
+<p>Please review these items and take appropriate action to maintain optimal inventory levels.</p>
+
+<a href="{{ base_url }}/inventory" class="button">Manage Inventory</a>
+
+<p>This summary is sent weekly. You can adjust your notification preferences in your account settings.</p>
+
+<p>Best regards,<br>Hayerlab Inventory System</p>
+{% endblock %}

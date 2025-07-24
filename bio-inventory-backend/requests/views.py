@@ -8,6 +8,7 @@ from .models import Request, RequestHistory
 from .serializers import RequestSerializer, RequestHistorySerializer
 from .filters import RequestFilter # Import our filter class
 from items.models import Item, Location
+from notifications.services import NotificationService
 
 class RequestViewSet(viewsets.ModelViewSet):
     queryset = Request.objects.all().select_related(
@@ -17,6 +18,12 @@ class RequestViewSet(viewsets.ModelViewSet):
     filterset_class = RequestFilter # Connect the filter class
     filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter
     search_fields = ['item_name', 'catalog_number', 'vendor__name'] # Define fields that the SearchFilter will search across
+    
+    def perform_create(self, serializer):
+        """Override to send notifications when request is created"""
+        request_obj = serializer.save()
+        # Send notification to admins about new request
+        NotificationService.notify_new_request_created(request_obj)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser]) # Add this decorator
     def approve(self, request, pk=None):
@@ -89,6 +96,9 @@ class RequestViewSet(viewsets.ModelViewSet):
         req_object.status = 'ORDERED'
         req_object.save()
         
+        # Send notification to requester
+        NotificationService.create_request_notification(req_object, 'ordered', request.user)
+        
         return Response({
             'status': 'Request marked as ordered',
             'fund_id': req_object.fund_id
@@ -140,6 +150,15 @@ class RequestViewSet(viewsets.ModelViewSet):
 
         req_object.status = 'RECEIVED'
         req_object.save()
+        
+        # Get location object for notification
+        try:
+            location = Location.objects.get(id=location_id)
+        except Location.DoesNotExist:
+            location = None
+        
+        # Send notification to requester
+        NotificationService.create_request_notification(req_object, 'received', request.user)
 
         return Response({'status': 'Item received and new inventory record created.'})
 
@@ -202,6 +221,10 @@ class RequestViewSet(viewsets.ModelViewSet):
                 
                 req_object.status = 'ORDERED'
                 req_object.save()
+                
+                # Send notification to requester
+                NotificationService.create_request_notification(req_object, 'ordered', request.user)
+                
                 updated_count += 1
                 
             except Exception as e:
@@ -258,6 +281,10 @@ class RequestViewSet(viewsets.ModelViewSet):
                 
                 req_object.status = 'RECEIVED'
                 req_object.save()
+                
+                # Send notification to requester
+                NotificationService.create_request_notification(req_object, 'received', request.user)
+                
                 updated_count += 1
                 
             except Exception as e:
