@@ -10,7 +10,9 @@ from .filters import RequestFilter # Import our filter class
 from items.models import Item, Location
 
 class RequestViewSet(viewsets.ModelViewSet):
-    queryset = Request.objects.all()
+    queryset = Request.objects.all().select_related(
+        'created_by', 'vendor'
+    ).prefetch_related('requesthistory_set')
     serializer_class = RequestSerializer
     filterset_class = RequestFilter # Connect the filter class
     filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter

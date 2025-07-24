@@ -36,16 +36,6 @@ interface SystemSetting {
     updated_at: string;
 }
 
-interface UserInfo {
-    id: number;
-    username: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    is_staff: boolean;
-    date_joined: string;
-    last_login: string;
-}
 
 const SettingsPage = () => {
     const { user } = useContext(AuthContext);
@@ -59,7 +49,6 @@ const SettingsPage = () => {
         auto_refresh_interval: 30
     });
     const [systemSettings, setSystemSettings] = useState<SystemSetting[]>([]);
-    const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
     const [systemStats, setSystemStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -75,18 +64,16 @@ const SettingsPage = () => {
             setLoading(true);
             const token = localStorage.getItem('authToken');
             
-            // Fetch user preferences and overview
-            const overviewResponse = await fetch('http://127.0.0.1:8000/api/settings/preferences/overview/', {
+            // Fetch user preferences
+            const preferencesResponse = await fetch('http://127.0.0.1:8000/api/settings/preferences/my-preferences/', {
                 headers: { 'Authorization': `Token ${token}` }
             });
             
-            if (overviewResponse.ok) {
-                const data = await overviewResponse.json();
-                setUserInfo(data.user_info);
-                setPreferences(data.preferences);
-                setSystemSettings(data.system_settings || []);
+            if (preferencesResponse.ok) {
+                const preferencesData = await preferencesResponse.json();
+                setPreferences(preferencesData);
             } else {
-                console.error('Failed to fetch overview:', overviewResponse.statusText);
+                console.error('Failed to fetch preferences:', preferencesResponse.statusText);
                 // Set default preferences if API fails
                 setPreferences({
                     theme: 'light',
@@ -96,6 +83,21 @@ const SettingsPage = () => {
                     items_per_page: 10,
                     auto_refresh_interval: 30
                 });
+            }
+
+            // Fetch system settings if user is admin
+            if (user?.is_staff) {
+                const systemSettingsResponse = await fetch('http://127.0.0.1:8000/api/settings/system/', {
+                    headers: { 'Authorization': `Token ${token}` }
+                });
+                
+                if (systemSettingsResponse.ok) {
+                    const systemSettingsData = await systemSettingsResponse.json();
+                    setSystemSettings(systemSettingsData || []);
+                } else {
+                    console.error('Failed to fetch system settings:', systemSettingsResponse.statusText);
+                    setSystemSettings([]);
+                }
             }
 
             // Fetch admin system info if user is admin
@@ -336,7 +338,7 @@ const SettingsPage = () => {
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
                                         <input
                                             type="text"
-                                            value={userInfo?.username || ''}
+                                            value={user?.username || ''}
                                             disabled
                                             className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600"
                                         />
@@ -346,7 +348,7 @@ const SettingsPage = () => {
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                                         <input
                                             type="email"
-                                            value={userInfo?.email || ''}
+                                            value={user?.email || ''}
                                             disabled
                                             className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600"
                                         />
@@ -490,37 +492,53 @@ const SettingsPage = () => {
                             </div>
                         </div>
                         
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {systemSettings.map(setting => (
-                                <div key={setting.id} className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <label className="block text-sm font-medium text-gray-700">
-                                            {setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </label>
-                                        {setting.is_admin_only && (
-                                            <Shield className="w-4 h-4 text-amber-500" />
-                                        )}
+                        {systemSettings.length > 0 ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {systemSettings.map(setting => (
+                                    <div key={setting.id} className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <label className="block text-sm font-medium text-gray-700">
+                                                {setting.key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                            </label>
+                                            {setting.is_admin_only && (
+                                                <Shield className="w-4 h-4 text-amber-500" />
+                                            )}
+                                        </div>
+                                        {renderSystemSettingInput(setting)}
+                                        <p className="text-xs text-gray-500">{setting.description}</p>
                                     </div>
-                                    {renderSystemSettingInput(setting)}
-                                    <p className="text-xs text-gray-500">{setting.description}</p>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12">
+                                <Settings className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                                <p className="text-gray-500 mb-4">No system settings found</p>
+                                <p className="text-sm text-gray-400">
+                                    Run the Django management command to initialize default settings:
+                                    <br />
+                                    <code className="bg-gray-100 px-2 py-1 rounded text-xs mt-2 inline-block">
+                                        python manage.py init_default_settings
+                                    </code>
+                                </p>
+                            </div>
+                        )}
 
-                        <div className="flex justify-end mt-8 pt-6 border-t border-gray-200">
-                            <button
-                                onClick={saveSystemSettings}
-                                disabled={saving}
-                                className="flex items-center px-6 py-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 focus:ring-2 focus:ring-primary-500/20 transition-colors disabled:opacity-50"
-                            >
-                                {saving ? (
-                                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Save className="w-4 h-4 mr-2" />
-                                )}
-                                Save System Settings
-                            </button>
-                        </div>
+                        {systemSettings.length > 0 && (
+                            <div className="flex justify-end mt-8 pt-6 border-t border-gray-200">
+                                <button
+                                    onClick={saveSystemSettings}
+                                    disabled={saving}
+                                    className="flex items-center px-6 py-3 bg-primary-600 text-white rounded-xl hover:bg-primary-700 focus:ring-2 focus:ring-primary-500/20 transition-colors disabled:opacity-50"
+                                >
+                                    {saving ? (
+                                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <Save className="w-4 h-4 mr-2" />
+                                    )}
+                                    Save System Settings
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
 

@@ -6,3 +6,14 @@ sqlparse==0.5.3
 tzdata==2025.2
 django-cors-headers==4.7.0
 django-filter==24.2
+# Performance and caching
+redis==5.2.1
+django-redis==5.4.0
+# Production server
+gunicorn==23.0.0
+# Security
+django-ratelimit==5.0.0
+# Monitoring
+django-extensions==3.2.3
+# Environment variables
+python-decouple==3.8
