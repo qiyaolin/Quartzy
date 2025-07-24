@@ -1,11 +1,32 @@
-# Python
-bio-inventory-backend/venv/
+# Project-wide ignores
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Backend (Django) ignores
 bio-inventory-backend/__pycache__/
-bio-inventory-backend/**/*.pyc
-bio-inventory-backend/**/*.pyo
-bio-inventory-backend/**/*.pyd
+bio-inventory-backend/*.py[cod]
+bio-inventory-backend/*$py.class
+bio-inventory-backend/*.so
 bio-inventory-backend/.Python
-bio-inventory-backend/env/
 bio-inventory-backend/build/
 bio-inventory-backend/develop-eggs/
 bio-inventory-backend/dist/
@@ -17,38 +38,138 @@ bio-inventory-backend/lib64/
 bio-inventory-backend/parts/
 bio-inventory-backend/sdist/
 bio-inventory-backend/var/
+bio-inventory-backend/wheels/
+bio-inventory-backend/share/python-wheels/
 bio-inventory-backend/*.egg-info/
-bio-inventory-backend/.mypy_cache/
-bio-inventory-backend/.pytest_cache/
-bio-inventory-backend/.coverage
-bio-inventory-backend/.tox/
-bio-inventory-backend/.env
-bio-inventory-backend/.env.*
+bio-inventory-backend/.installed.cfg
+bio-inventory-backend/*.egg
+bio-inventory-backend/MANIFEST
 
-# Node
+# Django specific
+bio-inventory-backend/db.sqlite3
+bio-inventory-backend/db.sqlite3-journal
+bio-inventory-backend/media/
+bio-inventory-backend/staticfiles/
+bio-inventory-backend/static/
+bio-inventory-backend/locale/
+
+# Virtual environments
+bio-inventory-backend/venv/
+bio-inventory-backend/env/
+bio-inventory-backend/ENV/
+bio-inventory-backend/env.bak/
+bio-inventory-backend/venv.bak/
+
+# Testing
+bio-inventory-backend/.coverage
+bio-inventory-backend/htmlcov/
+bio-inventory-backend/.pytest_cache/
+bio-inventory-backend/.cache
+
+# Frontend (React) ignores
 bio-inventory-frontend/node_modules/
-bio-inventory-frontend/.next/
-bio-inventory-frontend/.env
-bio-inventory-frontend/.env.*
-bio-inventory-frontend/dist/
-bio-inventory-frontend/build/
 bio-inventory-frontend/npm-debug.log*
 bio-inventory-frontend/yarn-debug.log*
 bio-inventory-frontend/yarn-error.log*
-bio-inventory-frontend/.parcel-cache/
+bio-inventory-frontend/build/
+bio-inventory-frontend/coverage/
+bio-inventory-frontend/.nyc_output
 
-# System
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
+# React specific
+bio-inventory-frontend/.eslintcache
 
-# VSCode
-.vscode/
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Deployment
+deployment/
 
 # Logs
+logs/
 *.log
 
-# Others
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# next.js build output
+.next
+
+# nuxt.js build output
+.nuxt
+
+# vuepress build output
+.vuepress/dist
+
+# Serverless directories
+.serverless
+
+# FuseBox cache
+.fusebox/
+
+# DynamoDB Local files
+.dynamodb/
+
+# TernJS port file
+.tern-port
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Backup files
 *.bak
-*.tmp 
+*.backup
+*~.nib
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows image file caches
+*.ico
+
+# Folder config file
+[Dd]esktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
