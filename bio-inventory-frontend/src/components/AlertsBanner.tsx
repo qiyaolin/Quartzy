@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { TriangleAlert, X } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 
 const AlertsBanner = () => {
@@ -28,7 +28,7 @@ const AlertsBanner = () => {
             <div className="max-w-7xl mx-auto px-4 py-3">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                        <AlertTriangle className="w-5 h-5 text-warning-600" />
+                        <TriangleAlert className="w-5 h-5 text-warning-600" />
                         <span className="text-sm font-medium text-warning-800">
                             {totalAlerts} items need attention: 
                             {alerts.expired.count > 0 && ` ${alerts.expired.count} expired`}

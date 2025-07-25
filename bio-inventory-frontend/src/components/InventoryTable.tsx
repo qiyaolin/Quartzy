@@ -215,6 +215,7 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                             </th>
                             <th className="table-header-cell">Vendor</th>
                             <th className="table-header-cell">Fund</th>
+                            <th className="table-header-cell">Financial Type</th>
                             <th className="table-header-cell">Total Amount</th>
                             <th className="table-header-cell">Expiration Status</th>
                             <th className="table-header-cell">Type</th>
@@ -246,6 +247,11 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                     ) : (
                                         <span className="text-secondary-400 text-xs">No Fund</span>
                                     )}
+                                </td>
+                                <td className="table-cell">
+                                    <span className={`badge text-xs ${group.instances[0]?.financial_type === 'Equipment' ? 'badge-primary' : 'badge-secondary'}`}>
+                                        {group.instances[0]?.financial_type || 'Supplies'}
+                                    </span>
                                 </td>
                                 <td className="table-cell">
                                     <span className="font-medium text-secondary-900">{group.totalQuantity.toFixed(2)}</span>
@@ -313,6 +319,11 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                         ) : (
                                             <span className="text-secondary-400 text-xs">No Fund</span>
                                         )}
+                                    </td>
+                                    <td className="table-cell">
+                                        <span className={`badge text-xs ${instance.financial_type === 'Equipment' ? 'badge-primary' : 'badge-secondary'}`}>
+                                            {instance.financial_type || 'Supplies'}
+                                        </span>
                                     </td>
                                     <td className="table-cell">
                                         <div className="text-sm">

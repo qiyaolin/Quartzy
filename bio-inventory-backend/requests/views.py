@@ -186,7 +186,8 @@ class RequestViewSet(viewsets.ModelViewSet):
             name=req_object.item_name,
             vendor=req_object.vendor,
             catalog_number=req_object.catalog_number,
-            item_type_id=1, # Default to a generic type, can be improved
+            item_type=req_object.item_type if req_object.item_type else None,
+            financial_type=req_object.financial_type,  # Include financial type from request
             owner=req_object.requested_by,
             quantity=quantity_received,
             unit=req_object.unit_size,
@@ -203,6 +204,8 @@ class RequestViewSet(viewsets.ModelViewSet):
                 requested_by=req_object.requested_by,
                 vendor=req_object.vendor,
                 catalog_number=req_object.catalog_number,
+                item_type=req_object.item_type,
+                financial_type=req_object.financial_type,  # Keep the same financial type
                 quantity=remaining_qty,
                 unit_price=req_object.unit_price,
                 status='ORDERED', # It's still on order
@@ -244,6 +247,8 @@ class RequestViewSet(viewsets.ModelViewSet):
             requested_by=request.user,
             vendor=original_request.vendor,
             catalog_number=original_request.catalog_number,
+            item_type=original_request.item_type,
+            financial_type=original_request.financial_type,  # Include financial type
             url=original_request.url,
             quantity=original_request.quantity,
             unit_size=original_request.unit_size,

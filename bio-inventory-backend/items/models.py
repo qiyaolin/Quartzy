@@ -44,10 +44,22 @@ class ItemType(models.Model):
 
 class Item(models.Model):
     """The core model representing a single inventory item."""
+    
+    FINANCIAL_TYPE_CHOICES = [
+        ('Equipment', 'Equipment'),
+        ('Supplies', 'Supplies'),
+    ]
+    
     # Core Information
     serial_number = models.CharField(max_length=20, unique=True, default=generate_serial_number, editable=False)
     name = models.CharField(max_length=255, help_text="The common name of the item.")
     item_type = models.ForeignKey(ItemType, on_delete=models.PROTECT, related_name="items")
+    financial_type = models.CharField(
+        max_length=20, 
+        choices=FINANCIAL_TYPE_CHOICES, 
+        default='Supplies',
+        help_text="Financial classification for reporting (Equipment or Supplies)"
+    )
     
     # Supplier Information
     vendor = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, blank=True, related_name="items")
@@ -116,6 +128,18 @@ class Item(models.Model):
     def needs_attention(self):
         """Check if item needs attention (expired, expiring soon, or low stock)"""
         return self.expiration_status in ['EXPIRED', 'EXPIRING_SOON'] or self.is_low_stock
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Update fund spent amount if this item is linked to a fund
+        if self.fund_id and self.price:
+            try:
+                from funding.models import Fund
+                fund = Fund.objects.get(id=self.fund_id)
+                fund.recalculate_spent_amount()
+                fund.save()
+            except Fund.DoesNotExist:
+                pass  # Fund might not exist yet
 
     def __str__(self):
         return f"{self.name} ({self.serial_number})"

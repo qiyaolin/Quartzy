@@ -10,10 +10,10 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
     const isEditMode = initialData !== null;
 
     useEffect(() => {
-        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '' };
+        const emptyForm = { name: '', item_type_id: '', financial_type: 'Supplies', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '' };
         if (isEditMode) {
             setFormData({
-                name: initialData.name || '', item_type_id: initialData.item_type?.id || '', vendor_id: initialData.vendor?.id || '',
+                name: initialData.name || '', item_type_id: initialData.item_type?.id || '', financial_type: initialData.financial_type || 'Supplies', vendor_id: initialData.vendor?.id || '',
                 owner_id: initialData.owner?.id || '1', catalog_number: initialData.catalog_number || '', quantity: initialData.quantity || '1.00',
                 unit: initialData.unit || '', location_id: initialData.location?.id || '', price: initialData.price || '',
                 expiration_date: initialData.expiration_date || '', lot_number: initialData.lot_number || '', received_date: initialData.received_date || '',
@@ -156,7 +156,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                         />
                                     </div>
                                     
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
                                             <label htmlFor="item_type_id" className="block text-sm font-semibold text-gray-700 mb-2">
                                                 <div className="flex items-center space-x-1">
@@ -176,6 +176,26 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                                 {dropdownData.itemTypes.map(type => (
                                                     <option key={type.id} value={type.id}>{type.name}</option>
                                                 ))}
+                                            </select>
+                                        </div>
+                                        
+                                        <div>
+                                            <label htmlFor="financial_type" className="block text-sm font-semibold text-gray-700 mb-2">
+                                                <div className="flex items-center space-x-1">
+                                                    <DollarSign className="w-4 h-4" />
+                                                    <span>Financial Type *</span>
+                                                </div>
+                                            </label>
+                                            <select 
+                                                name="financial_type" 
+                                                id="financial_type" 
+                                                value={formData.financial_type} 
+                                                onChange={handleChange} 
+                                                required 
+                                                className="select focus:ring-primary-500 focus:border-primary-500"
+                                            >
+                                                <option value="Equipment">Equipment</option>
+                                                <option value="Supplies">Supplies</option>
                                             </select>
                                         </div>
                                         

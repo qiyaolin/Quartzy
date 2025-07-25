@@ -145,6 +145,12 @@ const RequestsTable = ({ requests, onApprove, onRefuse, onCancel, onPlaceOrder, 
                                     <span>Vendor</span>
                                 </div>
                             </th>
+                            <th className="table-header-cell w-32">
+                                <div className="flex items-center space-x-2">
+                                    <DollarSign className="w-4 h-4 text-gray-500" />
+                                    <span>Financial Type</span>
+                                </div>
+                            </th>
                             <th className="table-header-cell w-24">
                                 <div className="flex items-center space-x-2">
                                     <DollarSign className="w-4 h-4 text-gray-500" />
@@ -199,6 +205,11 @@ const RequestsTable = ({ requests, onApprove, onRefuse, onCancel, onPlaceOrder, 
                             </td>
                             <td className="table-cell">
                                 <div className="text-sm text-gray-700 font-medium">{req.vendor?.name || 'N/A'}</div>
+                            </td>
+                            <td className="table-cell">
+                                <span className={`badge text-xs ${req.financial_type === 'Equipment' ? 'badge-primary' : 'badge-secondary'}`}>
+                                    {req.financial_type || 'Supplies'}
+                                </span>
                             </td>
                             <td className="table-cell">
                                 <div className="font-mono font-bold text-gray-900 text-lg">${req.unit_price}</div>

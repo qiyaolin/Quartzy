@@ -59,7 +59,7 @@ class ItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = Item
         fields = [
-            'id', 'serial_number', 'name', 'item_type', 'item_type_id',
+            'id', 'serial_number', 'name', 'item_type', 'item_type_id', 'financial_type',
             'vendor', 'vendor_id', 'catalog_number', 'quantity', 'unit',
             'location', 'location_id', 'price', 'owner', 'owner_id', 'url',
             'low_stock_threshold', 'is_archived', 'created_at', 'updated_at',

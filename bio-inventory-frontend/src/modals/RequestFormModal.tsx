@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Package, DollarSign, User, Tag, Save, AlertCircle, ShoppingCart } from 'lucide-react';
 
 const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
-    const [formData, setFormData] = useState({ item_name: '', item_type_id: '', vendor_id: '', catalog_number: '', quantity: 1, unit_size: '', unit_price: '', url: '', notes: '' });
+    const [formData, setFormData] = useState({ item_name: '', item_type_id: '', financial_type: 'Supplies', vendor_id: '', catalog_number: '', quantity: 1, unit_size: '', unit_price: '', url: '', notes: '' });
     const [dropdownData, setDropdownData] = useState({ vendors: [], itemTypes: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState(null);
@@ -137,7 +137,7 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
                                         />
                                     </div>
                                     
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
                                             <label htmlFor="item_type_id" className="block text-sm font-semibold text-gray-700 mb-2">
                                                 <div className="flex items-center space-x-1">
@@ -156,6 +156,26 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
                                                 {dropdownData.itemTypes.map(type => (
                                                     <option key={type.id} value={type.id}>{type.name}</option>
                                                 ))}
+                                            </select>
+                                        </div>
+                                        
+                                        <div>
+                                            <label htmlFor="financial_type" className="block text-sm font-semibold text-gray-700 mb-2">
+                                                <div className="flex items-center space-x-1">
+                                                    <DollarSign className="w-4 h-4" />
+                                                    <span>Financial Type *</span>
+                                                </div>
+                                            </label>
+                                            <select 
+                                                name="financial_type" 
+                                                id="financial_type" 
+                                                value={formData.financial_type} 
+                                                onChange={handleChange} 
+                                                required 
+                                                className="select focus:ring-primary-500 focus:border-primary-500"
+                                            >
+                                                <option value="Equipment">Equipment</option>
+                                                <option value="Supplies">Supplies</option>
                                             </select>
                                         </div>
                                         

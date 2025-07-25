@@ -136,7 +136,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         
         summary = {
             'total': active_notifications.count(),
-            'unread': active_notifications.unread().count(),
+            'unread': active_notifications.filter(is_read=False).count(),
             'by_type': {},
             'by_priority': {}
         }

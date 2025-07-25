@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-(ke1aekx@qekmk_og@bblhb9#@kz(shy#2s7x5zqz2w=l%@10d
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', 'testserver']
 
 
 # Application definition
@@ -59,6 +59,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.APIErrorMiddleware',  # Custom API error handling
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -160,7 +161,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend'
-    ]
+    ],
+    'EXCEPTION_HANDLER': 'core.exception_handlers.custom_exception_handler',
 }
 
 # Email Configuration

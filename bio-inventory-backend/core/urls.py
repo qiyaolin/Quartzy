@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from users.views import CustomAuthToken # Import our new view
+from . import error_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,3 +28,7 @@ urlpatterns = [
     path('api/', include('funding.urls')),
     path('api/', include('notifications.urls')),
 ]
+
+# Custom error handlers
+handler404 = 'core.error_views.custom_404'
+handler500 = 'core.error_views.custom_500'

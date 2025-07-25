@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { DollarSign, Plus, BarChart3, Receipt, AlertTriangle, TrendingUp, Wallet, CreditCard } from 'lucide-react';
+import { DollarSign, Plus, BarChart3, Receipt, AlertTriangle, TrendingUp, Wallet, CreditCard, PieChart, FileText, Users } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import FundManagement from '../components/funding/FundManagement.tsx';
 import TransactionRecords from '../components/funding/TransactionRecords.tsx';
 import BudgetReports from '../components/funding/BudgetReports.tsx';
+import FinancialDashboard from '../components/FinancialDashboard.tsx';
+import FinancialReports from '../components/funding/FinancialReports.tsx';
+import PersonnelExpenseManagement from '../components/funding/PersonnelExpenseManagement.tsx';
 
 const FundingPage = () => {
     const { token, user } = useContext(AuthContext);
-    const [activeTab, setActiveTab] = useState('funds');
+    const [activeTab, setActiveTab] = useState('dashboard');
     const [funds, setFunds] = useState([]);
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -148,6 +151,19 @@ const FundingPage = () => {
                 <div className="border-b border-secondary-200">
                     <nav className="flex space-x-8 px-6">
                         <button
+                            onClick={() => setActiveTab('dashboard')}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                activeTab === 'dashboard'
+                                    ? 'border-primary-500 text-primary-600'
+                                    : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
+                            }`}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <PieChart className="w-4 h-4" />
+                                <span>Financial Dashboard</span>
+                            </div>
+                        </button>
+                        <button
                             onClick={() => setActiveTab('funds')}
                             className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                                 activeTab === 'funds'
@@ -186,11 +202,40 @@ const FundingPage = () => {
                                 <span>Budget Reports</span>
                             </div>
                         </button>
+                        <button
+                            onClick={() => setActiveTab('personnel')}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                activeTab === 'personnel'
+                                    ? 'border-primary-500 text-primary-600'
+                                    : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
+                            }`}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <Users className="w-4 h-4" />
+                                <span>Personnel Expenses</span>
+                            </div>
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('financial-reports')}
+                            className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                                activeTab === 'financial-reports'
+                                    ? 'border-primary-500 text-primary-600'
+                                    : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
+                            }`}
+                        >
+                            <div className="flex items-center space-x-2">
+                                <FileText className="w-4 h-4" />
+                                <span>Financial Reports</span>
+                            </div>
+                        </button>
                     </nav>
                 </div>
 
                 {/* Tab Content */}
                 <div className="p-6">
+                    {activeTab === 'dashboard' && (
+                        <FinancialDashboard token={token} />
+                    )}
                     {activeTab === 'funds' && (
                         <FundManagement 
                             funds={funds}
@@ -213,6 +258,12 @@ const FundingPage = () => {
                             budgetSummary={budgetSummary}
                             token={token}
                         />
+                    )}
+                    {activeTab === 'personnel' && (
+                        <PersonnelExpenseManagement token={token} />
+                    )}
+                    {activeTab === 'financial-reports' && (
+                        <FinancialReports token={token} />
                     )}
                 </div>
             </div>

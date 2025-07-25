@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Fund, Transaction, BudgetAllocation, FundingReport
+from .models import Fund, Transaction, BudgetAllocation, FundingReport, PersonnelExpense
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -101,3 +101,44 @@ class BudgetSummarySerializer(serializers.Serializer):
     average_utilization = serializers.DecimalField(max_digits=5, decimal_places=2)
     funds_near_limit = serializers.IntegerField()
     funds_over_budget = serializers.IntegerField()
+
+
+class PersonnelExpenseSerializer(serializers.ModelSerializer):
+    created_by = UserSerializer(read_only=True)
+    approved_by = UserSerializer(read_only=True)
+    employee = UserSerializer(read_only=True)
+    fund = FundSerializer(read_only=True)
+    fund_id = serializers.IntegerField(write_only=True)
+    employee_id = serializers.IntegerField(write_only=True, source='employee', required=False)
+
+    class Meta:
+        model = PersonnelExpense
+        fields = [
+            'id', 'fund', 'fund_id', 'employee', 'employee_id', 'employee_name', 'expense_type', 'amount',
+            'expense_date', 'description', 'reference_number', 'is_approved',
+            'approved_by', 'approved_at', 'notes', 'created_by', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['approved_by', 'approved_at', 'created_by', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        validated_data['created_by'] = self.context['request'].user
+        
+        # Convert employee_id to User object if provided
+        if 'employee' in validated_data and validated_data['employee']:
+            employee_id = validated_data['employee']
+            try:
+                from django.contrib.auth.models import User
+                employee = User.objects.get(id=employee_id)
+                validated_data['employee'] = employee  # Replace ID with User object
+                
+                # Auto-generate employee_name if not provided
+                if not validated_data.get('employee_name'):
+                    if employee.first_name and employee.last_name:
+                        validated_data['employee_name'] = f"{employee.first_name} {employee.last_name}"
+                    else:
+                        validated_data['employee_name'] = employee.username
+            except User.DoesNotExist:
+                # Remove invalid employee_id to let model validation handle it
+                validated_data.pop('employee', None)
+        
+        return super().create(validated_data)
