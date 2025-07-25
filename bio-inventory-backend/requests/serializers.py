@@ -11,9 +11,7 @@ class RequestSerializer(serializers.ModelSerializer):
     item_type = ItemTypeSerializer(read_only=True)
 
     # Use PrimaryKeyRelatedField for write operations (POST, PUT) to accept IDs
-    requested_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), source='requested_by', write_only=True
-    )
+    # Note: requested_by_id is set programmatically in the view, not by the client
     vendor_id = serializers.PrimaryKeyRelatedField(
         queryset=Vendor.objects.all(), source='vendor', write_only=True, allow_null=True, required=False
     )
@@ -26,7 +24,7 @@ class RequestSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'item_name', 'item_type', 'status', 'catalog_number', 'url', 'quantity', 
             'unit_size', 'unit_price', 'fund_id', 'notes', 'created_at', 'updated_at',
-            'requested_by', 'vendor', 'requested_by_id', 'vendor_id', 'item_type_id'
+            'requested_by', 'vendor', 'vendor_id', 'item_type_id'
         ]
         read_only_fields = ('status', 'created_at', 'updated_at')
 

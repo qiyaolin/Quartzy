@@ -1,0 +1,48 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Item Received - HayerLab Inventory System{% endblock %}
+
+{% block header_title %}Item Received{% endblock %}
+
+{% block content %}
+<h2>Your Item Has Been Received</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>Your requested item has been received and is ready for pickup.</p>
+
+<div class="highlight">
+    <h3>Item Details</h3>
+    <p><strong>Item:</strong> {{ request.item_name }}</p>
+    <p><strong>Vendor:</strong> {{ request.vendor.name|default:"Not specified" }}</p>
+    <p><strong>Catalog Number:</strong> {{ request.catalog_number|default:"Not specified" }}</p>
+    {% if partial_delivery %}
+    <p><strong>Quantity Received:</strong> {{ quantity_received }} of {{ request.quantity }} {{ request.unit_size|default:"units" }}</p>
+    <p><strong>Remaining:</strong> {{ remaining_quantity }} {{ request.unit_size|default:"units" }}</p>
+    {% else %}
+    <p><strong>Quantity:</strong> {{ quantity_received }} {{ request.unit_size|default:"units" }}</p>
+    {% endif %}
+    <p><strong>Status:</strong> <span class="status status-received">{{ request.status }}</span></p>
+    {% if received_by %}
+    <p><strong>Received by:</strong> {{ received_by.get_full_name|default:received_by.username }}</p>
+    {% endif %}
+    {% if location %}
+    <p><strong>Location:</strong> {{ location }}</p>
+    {% endif %}
+    <p><strong>Date Received:</strong> {% timezone "America/New_York" %}{{ request.updated_at|date:"F j, Y g:i A T" }}{% endtimezone %}</p>
+</div>
+
+{% if partial_delivery %}
+<div class="highlight">
+    <h3>Partial Delivery Notice</h3>
+    <p>This is a partial delivery. The remaining {{ remaining_quantity }} {{ request.unit_size|default:"units" }} will be delivered separately.</p>
+</div>
+{% endif %}
+
+<p>Please come to the lab to pick up your item{% if location %} from {{ location }}{% endif %}.</p>
+
+<a href="{{ base_url }}/requests?request_id={{ request.id }}" class="button">View Request Details</a>
+
+<p>Best regards,<br>Hayerlab Inventory System</p>
+{% endblock %}

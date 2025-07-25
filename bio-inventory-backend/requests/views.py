@@ -8,6 +8,10 @@ from .models import Request, RequestHistory
 from .serializers import RequestSerializer, RequestHistorySerializer
 from .filters import RequestFilter # Import our filter class
 from items.models import Item, Location
+from notifications.email_service import EmailNotificationService
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RequestViewSet(viewsets.ModelViewSet):
     queryset = Request.objects.all()
@@ -15,6 +19,26 @@ class RequestViewSet(viewsets.ModelViewSet):
     filterset_class = RequestFilter # Connect the filter class
     filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter
     search_fields = ['item_name', 'catalog_number', 'vendor__name'] # Define fields that the SearchFilter will search across
+    
+    def create(self, request, *args, **kwargs):
+        """Override create to set requested_by to current user and send email notification"""
+        # Get serializer and validate data
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Set the requested_by field to the current user before saving
+        serializer.save(requested_by=request.user)
+        
+        # Send email notification to admins for new requests
+        try:
+            EmailNotificationService.send_new_request_notification(serializer.instance)
+            logger.info(f"Email notification sent for new request: {serializer.instance.id}")
+        except Exception as e:
+            logger.error(f"Failed to send email notification for new request: {e}")
+            # Don't fail the request creation if email fails
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser]) # Add this decorator
     def approve(self, request, pk=None):
@@ -87,6 +111,13 @@ class RequestViewSet(viewsets.ModelViewSet):
         req_object.status = 'ORDERED'
         req_object.save()
         
+        # Send email notification to requester
+        try:
+            EmailNotificationService.send_order_placed_notification(req_object, request.user)
+            logger.info(f"Email notification sent for order placed: {req_object.id}")
+        except Exception as e:
+            logger.error(f"Failed to send email notification for order placed: {e}")
+        
         return Response({
             'status': 'Request marked as ordered',
             'fund_id': req_object.fund_id
@@ -136,8 +167,30 @@ class RequestViewSet(viewsets.ModelViewSet):
                 fund_id=req_object.fund_id  # Keep the same fund for back-orders
             )
 
+        # Create history record
+        RequestHistory.objects.create(
+            request=req_object,
+            user=request.user,
+            old_status=req_object.status,
+            new_status='RECEIVED',
+            notes=f"Marked as received - Quantity: {quantity_received}"
+        )
+        
         req_object.status = 'RECEIVED'
         req_object.save()
+        
+        # Send email notification to requester
+        try:
+            location = Location.objects.get(id=location_id) if location_id else None
+            EmailNotificationService.send_item_received_notification(
+                req_object, 
+                request.user, 
+                quantity_received,
+                location.name if location else None
+            )
+            logger.info(f"Email notification sent for item received: {req_object.id}")
+        except Exception as e:
+            logger.error(f"Failed to send email notification for item received: {e}")
 
         return Response({'status': 'Item received and new inventory record created.'})
 
@@ -155,6 +208,14 @@ class RequestViewSet(viewsets.ModelViewSet):
             unit_price=original_request.unit_price,
             status='NEW'
         )
+        
+        # Send email notification to admins for new reorder request
+        try:
+            EmailNotificationService.send_new_request_notification(new_request)
+            logger.info(f"Email notification sent for reorder request: {new_request.id}")
+        except Exception as e:
+            logger.error(f"Failed to send email notification for reorder request: {e}")
+        
         serializer = self.get_serializer(new_request)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -209,6 +270,86 @@ class RequestViewSet(viewsets.ModelViewSet):
             'updated_count': updated_count,
             'total_requested': len(request_ids),
             'fund_id': fund_id
+        }
+        
+        if errors:
+            response_data['errors'] = errors
+        
+        return Response(response_data)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
+    def batch_approve(self, request):
+        """Batch approve multiple pending requests."""
+        request_ids = request.data.get('request_ids', [])
+        
+        if not request_ids:
+            return Response({'error': 'No request IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        requests_to_update = Request.objects.filter(id__in=request_ids, status='NEW')
+        updated_count = 0
+        errors = []
+        
+        for req_object in requests_to_update:
+            try:
+                # Create history record
+                RequestHistory.objects.create(
+                    request=req_object,
+                    user=request.user,
+                    old_status=req_object.status,
+                    new_status='APPROVED',
+                    notes=f"Batch approve operation"
+                )
+                
+                req_object.status = 'APPROVED'
+                req_object.save()
+                updated_count += 1
+                
+            except Exception as e:
+                errors.append(f"Request {req_object.id}: {str(e)}")
+        
+        response_data = {
+            'updated_count': updated_count,
+            'total_requested': len(request_ids)
+        }
+        
+        if errors:
+            response_data['errors'] = errors
+        
+        return Response(response_data)
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAdminUser])
+    def batch_reject(self, request):
+        """Batch reject multiple pending requests."""
+        request_ids = request.data.get('request_ids', [])
+        
+        if not request_ids:
+            return Response({'error': 'No request IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        requests_to_update = Request.objects.filter(id__in=request_ids, status='NEW')
+        updated_count = 0
+        errors = []
+        
+        for req_object in requests_to_update:
+            try:
+                # Create history record
+                RequestHistory.objects.create(
+                    request=req_object,
+                    user=request.user,
+                    old_status=req_object.status,
+                    new_status='REJECTED',
+                    notes=f"Batch reject operation"
+                )
+                
+                req_object.status = 'REJECTED'
+                req_object.save()
+                updated_count += 1
+                
+            except Exception as e:
+                errors.append(f"Request {req_object.id}: {str(e)}")
+        
+        response_data = {
+            'updated_count': updated_count,
+            'total_requested': len(request_ids)
         }
         
         if errors:

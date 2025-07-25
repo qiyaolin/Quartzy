@@ -38,6 +38,57 @@ const MainApp = () => {
     const [inventoryFilters, setInventoryFilters] = useState({ search: '', location: [], item_type: [], vendor: [], expired: [], low_stock: [] });
     const [requestFilters, setRequestFilters] = useState({ search: '', status: 'NEW', vendor: [], requested_by: [] });
     const [userSearch, setUserSearch] = useState('');
+    const [highlightRequestId, setHighlightRequestId] = useState(null);
+
+    // Handle URL routing for email links
+    useEffect(() => {
+        const handleUrlRouting = () => {
+            const currentPath = window.location.pathname;
+            const urlParams = new URLSearchParams(window.location.search);
+            const requestId = urlParams.get('request_id');
+            
+            if (currentPath === '/' || currentPath === '/inventory') {
+                setActivePage('inventory');
+            } else if (currentPath === '/requests' || currentPath.startsWith('/requests')) {
+                setActivePage('requests');
+                if (requestId) {
+                    setHighlightRequestId(requestId);
+                    // Update the request filters to show the specific request's status if needed
+                    // We'll fetch the request to determine its status and set appropriate filter
+                    if (token) {
+                        fetch(`http://127.0.0.1:8000/api/requests/${requestId}/`, {
+                            headers: { 'Authorization': `Token ${token}` }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status) {
+                                setRequestFilters(prev => ({ ...prev, status: data.status }));
+                            }
+                        })
+                        .catch(err => console.error('Error fetching request:', err));
+                    }
+                }
+            } else if (currentPath === '/reports') {
+                setActivePage('reports');
+            } else if (currentPath === '/funding') {
+                setActivePage('funding');
+            } else if (currentPath === '/users') {
+                setActivePage('users');
+            }
+        };
+
+        handleUrlRouting();
+
+        // Listen for browser back/forward navigation
+        const handlePopState = () => {
+            handleUrlRouting();
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, [token]);
 
     useEffect(() => {
         const fetchFilterOptions = async () => {
@@ -83,6 +134,22 @@ const MainApp = () => {
     const handleOpenEditUserModal = (user) => { setEditingUser(user); setIsUserFormModalOpen(true); };
     const handleOpenDeleteUserModal = (user) => { setDeletingUser(user); setIsDeleteUserModalOpen(true); };
     const handleSave = () => { setRefreshKey(prev => prev + 1); }
+    
+    // Update URL when navigating programmatically
+    const navigateToPage = (page) => {
+        setActivePage(page);
+        setHighlightRequestId(null); // Clear highlight when navigating away
+        
+        // Update URL without page refresh
+        let newPath = '/';
+        if (page === 'inventory') newPath = '/inventory';
+        else if (page === 'requests') newPath = '/requests';
+        else if (page === 'reports') newPath = '/reports';
+        else if (page === 'funding') newPath = '/funding';
+        else if (page === 'users') newPath = '/users';
+        
+        window.history.pushState(null, '', newPath);
+    };
     const handleDeleteConfirm = async () => {
         if (!deletingItem) return;
         try {
@@ -103,9 +170,9 @@ const MainApp = () => {
     const renderPage = () => {
         switch (activePage) {
             case 'inventory': return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
-            case 'requests': return <RequestsPage onAddRequestClick={() => setIsRequestFormModalOpen(true)} refreshKey={refreshKey} filters={requestFilters} onFilterChange={handleRequestFilterChange} />;
+            case 'requests': return <RequestsPage onAddRequestClick={() => setIsRequestFormModalOpen(true)} refreshKey={refreshKey} filters={requestFilters} onFilterChange={handleRequestFilterChange} highlightRequestId={highlightRequestId} />;
             case 'reports': return <ReportsPage 
-                onNavigateToInventory={() => setActivePage('inventory')}
+                onNavigateToInventory={() => navigateToPage('inventory')}
                 onOpenAddItemModal={handleOpenAddItemModal}
                 onOpenNewRequestModal={() => setIsRequestFormModalOpen(true)}
                 onSetInventoryFilters={setInventoryFilters}
@@ -120,7 +187,7 @@ const MainApp = () => {
         <div className="bg-secondary-50 font-sans antialiased h-screen flex flex-col">
             <Header 
                 activePage={activePage} 
-                onNavigate={setActivePage}
+                onNavigate={navigateToPage}
                 inventoryFilters={inventoryFilters}
                 requestFilters={requestFilters}
                 handleInventoryFilterChange={handleInventoryFilterChange}

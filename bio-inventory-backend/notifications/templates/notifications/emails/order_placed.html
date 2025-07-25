@@ -1,0 +1,35 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Order Placed - HayerLab Inventory System{% endblock %}
+
+{% block header_title %}Order Placed{% endblock %}
+
+{% block content %}
+<h2>Your Order Has Been Placed</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>Great news! Your request has been approved and the order has been placed.</p>
+
+<div class="highlight">
+    <h3>Order Details</h3>
+    <p><strong>Item:</strong> {{ request.item_name }}</p>
+    <p><strong>Vendor:</strong> {{ request.vendor.name|default:"Not specified" }}</p>
+    <p><strong>Catalog Number:</strong> {{ request.catalog_number|default:"Not specified" }}</p>
+    <p><strong>Quantity:</strong> {{ request.quantity }} {{ request.unit_size|default:"units" }}</p>
+    <p><strong>Unit Price:</strong> ${{ request.unit_price|floatformat:2 }}</p>
+    <p><strong>Total Cost:</strong> ${{ total_cost|floatformat:2 }}</p>
+    <p><strong>Status:</strong> <span class="status status-ordered">{{ request.status }}</span></p>
+    {% if placed_by %}
+    <p><strong>Order Placed by:</strong> {{ placed_by.get_full_name|default:placed_by.username }}</p>
+    {% endif %}
+    <p><strong>Date Ordered:</strong> {% timezone "America/New_York" %}{{ request.updated_at|date:"F j, Y g:i A T" }}{% endtimezone %}</p>
+</div>
+
+<p>You will receive another notification once the item has been received and is ready for pickup.</p>
+
+<a href="{{ base_url }}/requests?request_id={{ request.id }}" class="button">View Request Details</a>
+
+<p>Best regards,<br>Hayerlab Inventory System</p>
+{% endblock %}

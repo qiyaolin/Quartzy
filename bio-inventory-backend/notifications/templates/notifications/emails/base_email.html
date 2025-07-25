@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Quartzy Bio-Inventory{% endblock %}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #374151;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        }
+        .container {
+            max-width: 600px;
+            margin: 10px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+            padding: 24px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        .header .subtitle {
+            margin: 4px 0 0 0;
+            font-size: 14px;
+            font-weight: 400;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 28px 30px;
+        }
+        .content h2 {
+            color: #111827;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            letter-spacing: -0.01em;
+        }
+        .content p {
+            margin-bottom: 12px;
+            color: #4b5563;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+        .highlight {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 3px solid #3b82f6;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        .highlight h3 {
+            color: #1f2937;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 12px 0;
+        }
+        .button {
+            display: inline-block;
+            background: #3b82f6 !important;
+            color: #ffffff !important;
+            padding: 12px 24px;
+            text-decoration: none !important;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 15px;
+            margin: 16px 0;
+            border: 1px solid #3b82f6;
+            text-align: center;
+        }
+        .button:hover {
+            background: #1d4ed8 !important;
+            color: #ffffff !important;
+            border-color: #1d4ed8;
+        }
+        .button:visited {
+            color: #ffffff !important;
+        }
+        .button:active {
+            color: #ffffff !important;
+        }
+        .footer {
+            background-color: #f8fafc;
+            padding: 20px 24px;
+            text-align: center;
+            font-size: 13px;
+            color: #64748b;
+            border-top: 1px solid #e2e8f0;
+        }
+        .footer strong {
+            color: #1e293b;
+            font-weight: 600;
+        }
+        .footer a {
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 500;
+            border-bottom: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .footer a:hover {
+            border-bottom-color: #3b82f6;
+        }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .status-new {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+        .status-approved {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+        .status-ordered {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            color: #92400e;
+            border: 1px solid #fcd34d;
+        }
+        .status-received {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{% block header_title %}Hayer Lab Inventory System{% endblock %}</h1>
+            {% if header_subtitle %}<p class="subtitle">{% block header_subtitle %}{% endblock %}</p>{% endif %}
+        </div>
+        
+        <div class="content">
+            {% block content %}
+            {% endblock %}
+        </div>
+        
+        <div class="footer">
+            <p>
+                <strong>Hayer Lab - McGill University</strong><br>
+                Automated notification from Hayer Lab Inventory System.
+            </p>
+            <p>
+                <small>
+                    <a href="{{ base_url }}/settings">Update preferences</a> • 
+                    <a href="{{ base_url }}">Access System</a>
+                </small>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

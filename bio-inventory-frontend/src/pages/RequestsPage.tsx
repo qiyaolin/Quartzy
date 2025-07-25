@@ -11,7 +11,7 @@ import BatchReceivedModal from '../modals/BatchReceivedModal.tsx';
 import BatchFundSelectionModal from '../modals/BatchFundSelectionModal.tsx';
 import { exportToExcel } from '../utils/excelExport.ts';
 
-const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }) => {
+const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, highlightRequestId }) => {
     const { token } = useContext(AuthContext);
     const notification = useNotification();
     const [requests, setRequests] = useState([]);
@@ -48,6 +48,16 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange }
     useEffect(() => {
         if (token) { fetchRequests(); }
     }, [token, refreshKey, fetchRequests]);
+
+    // Auto-open detail modal when highlightRequestId is provided (from email links)
+    useEffect(() => {
+        if (highlightRequestId && requests.length > 0) {
+            const requestToHighlight = requests.find(req => req.id.toString() === highlightRequestId);
+            if (requestToHighlight) {
+                handleViewDetails(requestToHighlight);
+            }
+        }
+    }, [highlightRequestId, requests]);
 
     const handleAction = async (url, options = {}) => {
         try {

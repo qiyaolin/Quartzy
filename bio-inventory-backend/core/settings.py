@@ -131,6 +131,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -158,3 +162,21 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend'
     ]
 }
+
+# Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+EMAIL_HOST_USER = 'hayerlabaws@gmail.com'
+EMAIL_HOST_PASSWORD = 'rkllfsehfwxqlefv'  # Set this via environment variable in production
+DEFAULT_FROM_EMAIL = 'Hayer Lab Inventory System <hayerlabaws@gmail.com>'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+
+# Email settings for notifications
+EMAIL_SUBJECT_PREFIX = '[Hayer Lab Inventory System] '
+EMAIL_TIMEOUT = 60
+
+# Frontend URL for email links
+FRONTEND_URL = 'http://localhost:3000'
