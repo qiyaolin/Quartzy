@@ -1,8 +1,8 @@
 import React, { useContext, useState } from 'react';
-import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, ShoppingCart, RotateCcw } from 'lucide-react';
+import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, ShoppingCart, RotateCcw, X, Ban } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 
-const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onReorder, onShowHistory, onViewDetails, onBatchAction, currentStatus }) => {
+const RequestsTable = ({ requests, onApprove, onRefuse, onCancel, onPlaceOrder, onMarkReceived, onReorder, onShowHistory, onViewDetails, onBatchAction, currentStatus }) => {
     const { user } = useContext(AuthContext);
     const [selectedRequests, setSelectedRequests] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
@@ -33,7 +33,9 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
             'NEW': { class: 'badge-warning', label: 'New' },
             'APPROVED': { class: 'badge-success', label: 'Approved' },
             'ORDERED': { class: 'badge-primary', label: 'Ordered' },
-            'RECEIVED': { class: 'badge-secondary', label: 'Received' }
+            'RECEIVED': { class: 'badge-secondary', label: 'Received' },
+            'REJECTED': { class: 'badge-danger', label: 'Rejected' },
+            'CANCELLED': { class: 'badge-danger', label: 'Cancelled' }
         };
         const config = statusConfig[status] || { class: 'badge-secondary', label: status };
         return <span className={`badge ${config.class}`}>{config.label}</span>;
@@ -218,29 +220,58 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                             <td className="table-cell">
                                 <div className="flex items-center space-x-1">
                                     {user?.is_staff && req.status === 'NEW' && (
-                                        <button 
-                                            onClick={() => onApprove(req.id)} 
-                                            className="btn btn-success px-3 py-1.5 text-xs hover:scale-105 transition-transform"
-                                        >
-                                            <CheckCircle className="w-3 h-3 mr-1" />
-                                            Approve
-                                        </button>
+                                        <>
+                                            <button 
+                                                onClick={() => onApprove(req.id)} 
+                                                className="btn btn-success px-3 py-1.5 text-xs hover:scale-105 transition-transform"
+                                            >
+                                                <CheckCircle className="w-3 h-3 mr-1" />
+                                                Approve
+                                            </button>
+                                            <button 
+                                                onClick={() => onRefuse(req.id)} 
+                                                className="btn btn-danger px-3 py-1.5 text-xs hover:scale-105 transition-transform"
+                                            >
+                                                <X className="w-3 h-3 mr-1" />
+                                                Refuse
+                                            </button>
+                                        </>
                                     )}
                                     {req.status === 'APPROVED' && user?.is_staff && (
-                                        <button 
-                                            onClick={() => onPlaceOrder(req.id)} 
-                                            className="btn btn-warning px-3 py-1.5 text-xs hover:scale-105 transition-transform"
-                                        >
-                                            Place Order
-                                        </button>
+                                        <>
+                                            <button 
+                                                onClick={() => onPlaceOrder(req.id)} 
+                                                className="btn btn-warning px-3 py-1.5 text-xs hover:scale-105 transition-transform"
+                                            >
+                                                Place Order
+                                            </button>
+                                            <button 
+                                                onClick={() => onCancel(req.id)} 
+                                                className="btn btn-danger px-3 py-1.5 text-xs hover:scale-105 transition-transform"
+                                            >
+                                                <Ban className="w-3 h-3 mr-1" />
+                                                Cancel
+                                            </button>
+                                        </>
                                     )}
                                     {req.status === 'ORDERED' && (
-                                        <button 
-                                            onClick={() => onMarkReceived(req)} 
-                                            className="btn btn-primary px-3 py-1.5 text-xs hover:scale-105 transition-transform"
-                                        >
-                                            Mark Received
-                                        </button>
+                                        <>
+                                            <button 
+                                                onClick={() => onMarkReceived(req)} 
+                                                className="btn btn-primary px-3 py-1.5 text-xs hover:scale-105 transition-transform"
+                                            >
+                                                Mark Received
+                                            </button>
+                                            {user?.is_staff && (
+                                                <button 
+                                                    onClick={() => onCancel(req.id)} 
+                                                    className="btn btn-danger px-3 py-1.5 text-xs hover:scale-105 transition-transform"
+                                                >
+                                                    <Ban className="w-3 h-3 mr-1" />
+                                                    Cancel
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                     {req.status === 'RECEIVED' && (
                                         <button 

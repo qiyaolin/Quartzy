@@ -81,6 +81,48 @@ class RequestViewSet(viewsets.ModelViewSet):
         })
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def refuse(self, request, pk=None):
+        """Custom action to refuse/reject a NEW request."""
+        req_object = self.get_object()
+        if req_object.status != 'NEW':
+            return Response({'error': 'Only new requests can be refused.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create history record
+        RequestHistory.objects.create(
+            request=req_object,
+            user=request.user,
+            old_status=req_object.status,
+            new_status='REJECTED',
+            notes=request.data.get('notes', '')
+        )
+        
+        req_object.status = 'REJECTED'
+        req_object.save()
+        
+        return Response({'status': 'Request refused'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def cancel(self, request, pk=None):
+        """Custom action to cancel a request that is not yet received."""
+        req_object = self.get_object()
+        if req_object.status not in ['NEW', 'APPROVED', 'ORDERED']:
+            return Response({'error': 'Only new, approved, or ordered requests can be cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create history record
+        RequestHistory.objects.create(
+            request=req_object,
+            user=request.user,
+            old_status=req_object.status,
+            new_status='CANCELLED',
+            notes=request.data.get('notes', '')
+        )
+        
+        req_object.status = 'CANCELLED'
+        req_object.save()
+        
+        return Response({'status': 'Request cancelled'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def place_order(self, request, pk=None):
         """Custom action to mark an approved request as ordered."""
         req_object = self.get_object()

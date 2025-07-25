@@ -68,6 +68,8 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
     };
 
     const handleApprove = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/approve/`);
+    const handleRefuse = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/refuse/`);
+    const handleCancel = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/cancel/`);
     const handlePlaceOrder = (id) => {
         // Find the request and open fund selection modal
         const request = requests.find(req => req.id === id);
@@ -298,7 +300,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
         }
     };
 
-    const statusTabs = [ { key: 'NEW', label: 'New' }, { key: 'APPROVED', label: 'Approved' }, { key: 'ORDERED', label: 'Ordered' }, { key: 'RECEIVED', label: 'Received' } ];
+    const statusTabs = [ { key: 'NEW', label: 'New' }, { key: 'APPROVED', label: 'Approved' }, { key: 'ORDERED', label: 'Ordered' }, { key: 'RECEIVED', label: 'Received' }, { key: 'REJECTED', label: 'Rejected' }, { key: 'CANCELLED', label: 'Cancelled' } ];
 
     return (
         <>
@@ -350,6 +352,8 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
                         <RequestsTable 
                             requests={requests.filter(r => r.status === filters.status)} 
                             onApprove={handleApprove} 
+                            onRefuse={handleRefuse}
+                            onCancel={handleCancel}
                             onPlaceOrder={handlePlaceOrder} 
                             onMarkReceived={handleMarkReceived} 
                             onReorder={handleReorder} 
