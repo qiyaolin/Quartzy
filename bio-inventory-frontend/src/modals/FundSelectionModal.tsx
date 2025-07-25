@@ -12,7 +12,17 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     useEffect(() => {
         if (isOpen && request) {
             fetchFunds();
+            // Prevent body scroll when modal is open
+            document.body.style.overflow = 'hidden';
+        } else {
+            // Restore body scroll when modal is closed
+            document.body.style.overflow = 'unset';
         }
+        
+        // Cleanup function to restore scroll on unmount
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
     }, [isOpen, request]);
 
     const fetchFunds = async () => {
@@ -106,9 +116,9 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     if (!isOpen || !request) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-                <div className="p-6 border-b border-secondary-200 flex justify-between items-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex justify-center items-center p-4" style={{ zIndex: 9999 }}>
+            <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col mx-auto" style={{ zIndex: 10000 }}>
+                <div className="p-6 border-b border-secondary-200 flex justify-between items-center flex-shrink-0">
                     <div>
                         <h2 className="text-2xl font-bold text-secondary-900">Select Fund for Order</h2>
                         <p className="text-secondary-600 mt-1">Choose which fund to use for this order (optional)</p>
@@ -122,7 +132,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <div className="p-6 overflow-y-auto flex-1">
                     {/* Order Summary */}
                     <div className="bg-primary-50 rounded-lg p-4 mb-6">
                         <h3 className="text-lg font-semibold text-primary-900 mb-3 flex items-center">
@@ -278,7 +288,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center p-6 border-t border-secondary-200 bg-secondary-50">
+                <div className="flex justify-between items-center p-6 border-t border-secondary-200 bg-secondary-50 flex-shrink-0">
                     <button
                         type="button"
                         onClick={onClose}
@@ -294,36 +304,36 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                                     setSelectedFund('');
                                     handlePlaceOrder();
                                 }}
-                                className="btn btn-secondary"
+                                className="btn btn-secondary text-sm"
                                 disabled={placing}
                             >
                                 {placing ? (
                                     <div className="flex items-center">
                                         <div className="loading-spinner w-4 h-4 mr-2"></div>
-                                        Placing Order...
+                                        Placing...
                                     </div>
                                 ) : (
                                     <>
                                         <Package className="w-4 h-4 mr-2" />
-                                        Place Order Without Fund
+                                        Without Fund
                                     </>
                                 )}
                             </button>
                         )}
                         <button
                             onClick={handlePlaceOrder}
-                            className="btn btn-primary"
+                            className="btn btn-primary text-sm"
                             disabled={placing || (funds.length > 0 && !selectedFund)}
                         >
                             {placing ? (
                                 <div className="flex items-center">
                                     <div className="loading-spinner w-4 h-4 mr-2"></div>
-                                    Placing Order...
+                                    Placing...
                                 </div>
                             ) : (
                                 <>
                                     <Package className="w-4 h-4 mr-2" />
-                                    {selectedFund ? 'Place Order with Fund' : 'Place Order'}
+                                    {selectedFund ? 'With Fund' : 'Place Order'}
                                 </>
                             )}
                         </button>

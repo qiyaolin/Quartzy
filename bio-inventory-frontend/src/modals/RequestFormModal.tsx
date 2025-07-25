@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package, DollarSign, User, Tag, Save, AlertCircle, ShoppingCart } from 'lucide-react';
+import BarcodeComponent from '../components/BarcodeComponent.tsx';
 
 const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
     const [formData, setFormData] = useState({ item_name: '', item_type_id: '', financial_type: 'Supplies', vendor_id: '', catalog_number: '', quantity: 1, unit_size: '', unit_price: '', url: '', notes: '' });
@@ -7,6 +8,8 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [customVendor, setCustomVendor] = useState('');
+    const [createdRequest, setCreatedRequest] = useState(null);
+    const [showBarcode, setShowBarcode] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -80,11 +83,76 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
                 const errorData = await response.json(); 
                 throw new Error(JSON.stringify(errorData)); 
             }
-            onSave(); onClose();
+            const newRequest = await response.json();
+            setCreatedRequest(newRequest);
+            setShowBarcode(true);
+            onSave();
         } catch (e) { setError(`Submission failed: ${e.message}`); } finally { setIsSubmitting(false); }
     };
 
+    const handleCloseModal = () => {
+        setCreatedRequest(null);
+        setShowBarcode(false);
+        setFormData({ item_name: '', item_type_id: '', financial_type: 'Supplies', vendor_id: '', catalog_number: '', quantity: 1, unit_size: '', unit_price: '', url: '', notes: '' });
+        setCustomVendor('');
+        setError(null);
+        onClose();
+    };
+
     if (!isOpen) return null;
+
+    // Show barcode after successful submission
+    if (showBarcode && createdRequest) {
+        return (
+            <div className="modal-backdrop animate-fade-in">
+                <div className="flex min-h-full items-center justify-center p-4">
+                    <div className="modal-panel modal-panel-large animate-scale-in">
+                        <div className="bg-gradient-to-r from-green-50 to-green-100 px-6 py-5 border-b border-green-200 rounded-t-2xl">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <div className="w-10 h-10 bg-green-500 rounded-2xl flex items-center justify-center">
+                                        <ShoppingCart className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-900">Request Created Successfully</h2>
+                                        <p className="text-sm text-green-700">Your barcode is ready for printing</p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={handleCloseModal} 
+                                    className="p-2.5 rounded-xl hover:bg-green-200 transition-all duration-200 group hover:scale-105"
+                                >
+                                    <X className="w-5 h-5 text-gray-600 group-hover:text-gray-800" />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="px-6 py-8">
+                            <BarcodeComponent 
+                                barcodeData={createdRequest.barcode}
+                                itemName={createdRequest.item_name}
+                                onPrint={() => {
+                                    console.log('Barcode printed for request:', createdRequest.barcode);
+                                }}
+                            />
+                        </div>
+
+                        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-t border-gray-200 rounded-b-2xl">
+                            <div className="flex justify-end">
+                                <button 
+                                    onClick={handleCloseModal}
+                                    className="btn btn-primary hover:scale-105 transition-transform"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="modal-backdrop animate-fade-in">
             <div className="flex min-h-full items-center justify-center p-4">
@@ -102,7 +170,7 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
                                 </div>
                             </div>
                             <button 
-                                onClick={onClose} 
+                                onClick={handleCloseModal} 
                                 className="p-2.5 rounded-xl hover:bg-primary-200 transition-all duration-200 group hover:scale-105"
                             >
                                 <X className="w-5 h-5 text-gray-600 group-hover:text-gray-800" />
@@ -347,7 +415,7 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
                                 <div className="flex space-x-3">
                                     <button 
                                         type="button" 
-                                        onClick={onClose} 
+                                        onClick={handleCloseModal} 
                                         className="btn btn-secondary hover:scale-105 transition-transform"
                                     >
                                         Cancel

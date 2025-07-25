@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronDown, Edit, Trash2, AlertTriangle, Clock, Package, History } from 'lucide-react';
+import { ChevronDown, Edit, Trash2, AlertTriangle, Clock, Package, History, LogOut } from 'lucide-react';
+import BarcodeScanner from './BarcodeScanner.tsx';
 
-const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, onBatchAction }) => {
+const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, onBatchAction, onCheckout }) => {
     const [expandedGroups, setExpandedGroups] = useState({});
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
+    const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
     
     const toggleGroup = (groupId) => { setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] })); };
     
@@ -153,7 +155,34 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
             </div>
         );
     };
+
+    const handleBarcodeConfirm = async (barcode: string, itemData: any) => {
+        if (onCheckout) {
+            await onCheckout(barcode, itemData);
+        }
+        setShowBarcodeScanner(false);
+    };
+
     return (
+        <>
+            <BarcodeScanner
+                isOpen={showBarcodeScanner}
+                onClose={() => setShowBarcodeScanner(false)}
+                onScan={(barcode) => console.log('Barcode scanned:', barcode)}
+                onConfirm={handleBarcodeConfirm}
+            />
+            
+            {/* Checkout button for quick access */}
+            <div className="mb-4 flex justify-end">
+                <button 
+                    onClick={() => setShowBarcodeScanner(true)}
+                    className="btn btn-primary flex items-center space-x-2"
+                >
+                    <LogOut className="w-4 h-4" />
+                    <span>Checkout Item</span>
+                </button>
+            </div>
+            
         <div className="card overflow-hidden">
             {/* Enhanced Selection Bar */}
             {selectedItems.size > 0 && (
@@ -171,6 +200,13 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                             </div>
                         </div>
                         <div className="flex space-x-3">
+                            <button 
+                                onClick={() => setShowBarcodeScanner(true)}
+                                className="btn btn-primary btn-sm hover:scale-105 transition-transform flex items-center space-x-2"
+                            >
+                                <LogOut className="w-4 h-4" />
+                                <span>Checkout Item</span>
+                            </button>
                             <button 
                                 onClick={() => onBatchAction && onBatchAction('archive', Array.from(selectedItems))}
                                 className="btn btn-secondary btn-sm hover:scale-105 transition-transform"
@@ -370,6 +406,7 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                 </table>
             </div>
         </div>
+        </>
     );
 };
 

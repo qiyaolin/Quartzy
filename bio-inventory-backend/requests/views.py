@@ -501,3 +501,66 @@ class RequestViewSet(viewsets.ModelViewSet):
             response_data['errors'] = errors
         
         return Response(response_data)
+
+    @action(detail=False, methods=['post'])
+    def checkout_item(self, request):
+        """Checkout an item using barcode scanning."""
+        barcode = request.data.get('barcode')
+        checkout_notes = request.data.get('notes', '')
+        
+        if not barcode:
+            return Response({'error': 'Barcode is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Find the request by barcode
+            req_object = Request.objects.get(barcode=barcode, status='RECEIVED')
+        except Request.DoesNotExist:
+            return Response({
+                'error': 'No received item found with this barcode'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Find the corresponding inventory item
+        try:
+            from items.models import Item
+            inventory_item = Item.objects.filter(
+                name=req_object.item_name,
+                owner=req_object.requested_by,
+                quantity__gt=0
+            ).first()
+            
+            if not inventory_item:
+                return Response({
+                    'error': 'No available inventory item found for checkout'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Record the checkout
+            checkout_quantity = 1  # For now, checkout 1 unit at a time
+            if inventory_item.quantity >= checkout_quantity:
+                inventory_item.quantity -= checkout_quantity
+                inventory_item.save()
+                
+                # Create history record for checkout
+                RequestHistory.objects.create(
+                    request=req_object,
+                    user=request.user,
+                    old_status=req_object.status,
+                    new_status=req_object.status,  # Status remains the same
+                    notes=f"Item checked out - Quantity: {checkout_quantity}. {checkout_notes}"
+                )
+                
+                return Response({
+                    'status': 'Item checked out successfully',
+                    'item_name': req_object.item_name,
+                    'barcode': barcode,
+                    'quantity_checked_out': checkout_quantity,
+                    'remaining_quantity': inventory_item.quantity
+                })
+            else:
+                return Response({
+                    'error': 'Insufficient quantity available for checkout'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({
+                'error': f'Checkout failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

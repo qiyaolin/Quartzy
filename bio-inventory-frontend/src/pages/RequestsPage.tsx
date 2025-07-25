@@ -62,7 +62,10 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
     const handleAction = async (url, options = {}) => {
         try {
             const response = await fetch(url, { method: 'POST', headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }, ...options });
-            if (!response.ok) throw new Error('Action failed.');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Action failed.');
+            }
             fetchRequests(); // Refresh list on success
         } catch (e) { notification.error(e.message); }
     };
@@ -96,9 +99,9 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
     };
     const handleReorder = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/reorder/`);
     const handleMarkReceived = (req) => { setSelectedRequest(req); setIsReceivedModalOpen(true); };
-    const handleSaveReceived = async (id, data) => {
-        await handleAction(`http://127.0.0.1:8000/api/requests/${id}/mark_received/`, { body: JSON.stringify(data) });
+    const handleReceivedModalClose = () => {
         setIsReceivedModalOpen(false);
+        fetchRequests(); // Refresh the data when modal closes
     };
     const handleShowHistory = async (id) => {
         const response = await fetch(`http://127.0.0.1:8000/api/requests/${id}/history/`, { headers: { 'Authorization': `Token ${token}` } });
@@ -365,7 +368,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
                     )}
                 </div>
             </main>
-            <MarkReceivedModal isOpen={isReceivedModalOpen} onClose={() => setIsReceivedModalOpen(false)} onSave={handleSaveReceived} token={token} request={selectedRequest} />
+            <MarkReceivedModal isOpen={isReceivedModalOpen} onClose={handleReceivedModalClose} token={token} request={selectedRequest} />
             <RequestHistoryModal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} history={historyData} />
             <RequestDetailModal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} onSave={handleDetailSave} token={token} request={selectedRequest} />
             <FundSelectionModal 

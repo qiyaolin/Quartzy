@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from items.models import Vendor, ItemType # We can link to models from other apps
+import uuid
 
 class Request(models.Model):
     # Enum for request status
@@ -46,10 +47,18 @@ class Request(models.Model):
     # Funding
     fund_id = models.IntegerField(null=True, blank=True, help_text="ID of the fund used for this request")
 
+    # Barcode
+    barcode = models.CharField(max_length=50, unique=True, null=True, blank=True, help_text="Unique barcode for this request")
+
     # Notes and Timestamps
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if not self.barcode:
+            self.barcode = f"REQ-{uuid.uuid4().hex[:8].upper()}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Request for {self.item_name} by {self.requested_by.username} ({self.status})"

@@ -72,6 +72,31 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         setIsRequestHistoryOpen(true);
     };
 
+    const handleCheckout = async (barcode, itemData) => {
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/requests/checkout_item/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Token ${token}`
+                },
+                body: JSON.stringify({ barcode })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                notification.success(`${result.item_name} checked out successfully. Remaining quantity: ${result.remaining_quantity}`);
+                // Refresh inventory to show updated quantities
+                window.location.reload();
+            } else {
+                const errorData = await response.json();
+                notification.error(errorData.error || 'Checkout failed');
+            }
+        } catch (error) {
+            notification.error('Network error during checkout');
+        }
+    };
+
     const handleBatchAction = async (action, selectedIds) => {
         if (selectedIds.length === 0) return;
         
@@ -203,6 +228,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                             onDelete={onDeleteItem} 
                             onViewRequestHistory={handleViewRequestHistory}
                             onBatchAction={handleBatchAction}
+                            onCheckout={handleCheckout}
                         />
                         <div className="p-6 border-t border-secondary-200 bg-secondary-50/50">
                             <Pagination currentPage={currentPage} totalItems={Object.keys(groupedInventory).length} itemsPerPage={itemsPerPage} onPageChange={setCurrentPage} />
