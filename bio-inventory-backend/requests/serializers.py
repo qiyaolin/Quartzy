@@ -22,8 +22,8 @@ class RequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = Request
         fields = [
-            'id', 'item_name', 'item_type', 'status', 'catalog_number', 'url', 'quantity', 
-            'unit_size', 'unit_price', 'fund_id', 'notes', 'created_at', 'updated_at',
+            'id', 'item_name', 'item_type', 'financial_type', 'status', 'catalog_number', 'url', 'quantity', 
+            'unit_size', 'unit_price', 'fund_id', 'barcode', 'notes', 'created_at', 'updated_at',
             'requested_by', 'vendor', 'vendor_id', 'item_type_id'
         ]
         read_only_fields = ('status', 'created_at', 'updated_at')

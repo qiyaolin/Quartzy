@@ -1,11 +1,13 @@
 import React, { useContext, useState } from 'react';
-import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, ShoppingCart, RotateCcw } from 'lucide-react';
+import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, ShoppingCart, RotateCcw, QrCode, Printer, X } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
+import BarcodeComponent from './BarcodeComponent.tsx';
 
 const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onReorder, onShowHistory, onViewDetails, onBatchAction, currentStatus }) => {
     const { user } = useContext(AuthContext);
     const [selectedRequests, setSelectedRequests] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
+    const [showBarcodeModal, setShowBarcodeModal] = useState(null);
     
     const handleSelectAll = (checked) => {
         setSelectAll(checked);
@@ -161,6 +163,12 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                     <span>Status</span>
                                 </div>
                             </th>
+                            <th className="table-header-cell w-28">
+                                <div className="flex items-center space-x-2">
+                                    <QrCode className="w-4 h-4 text-gray-500" />
+                                    <span>Barcode</span>
+                                </div>
+                            </th>
                             <th className="table-header-cell w-28">Actions</th>
                         </tr>
                     </thead>
@@ -216,6 +224,24 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                             </td>
                             <td className="table-cell">{getStatusBadge(req.status)}</td>
                             <td className="table-cell">
+                                {req.barcode ? (
+                                    <div className="flex items-center space-x-2">
+                                        <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                                            {req.barcode}
+                                        </code>
+                                        <button
+                                            onClick={() => setShowBarcodeModal(req)}
+                                            className="p-1 hover:bg-primary-50 rounded transition-colors"
+                                            title="Print barcode label"
+                                        >
+                                            <Printer className="w-3 h-3 text-gray-500 hover:text-primary-600" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <span className="text-xs text-gray-400">No barcode</span>
+                                )}
+                            </td>
+                            <td className="table-cell">
                                 <div className="flex items-center space-x-1">
                                     {user?.is_staff && req.status === 'NEW' && (
                                         <button 
@@ -264,6 +290,33 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                     </tbody>
                 </table>
             </div>
+            
+            {/* Barcode Modal */}
+            {showBarcodeModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+                    <div className="bg-white rounded-lg max-w-md w-full">
+                        <div className="p-4 border-b flex justify-between items-center">
+                            <h3 className="text-lg font-semibold">Barcode Label</h3>
+                            <button
+                                onClick={() => setShowBarcodeModal(null)}
+                                className="p-2 hover:bg-gray-100 rounded"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-4">
+                            <BarcodeComponent
+                                barcodeData={showBarcodeModal.barcode}
+                                itemName={showBarcodeModal.item_name}
+                                onPrint={() => {
+                                    console.log('Barcode printed for:', showBarcodeModal.barcode);
+                                    setShowBarcodeModal(null);
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

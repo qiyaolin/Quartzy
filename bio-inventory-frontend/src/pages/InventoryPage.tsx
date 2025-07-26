@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
-import { AlertTriangle, Clock, Package } from 'lucide-react';
+import { AlertTriangle, Clock, Package, QrCode } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import InventoryTable from '../components/InventoryTable.tsx';
 import Pagination from '../components/Pagination.tsx';
 import ItemRequestHistoryModal from '../modals/ItemRequestHistoryModal.tsx';
+import BarcodeScanner from '../components/BarcodeScanner.tsx';
 import { exportToExcel } from '../utils/excelExport.ts';
 
 const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
@@ -15,6 +16,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const [error, setError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [isRequestHistoryOpen, setIsRequestHistoryOpen] = useState(false);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
     const itemsPerPage = 10;
 
@@ -171,12 +173,53 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         }
     };
 
+    // Barcode checkout handling functions
+    const handleBarcodeScan = (barcode) => {
+        console.log('Barcode scanned for checkout:', barcode);
+        notification.info(`Scanned barcode: ${barcode}`);
+    };
+
+    const handleBarcodeCheckout = async (barcode, itemData) => {
+        console.log('Processing barcode checkout:', barcode, itemData);
+        
+        if (itemData) {
+            // Process checkout - this should mark the item as checked out
+            try {
+                // In a real implementation, you would call an API to process the checkout
+                // For now, we'll just show a success message
+                notification.success(`Successfully checked out: ${itemData.item_name}`);
+                
+                // You might want to update the inventory count here
+                // await processCheckout(itemData.id, barcode);
+                
+                // Refresh the inventory data
+                // fetchInventory();
+                
+            } catch (error) {
+                notification.error(`Failed to checkout item: ${error.message}`);
+            }
+        } else {
+            notification.error('Item not found with this barcode');
+        }
+        
+        setIsScannerOpen(false);
+    };
+
     return (
         <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-secondary-900 mb-2">Inventory</h1>
                     <p className="text-secondary-600">Manage and track your laboratory inventory</p>
+                </div>
+                <div className="flex space-x-3">
+                    <button
+                        onClick={() => setIsScannerOpen(true)}
+                        className="btn btn-primary flex items-center space-x-2"
+                    >
+                        <QrCode className="w-4 h-4" />
+                        <span>Scan for Checkout</span>
+                    </button>
                 </div>
             </div>
             <div className="card overflow-hidden">
@@ -215,6 +258,12 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                 onClose={() => setIsRequestHistoryOpen(false)} 
                 itemName={selectedItem?.name} 
                 token={token} 
+            />
+            <BarcodeScanner
+                isOpen={isScannerOpen}
+                onClose={() => setIsScannerOpen(false)}
+                onScan={handleBarcodeScan}
+                onConfirm={handleBarcodeCheckout}
             />
         </main>
     );

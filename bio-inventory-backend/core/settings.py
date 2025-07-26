@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +21,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-(ke1aekx@qekmk_og@bblhb9#@kz(shy#2s7x5zqz2w=l%@10d'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-(ke1aekx@qekmk_og@bblhb9#@kz(shy#2s7x5zqz2w=l%@10d')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -87,11 +88,11 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'bio_inventory_db',    # The name you chose in Step 2
-        'USER': 'postgres',            # Your PostgreSQL username (default is 'postgres')
-        'PASSWORD': '111111', # The password you set during installation
-        'HOST': 'localhost',           # Or '127.0.0.1'
-        'PORT': '5432',                # Default PostgreSQL port
+        'NAME': os.environ.get('DB_NAME', 'bio_inventory_db'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', '111111'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
@@ -130,11 +131,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+
+# Media files
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -142,12 +147,18 @@ STATICFILES_DIRS = [
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", # The default for create-react-app
-    "http://127.0.0.1:3000",
-    "http://localhost:5173", # The default for Vite
-    "http://127.0.0.1:5173",
-]
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+else:
+    # Production CORS settings - update with your frontend domain
+    cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+    CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else []
+
 CORS_ALLOW_CREDENTIALS = True
 
 # DRF Token Auth config
@@ -165,18 +176,18 @@ REST_FRAMEWORK = {
 
 # Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
-EMAIL_HOST_USER = 'hayerlabaws@gmail.com'
-EMAIL_HOST_PASSWORD = 'rkllfsehfwxqlefv'  # Set this via environment variable in production
-DEFAULT_FROM_EMAIL = 'Hayer Lab Inventory System <hayerlabaws@gmail.com>'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'hayerlabaws@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'rkllfsehfwxqlefv')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Hayer Lab Inventory System <hayerlabaws@gmail.com>')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # Email settings for notifications
-EMAIL_SUBJECT_PREFIX = '[Hayer Lab Inventory System] '
-EMAIL_TIMEOUT = 60
+EMAIL_SUBJECT_PREFIX = os.environ.get('EMAIL_SUBJECT_PREFIX', '[Hayer Lab Inventory System] ')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '60'))
 
 # Frontend URL for email links
-FRONTEND_URL = 'http://localhost:3000'
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')

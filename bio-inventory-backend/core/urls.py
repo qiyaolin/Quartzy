@@ -17,9 +17,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from users.views import CustomAuthToken # Import our new view
+from .health import health_check, readiness_check
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', health_check, name='health_check'),
+    path('ready/', readiness_check, name='readiness_check'),
     path('api/login/', CustomAuthToken.as_view(), name='api_token_auth'), # Use the new view
     path('api/', include('items.urls')),
     path('api/', include('requests.urls')),

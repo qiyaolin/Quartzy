@@ -95,8 +95,32 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
     const handleReorder = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/reorder/`);
     const handleMarkReceived = (req) => { setSelectedRequest(req); setIsReceivedModalOpen(true); };
     const handleSaveReceived = async (id, data) => {
-        await handleAction(`http://127.0.0.1:8000/api/requests/${id}/mark_received/`, { body: JSON.stringify(data) });
-        setIsReceivedModalOpen(false);
+        try {
+            console.log('Sending mark_received request:', { id, data });
+            const response = await fetch(`http://127.0.0.1:8000/api/requests/${id}/mark_received/`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+            
+            console.log('Mark received response status:', response.status);
+            const responseText = await response.text();
+            console.log('Mark received response:', responseText);
+            
+            if (!response.ok) {
+                throw new Error(`Failed to mark as received: ${responseText}`);
+            }
+            
+            fetchRequests(); // Refresh list on success
+            // Don't close modal immediately - let the modal handle the success state
+        } catch (error) {
+            console.error('Mark received error:', error);
+            notification.error(error.message);
+            throw error; // Re-throw so modal can handle it
+        }
     };
     const handleShowHistory = async (id) => {
         const response = await fetch(`http://127.0.0.1:8000/api/requests/${id}/history/`, { headers: { 'Authorization': `Token ${token}` } });

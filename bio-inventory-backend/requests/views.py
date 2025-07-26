@@ -18,7 +18,7 @@ class RequestViewSet(viewsets.ModelViewSet):
     serializer_class = RequestSerializer
     filterset_class = RequestFilter # Connect the filter class
     filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter
-    search_fields = ['item_name', 'catalog_number', 'vendor__name'] # Define fields that the SearchFilter will search across
+    search_fields = ['item_name', 'catalog_number', 'vendor__name', 'barcode'] # Define fields that the SearchFilter will search across
     
     def create(self, request, *args, **kwargs):
         """Override create to set requested_by to current user and send email notification"""
@@ -150,7 +150,8 @@ class RequestViewSet(viewsets.ModelViewSet):
             unit=req_object.unit_size,
             location_id=location_id,
             price=req_object.unit_price,
-            fund_id=req_object.fund_id  # Include fund_id from the request
+            fund_id=req_object.fund_id,  # Include fund_id from the request
+            financial_type=req_object.financial_type or 'Supplies'  # Include financial_type from request
         )
 
         # Handle partial delivery
