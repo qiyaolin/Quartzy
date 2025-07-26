@@ -5,7 +5,7 @@ from decimal import Decimal
 import random
 
 from funding.models import Fund, Transaction
-from requests.models import Request
+from inventory_requests.models import Request
 from items.models import Item
 
 

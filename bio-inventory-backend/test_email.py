@@ -15,7 +15,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
 
 from django.contrib.auth.models import User
-from requests.models import Request
+from inventory_requests.models import Request
 from items.models import Vendor
 from notifications.email_service import EmailNotificationService
 

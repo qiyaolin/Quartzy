@@ -35,7 +35,7 @@ def check_item_alerts(sender, instance, created, **kwargs):
             )
 
 
-@receiver(post_save, sender='requests.Request')
+@receiver(post_save, sender='inventory_requests.Request')
 def notify_request_status_change(sender, instance, created, **kwargs):
     """Send notification when request status changes"""
     if not created and hasattr(instance, '_previous_status'):
@@ -56,7 +56,7 @@ def notify_request_status_change(sender, instance, created, **kwargs):
                 )
 
 
-@receiver(pre_save, sender='requests.Request')
+@receiver(pre_save, sender='inventory_requests.Request')
 def store_previous_status(sender, instance, **kwargs):
     """Store previous status before saving to detect changes"""
     if instance.pk:

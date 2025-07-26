@@ -25,7 +25,7 @@ urlpatterns = [
     path('ready/', readiness_check, name='readiness_check'),
     path('api/login/', CustomAuthToken.as_view(), name='api_token_auth'), # Use the new view
     path('api/', include('items.urls')),
-    path('api/', include('requests.urls')),
+    path('api/', include('inventory_requests.urls')),
     path('api/', include('users.urls')),
     path('api/', include('funding.urls')),
     path('api/', include('notifications.urls')),

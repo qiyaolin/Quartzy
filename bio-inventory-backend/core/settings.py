@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import io
+from google.cloud.sql.connector import Connector, IPTypes
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -45,7 +47,7 @@ INSTALLED_APPS = [
     'django_filters', # Add this
     # Our apps
     'items',
-    'requests', # Add our new app here
+    'inventory_requests', # Renamed from 'requests' to avoid conflict
     'users',
     'funding',
     'notifications',
@@ -85,14 +87,32 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# 从环境变量安全地读取数据库凭据
+DB_USER = os.environ.get("DB_USER", "postgres")
+DB_PASS = os.environ.get("DB_PASS") # 将从 app.yaml 读取
+DB_NAME = os.environ.get("DB_NAME", "inventory_db")
+INSTANCE_CONNECTION_NAME = os.environ.get("INSTANCE_CONNECTION_NAME") # 将从 app.yaml 读取
+
+# 初始化 Cloud SQL 连接器
+connector = Connector()
+
+# 定义一个函数，让 Django 知道如何获取连接
+def getconn() -> io.IOBase:
+    conn = connector.connect(
+        INSTANCE_CONNECTION_NAME,
+        "pg8000",
+        user=DB_USER,
+        password=DB_PASS,
+        db=DB_NAME,
+        ip_type=IPTypes.PUBLIC, # 在 App Engine 中使用 Public IP
+    )
+    return conn
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'bio_inventory_db'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', '111111'),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        # 使用 CONN_CALLABLE，而不是 HOST, PORT
+        "CONN_CALLABLE": getconn,
     }
 }
 
@@ -155,9 +175,12 @@ if DEBUG:
         "http://127.0.0.1:5173",
     ]
 else:
-    # Production CORS settings - update with your frontend domain
-    cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '')
-    CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else []
+    # Production CORS settings - Firebase Hosting URLs
+    cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com')
+    CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else [
+        "https://lab-inventory-467021.web.app",
+        "https://lab-inventory-467021.firebaseapp.com"
+    ]
 
 CORS_ALLOW_CREDENTIALS = True
 
