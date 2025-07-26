@@ -12,8 +12,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
-import io
-from google.cloud.sql.connector import Connector, IPTypes
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -93,28 +91,27 @@ DB_PASS = os.environ.get("DB_PASS") # 将从 app.yaml 读取
 DB_NAME = os.environ.get("DB_NAME", "inventory_db")
 INSTANCE_CONNECTION_NAME = os.environ.get("INSTANCE_CONNECTION_NAME") # 将从 app.yaml 读取
 
-# 初始化 Cloud SQL 连接器
-connector = Connector()
-
-# 定义一个函数，让 Django 知道如何获取连接
-def getconn() -> io.IOBase:
-    conn = connector.connect(
-        INSTANCE_CONNECTION_NAME,
-        "pg8000",
-        user=DB_USER,
-        password=DB_PASS,
-        db=DB_NAME,
-        ip_type=IPTypes.PUBLIC, # 在 App Engine 中使用 Public IP
-    )
-    return conn
-
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        # 使用 CONN_CALLABLE，而不是 HOST, PORT
-        "CONN_CALLABLE": getconn,
+# App Engine 环境下的数据库配置
+if os.environ.get('GAE_ENV', '').startswith('standard'):
+    # 在 App Engine 标准环境中使用 Unix socket 连接
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": DB_NAME,
+            "USER": DB_USER,
+            "PASSWORD": DB_PASS,
+            "HOST": "/cloudsql/" + INSTANCE_CONNECTION_NAME,
+            "PORT": "5432",
+        }
     }
-}
+else:
+    # 本地开发环境或其他环境
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -153,9 +150,13 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+
+# 只在静态文件目录存在时才添加到 STATICFILES_DIRS
+static_dir = BASE_DIR / 'static'
+if static_dir.exists():
+    STATICFILES_DIRS = [static_dir]
+else:
+    STATICFILES_DIRS = []
 
 # Media files
 MEDIA_URL = '/media/'
@@ -175,11 +176,12 @@ if DEBUG:
         "http://127.0.0.1:5173",
     ]
 else:
-    # Production CORS settings - Firebase Hosting URLs
-    cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com')
+    # Production CORS settings - Firebase Hosting and App Engine URLs
+    cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com,https://lab-inventory-467021.nn.r.appspot.com')
     CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else [
         "https://lab-inventory-467021.web.app",
-        "https://lab-inventory-467021.firebaseapp.com"
+        "https://lab-inventory-467021.firebaseapp.com",
+        "https://lab-inventory-467021.nn.r.appspot.com"
     ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -214,3 +216,6 @@ EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '60'))
 
 # Frontend URL for email links
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+
+# Remove auto-create superuser code from settings.py
+# This should be handled by a startup script or management command instead

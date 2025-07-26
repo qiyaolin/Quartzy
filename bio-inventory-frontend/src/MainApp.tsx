@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import { AuthContext } from './components/AuthContext.tsx';
 import { useNotification } from './contexts/NotificationContext.tsx';
+import { buildApiUrl, API_ENDPOINTS } from './config/api.ts';
 import AlertsBanner from './components/AlertsBanner.tsx';
 import Header from './components/Header.tsx';
 import InventorySidebar from './components/InventorySidebar.tsx';
@@ -56,7 +57,7 @@ const MainApp = () => {
                     // Update the request filters to show the specific request's status if needed
                     // We'll fetch the request to determine its status and set appropriate filter
                     if (token) {
-                        fetch(`http://127.0.0.1:8000/api/requests/${requestId}/`, {
+                        fetch(buildApiUrl(`/api/requests/${requestId}/`), {
                             headers: { 'Authorization': `Token ${token}` }
                         })
                         .then(response => response.json())
@@ -96,10 +97,10 @@ const MainApp = () => {
             try {
                 const headers = { 'Authorization': `Token ${token}` };
                 const [vendorsRes, locationsRes, itemTypesRes, usersRes] = await Promise.all([
-                    fetch('http://127.0.0.1:8000/api/vendors/', { headers }),
-                    fetch('http://127.0.0.1:8000/api/locations/', { headers }),
-                    fetch('http://127.0.0.1:8000/api/item-types/', { headers }),
-                    fetch('http://127.0.0.1:8000/api/users/', { headers }),
+                    fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
+                    fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { headers }),
+                    fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
+                    fetch(buildApiUrl(API_ENDPOINTS.USERS), { headers }),
                 ]);
                 const vendors = await vendorsRes.json();
                 const locations = await locationsRes.json();
@@ -153,14 +154,14 @@ const MainApp = () => {
     const handleDeleteConfirm = async () => {
         if (!deletingItem) return;
         try {
-            await fetch(`http://127.0.0.1:8000/api/items/${deletingItem.id}/`, { method: 'DELETE', headers: { 'Authorization': `Token ${token}` } });
+            await fetch(buildApiUrl(`/api/items/${deletingItem.id}/`), { method: 'DELETE', headers: { 'Authorization': `Token ${token}` } });
             handleSave();
         } catch (e) { console.error(e); } finally { setIsDeleteModalOpen(false); setDeletingItem(null); }
     };
     const handleDeleteUserConfirm = async () => {
         if (!deletingUser) return;
         try {
-            await fetch(`http://127.0.0.1:8000/api/users/${deletingUser.id}/`, { method: 'DELETE', headers: { 'Authorization': `Token ${token}` } });
+            await fetch(buildApiUrl(`/api/users/${deletingUser.id}/`), { method: 'DELETE', headers: { 'Authorization': `Token ${token}` } });
             handleSave();
         } catch (e) { 
             notification.error(e.message || 'Failed to delete user'); 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { X, Edit3, Calendar, User, Package, FileText, DollarSign, Save, AlertCircle, CheckCircle, CheckCircle2 } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const RequestDetailModal = ({ isOpen, onClose, request, onSave, token }) => {
     const { user } = useContext(AuthContext);
@@ -33,7 +34,7 @@ const RequestDetailModal = ({ isOpen, onClose, request, onSave, token }) => {
         if (isOpen && isEditing) {
             const fetchVendors = async () => {
                 try {
-                    const response = await fetch('http://127.0.0.1:8000/api/vendors/', {
+                    const response = await fetch(buildApiUrl(API_ENDPOINTS.VENDORS), {
                         headers: { 'Authorization': `Token ${token}` }
                     });
                     const data = await response.json();
@@ -56,7 +57,7 @@ const RequestDetailModal = ({ isOpen, onClose, request, onSave, token }) => {
         setError(null);
         
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/requests/${request.id}/`, {
+            const response = await fetch(buildApiUrl(`/api/requests/${request.id}/`), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',

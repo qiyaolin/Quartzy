@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Package, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) => {
     const notification = useNotification();
@@ -18,7 +19,7 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     const fetchFunds = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/funds/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.FUNDS), {
                 headers: { 'Authorization': `Token ${token}` }
             });
             if (response.ok) {

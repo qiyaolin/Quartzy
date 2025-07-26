@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, createContext } from 'react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 interface AuthContextType {
   user: any;
@@ -19,7 +20,7 @@ export const AuthProvider = ({ children }) => {
             // Fetch user details when token is available
             const fetchUser = async () => {
                 try {
-                    const response = await fetch('http://127.0.0.1:8000/api/users/me/', {
+                    const response = await fetch(buildApiUrl(API_ENDPOINTS.USER_ME), {
                         headers: { 'Authorization': `Token ${token}` }
                     });
                     if (response.ok) {

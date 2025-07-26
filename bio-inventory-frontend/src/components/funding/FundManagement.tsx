@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit, Archive, AlertTriangle, DollarSign, Calendar, User, Building } from 'lucide-react';
 import FundModal from './FundModal.tsx';
+import { buildApiUrl } from '../../config/api.ts';
 
 const FundManagement = ({ funds, onRefresh, token }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,7 +23,7 @@ const FundManagement = ({ funds, onRefresh, token }) => {
     const handleArchiveFund = async (fundId) => {
         if (window.confirm('Are you sure you want to archive this fund? This action cannot be undone.')) {
             try {
-                const response = await fetch(`http://127.0.0.1:8000/api/funds/${fundId}/archive/`, {
+                const response = await fetch(buildApiUrl(`/api/funds/${fundId}/archive/`), {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,

@@ -7,6 +7,7 @@ import Pagination from '../components/Pagination.tsx';
 import ItemRequestHistoryModal from '../modals/ItemRequestHistoryModal.tsx';
 import BarcodeScanner from '../components/BarcodeScanner.tsx';
 import { exportToExcel } from '../utils/excelExport.ts';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const { token } = useContext(AuthContext);
@@ -60,7 +61,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                 }
             });
             try {
-                const response = await fetch(`http://127.0.0.1:8000/api/items/?${params.toString()}`, { headers: { 'Authorization': `Token ${token}` } });
+                const response = await fetch(`${buildApiUrl(API_ENDPOINTS.ITEMS)}?${params.toString()}`, { headers: { 'Authorization': `Token ${token}` } });
                 if (!response.ok) throw new Error(`Authentication failed`);
                 const data = await response.json();
                 setInventory(data);
@@ -132,7 +133,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
             case 'archive':
                 if (window.confirm(`Are you sure you want to archive ${selectedIds.length} item(s)?`)) {
                     try {
-                        const response = await fetch('http://127.0.0.1:8000/api/items/batch_archive/', {
+                        const response = await fetch(buildApiUrl(API_ENDPOINTS.ITEMS_BATCH_ARCHIVE), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -153,7 +154,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
             case 'delete':
                 if (window.confirm(`Are you sure you want to delete ${selectedIds.length} item(s)? This action cannot be undone.`)) {
                     try {
-                        const response = await fetch('http://127.0.0.1:8000/api/items/batch_delete/', {
+                        const response = await fetch(buildApiUrl(API_ENDPOINTS.ITEMS_BATCH_DELETE), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',

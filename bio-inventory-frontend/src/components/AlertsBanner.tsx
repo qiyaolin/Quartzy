@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const AlertsBanner = () => {
     const { token } = useContext(AuthContext);
@@ -10,7 +11,7 @@ const AlertsBanner = () => {
 
     useEffect(() => {
         if (token) {
-            fetch('http://127.0.0.1:8000/api/items/alerts/', {
+            fetch(buildApiUrl(API_ENDPOINTS.ITEMS_ALERTS), {
                 headers: { 'Authorization': `Token ${token}` }
             })
             .then(response => response.json())

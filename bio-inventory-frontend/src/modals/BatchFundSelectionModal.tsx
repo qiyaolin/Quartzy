@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, AlertTriangle, Package } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selectedRequests }) => {
     const notification = useNotification();
@@ -17,7 +18,7 @@ const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selecte
 
     const fetchFunds = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/funds/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.FUNDS), {
                 headers: { 'Authorization': `Token ${token}` }
             });
             if (response.ok) {
@@ -40,7 +41,7 @@ const BatchFundSelectionModal = ({ isOpen, onClose, onPlaceOrder, token, selecte
             }, 0);
 
             try {
-                const response = await fetch(`http://127.0.0.1:8000/api/funds/${fundId}/validate_budget/`, {
+                const response = await fetch(buildApiUrl(`/api/funds/${fundId}/validate_budget/`), {
                     method: 'POST',
                     headers: {
                         'Authorization': `Token ${token}`,

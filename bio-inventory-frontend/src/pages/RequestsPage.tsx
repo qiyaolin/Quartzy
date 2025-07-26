@@ -10,6 +10,7 @@ import FundSelectionModal from '../modals/FundSelectionModal.tsx';
 import BatchReceivedModal from '../modals/BatchReceivedModal.tsx';
 import BatchFundSelectionModal from '../modals/BatchFundSelectionModal.tsx';
 import { exportToExcel } from '../utils/excelExport.ts';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, highlightRequestId }) => {
     const { token } = useContext(AuthContext);
@@ -38,7 +39,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
             }
         });
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/requests/?${params.toString()}`, { headers: { 'Authorization': `Token ${token}` } });
+            const response = await fetch(`${buildApiUrl(API_ENDPOINTS.REQUESTS)}?${params.toString()}`, { headers: { 'Authorization': `Token ${token}` } });
             if (!response.ok) throw new Error(`Authentication failed.`);
             const data = await response.json();
             setRequests(data);
@@ -67,7 +68,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
         } catch (e) { notification.error(e.message); }
     };
 
-    const handleApprove = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/approve/`);
+    const handleApprove = (id) => handleAction(buildApiUrl(`/api/requests/${id}/approve/`));
     const handlePlaceOrder = (id) => {
         // Find the request and open fund selection modal
         const request = requests.find(req => req.id === id);
@@ -78,7 +79,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
     };
     const handlePlaceOrderWithFund = async (id, fundId) => {
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/requests/${id}/place_order/`, {
+            const response = await fetch(buildApiUrl(`/api/requests/${id}/place_order/`), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Token ${token}`,
@@ -92,12 +93,12 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
             notification.error(e.message);
         }
     };
-    const handleReorder = (id) => handleAction(`http://127.0.0.1:8000/api/requests/${id}/reorder/`);
+    const handleReorder = (id) => handleAction(buildApiUrl(`/api/requests/${id}/reorder/`));
     const handleMarkReceived = (req) => { setSelectedRequest(req); setIsReceivedModalOpen(true); };
     const handleSaveReceived = async (id, data) => {
         try {
             console.log('Sending mark_received request:', { id, data });
-            const response = await fetch(`http://127.0.0.1:8000/api/requests/${id}/mark_received/`, {
+            const response = await fetch(buildApiUrl(`/api/requests/${id}/mark_received/`), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Token ${token}`,
@@ -123,7 +124,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
         }
     };
     const handleShowHistory = async (id) => {
-        const response = await fetch(`http://127.0.0.1:8000/api/requests/${id}/history/`, { headers: { 'Authorization': `Token ${token}` } });
+        const response = await fetch(buildApiUrl(`/api/requests/${id}/history/`), { headers: { 'Authorization': `Token ${token}` } });
         const data = await response.json();
         setHistoryData(data);
         setIsHistoryModalOpen(true);
@@ -196,7 +197,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
             case 'approve':
                 if (window.confirm(`Are you sure you want to approve ${selectedIds.length} request(s)?`)) {
                     try {
-                        const response = await fetch('http://127.0.0.1:8000/api/requests/batch_approve/', {
+                        const response = await fetch(buildApiUrl(API_ENDPOINTS.REQUESTS_BATCH_APPROVE), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -216,7 +217,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
             case 'reject':
                 if (window.confirm(`Are you sure you want to reject ${selectedIds.length} request(s)?`)) {
                     try {
-                        const response = await fetch('http://127.0.0.1:8000/api/requests/batch_reject/', {
+                        const response = await fetch(buildApiUrl(API_ENDPOINTS.REQUESTS_BATCH_REJECT), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -248,7 +249,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
             case 'batch_reorder':
                 if (window.confirm(`Are you sure you want to reorder ${selectedIds.length} request(s)?`)) {
                     try {
-                        const response = await fetch('http://127.0.0.1:8000/api/requests/batch_reorder/', {
+                        const response = await fetch(buildApiUrl(API_ENDPOINTS.REQUESTS_BATCH_REORDER), {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -272,7 +273,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
     // Batch operation handlers
     const handleBatchPlaceOrder = async (selectedRequestsData, fundId) => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/requests/batch_place_order/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.REQUESTS_BATCH_PLACE_ORDER), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -298,7 +299,7 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
 
     const handleBatchMarkReceived = async (selectedRequestsData, data) => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/requests/batch_mark_received/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.REQUESTS_BATCH_MARK_RECEIVED), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

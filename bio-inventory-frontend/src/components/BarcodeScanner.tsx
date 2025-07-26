@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { buildApiUrl } from '../config/api.ts';
 
 interface BarcodeScannerProps {
     isOpen: boolean;
@@ -89,7 +90,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 
         try {
             // Look up item data based on barcode - first check requests (items that have been received)
-            const response = await fetch(`http://127.0.0.1:8000/api/requests/?barcode=${barcode}`, {
+            const response = await fetch(buildApiUrl(`/api/requests/?barcode=${barcode}`), {
                 headers: {
                     'Authorization': `Token ${localStorage.getItem('token')}`
                 }

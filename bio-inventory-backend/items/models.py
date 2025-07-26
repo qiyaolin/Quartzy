@@ -63,17 +63,6 @@ class Item(models.Model):
     owner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="owned_items")
     fund_id = models.IntegerField(null=True, blank=True, help_text="ID of the fund used to purchase this item")
     
-    FINANCIAL_TYPE_CHOICES = [
-        ('Equipment', 'Equipment'),
-        ('Supplies', 'Supplies'),
-    ]
-    financial_type = models.CharField(
-        max_length=20, 
-        choices=FINANCIAL_TYPE_CHOICES, 
-        default='Supplies',
-        help_text="Financial classification for reporting (Equipment or Supplies)"
-    )
-    
     # Expiration & Storage Management
     expiration_date = models.DateField(null=True, blank=True, help_text="Expiration date of the item")
     lot_number = models.CharField(max_length=100, blank=True, help_text="Batch/lot number for tracking")

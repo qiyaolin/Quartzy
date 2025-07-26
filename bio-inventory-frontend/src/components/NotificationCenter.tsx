@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Bell, X, Check, Trash2, Settings, Filter } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { useNotification } from '../contexts/NotificationContext.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 interface Notification {
   id: number;
@@ -53,7 +54,7 @@ const NotificationCenter: React.FC = () => {
       if (filter.priority) params.append('priority', filter.priority);
       if (filter.is_read !== undefined) params.append('is_read', filter.is_read.toString());
 
-      const response = await fetch(`http://127.0.0.1:8000/api/notifications/?${params.toString()}`, {
+      const response = await fetch(buildApiUrl(`/api/notifications/?${params.toString()}`), {
         headers: { 'Authorization': `Token ${token}` }
       });
 
@@ -72,7 +73,7 @@ const NotificationCenter: React.FC = () => {
     if (!token) return;
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/notifications/summary/', {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.NOTIFICATIONS_SUMMARY), {
         headers: { 'Authorization': `Token ${token}` }
       });
 
@@ -100,7 +101,7 @@ const NotificationCenter: React.FC = () => {
 
   const markAsRead = async (notificationId: number) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/notifications/${notificationId}/mark_read/`, {
+      const response = await fetch(buildApiUrl(`/api/notifications/${notificationId}/mark_read/`), {
         method: 'POST',
         headers: { 'Authorization': `Token ${token}` }
       });
@@ -118,7 +119,7 @@ const NotificationCenter: React.FC = () => {
 
   const markAllAsRead = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/notifications/mark_all_read/', {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.NOTIFICATIONS_MARK_ALL_READ), {
         method: 'POST',
         headers: { 'Authorization': `Token ${token}` }
       });
@@ -135,7 +136,7 @@ const NotificationCenter: React.FC = () => {
 
   const dismissNotification = async (notificationId: number) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/notifications/${notificationId}/dismiss/`, {
+      const response = await fetch(buildApiUrl(`/api/notifications/${notificationId}/dismiss/`), {
         method: 'POST',
         headers: { 'Authorization': `Token ${token}` }
       });

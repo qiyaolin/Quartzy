@@ -4,6 +4,7 @@ import { AuthContext } from '../components/AuthContext.tsx';
 import FundManagement from '../components/funding/FundManagement.tsx';
 import TransactionRecords from '../components/funding/TransactionRecords.tsx';
 import BudgetReports from '../components/funding/BudgetReports.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const FundingPage = () => {
     const { token, user } = useContext(AuthContext);
@@ -27,15 +28,15 @@ const FundingPage = () => {
         setLoading(true);
         try {
             // Check if APIs are available with graceful fallbacks
-            const fundsResponse = await fetch('http://127.0.0.1:8000/api/funds/', {
+            const fundsResponse = await fetch(buildApiUrl(API_ENDPOINTS.FUNDS), {
                 headers: { 'Authorization': `Token ${token}` }
             }).catch(() => ({ ok: false, status: 404 }));
             
-            const transactionsResponse = await fetch('http://127.0.0.1:8000/api/transactions/', {
+            const transactionsResponse = await fetch(buildApiUrl(API_ENDPOINTS.TRANSACTIONS), {
                 headers: { 'Authorization': `Token ${token}` }
             }).catch(() => ({ ok: false, status: 404 }));
             
-            const summaryResponse = await fetch('http://127.0.0.1:8000/api/budget-summary/', {
+            const summaryResponse = await fetch(buildApiUrl(API_ENDPOINTS.BUDGET_SUMMARY), {
                 headers: { 'Authorization': `Token ${token}` }
             }).catch(() => ({ ok: false, status: 404 }));
             

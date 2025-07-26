@@ -13,20 +13,9 @@ class Request(models.Model):
         REJECTED = 'REJECTED', 'Rejected'
         CANCELLED = 'CANCELLED', 'Cancelled'
 
-    FINANCIAL_TYPE_CHOICES = [
-        ('Equipment', 'Equipment'),
-        ('Supplies', 'Supplies'),
-    ]
-
     # Core Details
     item_name = models.CharField(max_length=255)
     item_type = models.ForeignKey(ItemType, on_delete=models.SET_NULL, null=True, blank=True)
-    financial_type = models.CharField(
-        max_length=20, 
-        choices=FINANCIAL_TYPE_CHOICES, 
-        default='Supplies',
-        help_text="Financial classification for reporting (Equipment or Supplies)"
-    )
     requested_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name="requests")
     status = models.CharField(
         max_length=10,

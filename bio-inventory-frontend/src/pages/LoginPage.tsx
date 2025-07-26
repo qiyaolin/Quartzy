@@ -1,8 +1,13 @@
 import React, { useState, useContext } from 'react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 import { AuthContext } from '../components/AuthContext.tsx';
 
 const LoginPage = () => {
-    const { login } = useContext(AuthContext);
+    const auth = useContext(AuthContext);
+    if (!auth) {
+        throw new Error('LoginPage must be used within an AuthProvider');
+    }
+    const { login } = auth;
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -13,7 +18,7 @@ const LoginPage = () => {
         setIsLoggingIn(true);
         setError('');
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/login/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.LOGIN), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Clock, User, Package, AlertTriangle, CheckCircle } from 'lucide-react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const ItemRequestHistoryModal = ({ isOpen, onClose, itemName, token }) => {
     const [requests, setRequests] = useState([]);
@@ -17,7 +18,7 @@ const ItemRequestHistoryModal = ({ isOpen, onClose, itemName, token }) => {
         setError(null);
         
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/requests/?search=${encodeURIComponent(itemName)}`, {
+            const response = await fetch(`${buildApiUrl(API_ENDPOINTS.REQUESTS)}?search=${encodeURIComponent(itemName)}`, {
                 headers: { 'Authorization': `Token ${token}` }
             });
             

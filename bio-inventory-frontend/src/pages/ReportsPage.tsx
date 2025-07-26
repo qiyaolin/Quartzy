@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Download, RefreshCw, PlusCircle, FileText, Upload, Loader, AlertTriangle, Package, Clock, CheckCircle } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { exportMultiSheetExcel } from '../utils/excelExport.ts';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const ReportsPage = ({ 
     onNavigateToInventory, 
@@ -58,7 +59,7 @@ const ReportsPage = ({
             const sixMonthsAgo = new Date();
             sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
             
-            const response = await fetch(`http://127.0.0.1:8000/api/requests/?ordering=-created_at&limit=1000`, {
+            const response = await fetch(`${buildApiUrl(API_ENDPOINTS.REQUESTS)}?ordering=-created_at&limit=1000`, {
                 headers: { 'Authorization': `Token ${token}` }
             });
             const data = await response.json();
@@ -107,16 +108,16 @@ const ReportsPage = ({
         setLoading(true);
         try {
             const [reportsData, expiringData, recentRequests, itemsData] = await Promise.all([
-                fetch('http://127.0.0.1:8000/api/items/reports/', {
+                fetch(buildApiUrl(API_ENDPOINTS.ITEMS_REPORTS), {
                     headers: { 'Authorization': `Token ${token}` }
                 }).then(res => res.json()),
-                fetch('http://127.0.0.1:8000/api/items/expiring_this_month/', {
+                fetch(buildApiUrl(API_ENDPOINTS.ITEMS_EXPIRING), {
                     headers: { 'Authorization': `Token ${token}` }
                 }).then(res => res.json()),
-                fetch('http://127.0.0.1:8000/api/requests/?ordering=-created_at&limit=5', {
+                fetch(`${buildApiUrl(API_ENDPOINTS.REQUESTS)}?ordering=-created_at&limit=5`, {
                     headers: { 'Authorization': `Token ${token}` }
                 }).then(res => res.json()),
-                fetch('http://127.0.0.1:8000/api/items/?limit=10000', {
+                fetch(`${buildApiUrl(API_ENDPOINTS.ITEMS)}?limit=10000`, {
                     headers: { 'Authorization': `Token ${token}` }
                 }).then(res => res.json())
             ]);

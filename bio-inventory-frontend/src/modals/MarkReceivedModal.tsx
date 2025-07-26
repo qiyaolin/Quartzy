@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Printer, X } from 'lucide-react';
 import BarcodeComponent from '../components/BarcodeComponent.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
     const [locationId, setLocationId] = useState('');
@@ -11,7 +12,7 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
     useEffect(() => {
         if (isOpen) {
             const fetchLocations = async () => {
-                const response = await fetch('http://127.0.0.1:8000/api/locations/', { 
+                const response = await fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { 
                     headers: { 'Authorization': `Token ${token}` } 
                 });
                 const data = await response.json();

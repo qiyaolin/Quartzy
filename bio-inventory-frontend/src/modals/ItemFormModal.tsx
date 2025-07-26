@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package, DollarSign, Calendar, MapPin, User, Tag, Beaker, Save, AlertCircle } from 'lucide-react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {
     const [formData, setFormData] = useState<any>({});
@@ -28,9 +29,9 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                 try {
                     const headers = { 'Authorization': `Token ${token}` };
                     const [vendorsRes, locationsRes, itemTypesRes] = await Promise.all([
-                        fetch('http://127.0.0.1:8000/api/vendors/', { headers }),
-                        fetch('http://127.0.0.1:8000/api/locations/', { headers }),
-                        fetch('http://127.0.0.1:8000/api/item-types/', { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
                     ]);
                     const vendors = await vendorsRes.json(); const locations = await locationsRes.json(); const itemTypes = await itemTypesRes.json();
                     setDropdownData({ vendors, locations, itemTypes });
@@ -50,7 +51,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
 
     const createVendor = async (vendorName) => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/vendors/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.VENDORS), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -84,7 +85,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
             }
         }
         
-        const url = isEditMode ? `http://127.0.0.1:8000/api/items/${initialData.id}/` : 'http://127.0.0.1:8000/api/items/';
+        const url = isEditMode ? buildApiUrl(`/api/items/${initialData.id}/`) : buildApiUrl(API_ENDPOINTS.ITEMS);
         const method = isEditMode ? 'PUT' : 'POST';
         try {
             const response = await fetch(url, { 

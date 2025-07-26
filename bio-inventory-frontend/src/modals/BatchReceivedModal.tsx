@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package, MapPin } from 'lucide-react';
 import { useNotification } from '../contexts/NotificationContext.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const BatchReceivedModal = ({ isOpen, onClose, onSave, token, selectedRequests }) => {
     const notification = useNotification();
@@ -16,7 +17,7 @@ const BatchReceivedModal = ({ isOpen, onClose, onSave, token, selectedRequests }
 
     const fetchLocations = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/locations/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), {
                 headers: { 'Authorization': `Token ${token}` }
             });
             if (response.ok) {

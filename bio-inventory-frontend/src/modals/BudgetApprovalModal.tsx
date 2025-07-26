@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, AlertTriangle, CheckCircle, Calculator, TrendingUp } from 'lucide-react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const BudgetApprovalModal = ({ isOpen, onClose, request, onApprove, token }) => {
     const [funds, setFunds] = useState([]);
@@ -23,7 +24,7 @@ const BudgetApprovalModal = ({ isOpen, onClose, request, onApprove, token }) => 
     const fetchFunds = async () => {
         setLoading(true);
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/funds/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.FUNDS), {
                 headers: { 'Authorization': `Token ${token}` }
             });
             if (response.ok) {

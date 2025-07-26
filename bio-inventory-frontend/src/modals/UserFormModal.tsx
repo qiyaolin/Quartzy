@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader } from 'lucide-react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const UserFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {
     const [formData, setFormData] = useState({});
@@ -44,7 +45,7 @@ const UserFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
             delete submitData.confirm_password;
         }
 
-        const url = isEditMode ? `http://127.0.0.1:8000/api/users/${initialData.id}/` : 'http://127.0.0.1:8000/api/users/';
+        const url = isEditMode ? buildApiUrl(`/api/users/${initialData.id}/`) : buildApiUrl(API_ENDPOINTS.USERS);
         const method = isEditMode ? 'PUT' : 'POST';
         
         try {

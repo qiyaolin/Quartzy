@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Calendar, User, Building, FileText } from 'lucide-react';
+import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
 
 const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
     const [formData, setFormData] = useState({
@@ -91,8 +92,8 @@ const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {
         setLoading(true);
         try {
             const url = mode === 'edit' 
-                ? `http://127.0.0.1:8000/api/funds/${fund.id}/`
-                : 'http://127.0.0.1:8000/api/funds/';
+                ? buildApiUrl(`/api/funds/${fund.id}/`)
+                : buildApiUrl(API_ENDPOINTS.FUNDS);
             
             const method = mode === 'edit' ? 'PUT' : 'POST';
 

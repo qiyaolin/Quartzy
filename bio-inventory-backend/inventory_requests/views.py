@@ -151,7 +151,6 @@ class RequestViewSet(viewsets.ModelViewSet):
             location_id=location_id,
             price=req_object.unit_price,
             fund_id=req_object.fund_id,  # Include fund_id from the request
-            financial_type=req_object.financial_type or 'Supplies'  # Include financial_type from request
         )
 
         # Handle partial delivery

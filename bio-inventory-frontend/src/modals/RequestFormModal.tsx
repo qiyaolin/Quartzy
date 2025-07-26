@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package, DollarSign, User, Tag, Save, AlertCircle, ShoppingCart } from 'lucide-react';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
     const [formData, setFormData] = useState({ item_name: '', item_type_id: '', vendor_id: '', catalog_number: '', quantity: 1, unit_size: '', unit_price: '', url: '', notes: '' });
@@ -14,8 +15,8 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
                 try {
                     const headers = { 'Authorization': `Token ${token}` };
                     const [vendorsRes, itemTypesRes] = await Promise.all([
-                        fetch('http://127.0.0.1:8000/api/vendors/', { headers }),
-                        fetch('http://127.0.0.1:8000/api/item-types/', { headers })
+                        fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers })
                     ]);
                     const vendors = await vendorsRes.json();
                     const itemTypes = await itemTypesRes.json();
@@ -36,7 +37,7 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
     
     const createVendor = async (vendorName) => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/vendors/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.VENDORS), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -71,7 +72,7 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
         }
         
         try {
-            const response = await fetch('http://127.0.0.1:8000/api/requests/', {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.REQUESTS), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
                 body: JSON.stringify(finalFormData)

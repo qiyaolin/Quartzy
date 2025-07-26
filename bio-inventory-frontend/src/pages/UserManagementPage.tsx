@@ -3,6 +3,7 @@ import { AlertTriangle, Loader, Users, Shield, ShieldOff, Edit, Trash2 } from 'l
 import { AuthContext } from '../components/AuthContext.tsx';
 import Pagination from '../components/Pagination.tsx';
 import UsersTable from '../components/UsersTable.tsx';
+import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUsers }) => {
     const { token } = useContext(AuthContext);
@@ -15,7 +16,7 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
         const fetchUsers = async () => {
             setLoading(true); setError(null);
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/users/', { 
+                const response = await fetch(buildApiUrl(API_ENDPOINTS.USERS), { 
                     headers: { 'Authorization': `Token ${token}` } 
                 });
                 if (!response.ok) throw new Error('Failed to load users');
@@ -28,7 +29,7 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
 
     const handleToggleStatus = async (user) => {
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/users/${user.id}/toggle-status/`, {
+            const response = await fetch(buildApiUrl(`/api/users/${user.id}/toggle-status/`), {
                 method: 'POST',
                 headers: { 'Authorization': `Token ${token}` }
             });
@@ -37,7 +38,7 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
                 throw new Error(errorData.error || 'Failed to toggle user status');
             }
             // Refresh the user list
-            const updatedResponse = await fetch('http://127.0.0.1:8000/api/users/', { 
+            const updatedResponse = await fetch(buildApiUrl(API_ENDPOINTS.USERS), { 
                 headers: { 'Authorization': `Token ${token}` } 
             });
             const updatedData = await updatedResponse.json();
