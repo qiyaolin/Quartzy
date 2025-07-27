@@ -1,16 +1,16 @@
-// API 配置文件
-// 使用环境变量来配置 API 基础 URL
+// API Configuration File
+// Configure API base URL using environment variables
 
-// 从环境变量获取 API 基础 URL，如果没有则使用默认值
+// Get API base URL from environment variables, use default if not available
 const getApiBaseUrl = (): string => {
-  // 在浏览器环境中，React 应用只能访问以 REACT_APP_ 开头的环境变量
+  // In browser environment, React apps can only access environment variables starting with REACT_APP_
   const envApiUrl = process.env.REACT_APP_API_BASE_URL;
   
   if (envApiUrl) {
     return envApiUrl;
   }
   
-  // 如果没有环境变量，根据当前域名判断
+  // If no environment variable, determine based on current domain
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -18,29 +18,33 @@ const getApiBaseUrl = (): string => {
     }
   }
   
-  // 默认使用生产环境 URL
+  // Default to production environment URL
   return 'https://lab-inventory-467021.nn.r.appspot.com';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
 
-// API 端点构建函数
+// API endpoint builder function - fix undefined errors
 export const buildApiUrl = (endpoint: string): string => {
-  // 确保端点以 / 开头
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${API_BASE_URL}${cleanEndpoint}`;
+  // Ensure API_BASE_URL and endpoint are not undefined
+  const baseUrl = API_BASE_URL || 'https://lab-inventory-467021.nn.r.appspot.com';
+  const safeEndpoint = endpoint || '';
+  
+  // Ensure endpoint starts with /
+  const cleanEndpoint = safeEndpoint.startsWith('/') ? safeEndpoint : `/${safeEndpoint}`;
+  return `${baseUrl}${cleanEndpoint}`;
 };
 
-// 常用的 API 端点
+// Common API endpoints
 export const API_ENDPOINTS = {
-  // 认证相关
+  // Authentication
   LOGIN: '/api/login/',
   USER_ME: '/api/users/me/',
   
-  // 用户管理
+  // User Management
   USERS: '/api/users/',
   
-  // 物品管理
+  // Item Management
   ITEMS: '/api/items/',
   ITEMS_REPORTS: '/api/items/reports/',
   ITEMS_EXPIRING: '/api/items/expiring_this_month/',
@@ -48,7 +52,7 @@ export const API_ENDPOINTS = {
   ITEMS_BATCH_ARCHIVE: '/api/items/batch_archive/',
   ITEMS_BATCH_DELETE: '/api/items/batch_delete/',
   
-  // 请求管理
+  // Request Management
   REQUESTS: '/api/requests/',
   REQUESTS_BATCH_APPROVE: '/api/requests/batch_approve/',
   REQUESTS_BATCH_REJECT: '/api/requests/batch_reject/',
@@ -56,20 +60,23 @@ export const API_ENDPOINTS = {
   REQUESTS_BATCH_PLACE_ORDER: '/api/requests/batch_place_order/',
   REQUESTS_BATCH_MARK_RECEIVED: '/api/requests/batch_mark_received/',
   
-  // 基础数据
+  // Base Data
   VENDORS: '/api/vendors/',
   LOCATIONS: '/api/locations/',
   ITEM_TYPES: '/api/item-types/',
   
-  // 资金管理
+  // Fund Management
   FUNDS: '/api/funds/',
   TRANSACTIONS: '/api/transactions/',
   BUDGET_SUMMARY: '/api/budget-summary/',
   
-  // 通知
+  // Notifications
   NOTIFICATIONS: '/api/notifications/',
   NOTIFICATIONS_SUMMARY: '/api/notifications/summary/',
   NOTIFICATIONS_MARK_ALL_READ: '/api/notifications/mark_all_read/',
+  
+  // Dashboard Statistics - Added missing endpoint
+  DASHBOARD_STATS: '/api/dashboard/stats/',
 };
 
-console.log(`API 配置: 使用 API 基础 URL = ${API_BASE_URL}`);
+console.log(`API Configuration: Using API Base URL = ${API_BASE_URL}`);

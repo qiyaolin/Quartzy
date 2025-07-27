@@ -1,12 +1,11 @@
 import { useState, useEffect, useContext } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card.tsx';
 import { Input } from '../../components/ui/input.tsx';
 import { Button } from '../../components/ui/button.tsx';
-import { Search, Filter, Package, MapPin, Calendar } from 'lucide-react';
+import { Search, Filter, Package, MapPin, Calendar, AlertTriangle, CheckCircle, Scan } from 'lucide-react';
 import SpeedDialFab from '../../components/mobile/speed-dial-fab.tsx';
 import { AuthContext } from '../../components/AuthContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
-import ItemFormModal from '../../modals/ItemFormModal.tsx';
+import MobileItemFormModal from '../../modals/MobileItemFormModal.tsx';
 import { useNotification } from '../../contexts/NotificationContext.tsx';
 import MobileBarcodeScanner from '../../components/mobile/MobileBarcodeScanner.tsx';
 
@@ -91,7 +90,7 @@ const MobileInventoryListPage = () => {
   useEffect(() => {
     let filtered = items;
 
-    // 搜索过滤
+    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(item =>
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -100,7 +99,7 @@ const MobileInventoryListPage = () => {
       );
     }
 
-    // 其他过滤条件
+    // Other filters
     if (filters.location) {
       filtered = filtered.filter(item => getLocationName(item.location) === filters.location);
     }
@@ -119,9 +118,27 @@ const MobileInventoryListPage = () => {
 
   const getStockStatus = (item: InventoryItem) => {
     const minQty = item.min_quantity || 5;
-    if (item.quantity === 0) return { status: 'Out of Stock', color: 'text-red-600' };
-    if (item.quantity <= minQty) return { status: 'Low Stock', color: 'text-orange-600' };
-    return { status: 'In Stock', color: 'text-green-600' };
+    if (item.quantity === 0) return { 
+      status: 'Out of Stock', 
+      color: 'text-red-600', 
+      bg: 'bg-gradient-to-r from-red-100 to-red-200',
+      icon: AlertTriangle,
+      dotColor: 'bg-red-500'
+    };
+    if (item.quantity <= minQty) return { 
+      status: 'Low Stock', 
+      color: 'text-orange-600', 
+      bg: 'bg-gradient-to-r from-orange-100 to-orange-200',
+      icon: AlertTriangle,
+      dotColor: 'bg-orange-500'
+    };
+    return { 
+      status: 'In Stock', 
+      color: 'text-green-600', 
+      bg: 'bg-gradient-to-r from-green-100 to-green-200',
+      icon: CheckCircle,
+      dotColor: 'bg-green-500'
+    };
   };
 
   const isExpiringSoon = (expiryDate: string | null) => {
@@ -185,10 +202,13 @@ const MobileInventoryListPage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading inventory...</p>
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-cyan-400 rounded-full animate-spin mx-auto" style={{animationDirection: 'reverse', animationDuration: '1.5s'}}></div>
+          </div>
+          <p className="mt-6 text-gray-600 font-medium">Loading inventory...</p>
         </div>
       </div>
     );
@@ -196,13 +216,15 @@ const MobileInventoryListPage = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Package className="w-12 h-12 text-red-500 mx-auto" />
-          <p className="mt-4 text-red-600">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex items-center justify-center p-4">
+        <div className="text-center bg-white/80 backdrop-blur-xl rounded-2xl p-8 shadow-lg border border-white/20">
+          <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Package className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-red-600 font-medium mb-4">{error}</p>
           <Button 
             onClick={() => window.location.reload()} 
-            className="mt-4 bg-blue-500 hover:bg-blue-600"
+            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
           >
             Retry
           </Button>
@@ -212,172 +234,238 @@ const MobileInventoryListPage = () => {
   }
 
   return (
-    <div className="p-4 space-y-4 bg-gray-50 min-h-screen pb-20">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-800">Inventory</h1>
-        <p className="text-gray-600">{filteredItems.length} items found</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-40">
+        <div className="w-full h-full" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.2'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3Ccircle cx='53' cy='7' r='1'/%3E%3Ccircle cx='7' cy='53' r='1'/%3E%3Ccircle cx='53' cy='53' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+        }}></div>
       </div>
-
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          type="text"
-          placeholder="Search items, locations, vendors..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 pr-12"
-        />
-        <Button
-          onClick={() => setShowFilters(!showFilters)}
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 h-8 w-8 bg-gray-200 hover:bg-gray-300"
-        >
-          <Filter className="w-4 h-4 text-gray-600" />
-        </Button>
-      </div>
-
-      {/* Filters */}
-      {showFilters && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Filters</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-              <select
-                value={filters.location}
-                onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              >
-                <option value="">All Locations</option>
-                {Array.from(new Set(items.map(item => getLocationName(item.location)))).map(location => (
-                  <option key={location} value={location}>{location}</option>
-                ))}
-              </select>
+      
+        <div className="relative z-10 p-4 space-y-6 pb-40">
+        {/* Header */}
+        <div className="text-center py-4">
+          <div className="inline-flex items-center space-x-3 bg-white/80 backdrop-blur-xl rounded-2xl px-6 py-4 shadow-lg border border-white/20">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl flex items-center justify-center">
+              <Package className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Item Type</label>
-              <select
-                value={filters.itemType}
-                onChange={(e) => setFilters(prev => ({ ...prev, itemType: e.target.value }))}
-                className="w-full p-2 border border-gray-300 rounded-md"
-              >
-                <option value="">All Types</option>
-                {Array.from(new Set(items.map(item => getItemTypeName(item.item_type)))).map(type => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
+            <div className="text-left">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                Inventory
+              </h1>
+              <p className="text-gray-500 text-sm">{filteredItems.length} items found</p>
             </div>
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="lowStock"
-                checked={filters.lowStock}
-                onChange={(e) => setFilters(prev => ({ ...prev, lowStock: e.target.checked }))}
-                className="mr-2"
-              />
-              <label htmlFor="lowStock" className="text-sm text-gray-700">Show only low stock items</label>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </div>
 
-      {/* Items List */}
-      <div className="space-y-3">
-        {filteredItems.map((item) => {
-          const stockStatus = getStockStatus(item);
-          const expiringSoon = isExpiringSoon(item.expiry_date);
-          
-          return (
-            <Card key={item.id} className="shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-semibold text-gray-800 text-lg">{item.name}</h3>
-                  <span className={`text-sm font-medium ${stockStatus.color}`}>
+        {/* Search Bar */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-4 shadow-lg border border-white/20">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Input
+              type="text"
+              placeholder="Search items, locations, vendors..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-12 pr-14 h-12 bg-white/70 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+            />
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-2 h-8 w-8 rounded-lg transition-all duration-200 ${
+                showFilters 
+                  ? 'bg-blue-500 text-white shadow-lg' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        {showFilters && (
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/20 animate-fade-in-up">
+            <div className="flex items-center space-x-3 mb-5">
+              <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <Filter className="w-4 h-4 text-white" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-800">Filters</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
+                <select
+                  value={filters.location}
+                  onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
+                  className="w-full p-3 border border-gray-200 rounded-xl bg-white/70 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                >
+                  <option value="">All Locations</option>
+                  {Array.from(new Set(items.map(item => getLocationName(item.location)))).map(location => (
+                    <option key={location} value={location}>{location}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Item Type</label>
+                <select
+                  value={filters.itemType}
+                  onChange={(e) => setFilters(prev => ({ ...prev, itemType: e.target.value }))}
+                  className="w-full p-3 border border-gray-200 rounded-xl bg-white/70 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                >
+                  <option value="">All Types</option>
+                  {Array.from(new Set(items.map(item => getItemTypeName(item.item_type)))).map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl">
+                <input
+                  type="checkbox"
+                  id="lowStock"
+                  checked={filters.lowStock}
+                  onChange={(e) => setFilters(prev => ({ ...prev, lowStock: e.target.checked }))}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="lowStock" className="text-sm font-medium text-gray-700">
+                  Show only low stock items
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Items List */}
+        <div className="space-y-4">
+          {filteredItems.map((item) => {
+            const stockStatus = getStockStatus(item);
+            const expiringSoon = isExpiringSoon(item.expiry_date);
+            const StockIcon = stockStatus.icon;
+            
+            return (
+              <div key={item.id} className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
+                        <Package className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className="font-bold text-gray-800 text-lg">{item.name}</h3>
+                    </div>
+                  </div>
+                  <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${stockStatus.bg} ${stockStatus.color} border border-white/20`}>
+                    <div className={`w-2 h-2 ${stockStatus.dotColor} rounded-full mr-2`}></div>
                     {stockStatus.status}
-                  </span>
+                  </div>
                 </div>
                 
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center">
-                    <Package className="w-4 h-4 mr-2" />
-                    <span>Quantity: {item.quantity}</span>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl">
+                    <div className="flex items-center space-x-2">
+                      <StockIcon className={`w-4 h-4 ${stockStatus.color}`} />
+                      <span className="font-semibold text-gray-800">Quantity: {item.quantity}</span>
+                    </div>
                     {item.min_quantity && (
-                      <span className="ml-2 text-gray-500">(Min: {item.min_quantity})</span>
+                      <span className="text-sm text-gray-500 font-medium">
+                        Min: {item.min_quantity}
+                      </span>
                     )}
                   </div>
                   
-                  <div className="flex items-center">
-                    <MapPin className="w-4 h-4 mr-2" />
-                    <span>{getLocationName(item.location)}</span>
+                  <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
+                    <MapPin className="w-4 h-4 text-green-600" />
+                    <span className="font-medium text-gray-700">{getLocationName(item.location)}</span>
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <span className="bg-gray-100 px-2 py-1 rounded text-xs">
-                      {getItemTypeName(item.item_type)}
-                    </span>
-                    <span className="text-xs text-gray-500">
+                    <div className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-purple-100 to-purple-200 rounded-full">
+                      <span className="text-xs font-semibold text-purple-800">
+                        {getItemTypeName(item.item_type)}
+                      </span>
+                    </div>
+                    <span className="text-sm text-gray-500 font-medium">
                       {getVendorName(item.vendor)}
                     </span>
                   </div>
                   
                   {item.expiry_date && (
-                    <div className="flex items-center">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      <span className={expiringSoon ? 'text-orange-600 font-medium' : ''}>
+                    <div className={`flex items-center space-x-2 p-3 rounded-xl ${
+                      expiringSoon 
+                        ? 'bg-gradient-to-r from-orange-50 to-red-50' 
+                        : 'bg-gradient-to-r from-gray-50 to-slate-50'
+                    }`}>
+                      <Calendar className={`w-4 h-4 ${expiringSoon ? 'text-orange-600' : 'text-gray-600'}`} />
+                      <span className={`font-medium ${expiringSoon ? 'text-orange-700' : 'text-gray-700'}`}>
                         Expires: {new Date(item.expiry_date).toLocaleDateString()}
-                        {expiringSoon && ' (Soon)'}
+                        {expiringSoon && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 bg-orange-200 text-orange-800 text-xs font-bold rounded-full">
+                            SOON
+                          </span>
+                        )}
                       </span>
                     </div>
                   )}
                   
                   {item.barcode && (
-                    <div className="text-xs text-gray-500">
-                      Barcode: {item.barcode}
+                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl">
+                      <Scan className="w-4 h-4 text-indigo-600" />
+                      <span className="text-sm text-indigo-700 font-mono">
+                        {item.barcode}
+                      </span>
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {filteredItems.length === 0 && !loading && (
-        <div className="text-center py-8">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No items found</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Try adjusting your search or filters
-          </p>
+              </div>
+            );
+          })}
         </div>
-      )}
 
-      {/* Speed Dial FAB */}
-      <SpeedDialFab
-        onAddItem={handleAddItem}
-        onScanCheckout={handleScanCheckout}
-      />
+        {/* Empty State */}
+        {filteredItems.length === 0 && !loading && (
+          <div className="text-center py-12 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20">
+            <div className="w-20 h-20 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Package className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-600 mb-2">No items found</h3>
+            <p className="text-gray-500 mb-6">
+              Try adjusting your search or filters
+            </p>
+            <Button
+              onClick={() => {
+                setSearchTerm('');
+                setFilters({ location: '', itemType: '', vendor: '', lowStock: false });
+                setShowFilters(false);
+              }}
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              Clear Filters
+            </Button>
+          </div>
+        )}
 
-      {/* Modals */}
-      <ItemFormModal
-        isOpen={isItemFormModalOpen}
-        onClose={() => setIsItemFormModalOpen(false)}
-        onSave={handleItemSaved}
-        token={token}
-      />
-      
-      {/* Barcode Scanner */}
-      <MobileBarcodeScanner
-        isOpen={showBarcodeScanner}
-        onClose={() => setShowBarcodeScanner(false)}
-        onScan={handleBarcodeScanned}
-        onConfirm={handleBarcodeConfirmed}
-        title="Scan Item for Checkout"
-        token={token}
-      />
+        {/* Speed Dial FAB */}
+        <SpeedDialFab
+          onAddItem={handleAddItem}
+          onScanCheckout={handleScanCheckout}
+        />
+
+        {/* Modals */}
+        <MobileItemFormModal
+          isOpen={isItemFormModalOpen}
+          onClose={() => setIsItemFormModalOpen(false)}
+          onSave={handleItemSaved}
+          token={token}
+        />
+        
+        {/* Barcode Scanner */}
+        <MobileBarcodeScanner
+          isOpen={showBarcodeScanner}
+          onClose={() => setShowBarcodeScanner(false)}
+          onScan={handleBarcodeScanned}
+          onConfirm={handleBarcodeConfirmed}
+          title="Scan Item for Checkout"
+          token={token}
+        />
+      </div>
     </div>
   );
 };

@@ -1,14 +1,13 @@
 import { useState, useEffect, useContext } from 'react';
-import { Card, CardContent } from '../../components/ui/card.tsx';
 import { Button } from '../../components/ui/button.tsx';
 import { Input } from '../../components/ui/input.tsx';
-import { Search, Plus, Clock, CheckCircle, XCircle, User, Package, Eye, History, RotateCcw, ShoppingCart, FileDown } from 'lucide-react';
+import { Search, Plus, Clock, CheckCircle, XCircle, User, Package, Eye, History, RotateCcw, ShoppingCart, FileDown, Calendar, DollarSign, Building, Zap } from 'lucide-react';
 import { AuthContext } from '../../components/AuthContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
-import RequestFormModal from '../../modals/RequestFormModal.tsx';
+import MobileRequestFormModal from '../../modals/MobileRequestFormModal.tsx';
 import RequestDetailModal from '../../modals/RequestDetailModal.tsx';
 import RequestHistoryModal from '../../modals/RequestHistoryModal.tsx';
-import MarkReceivedModal from '../../modals/MarkReceivedModal.tsx';
+import MobileMarkReceivedModal from '../../modals/MobileMarkReceivedModal.tsx';
 import FundSelectionModal from '../../modals/FundSelectionModal.tsx';
 import { useNotification } from '../../contexts/NotificationContext.tsx';
 import { exportToExcel } from '../../utils/excelExport.ts';
@@ -91,7 +90,7 @@ const MobileRequestsPage = () => {
   useEffect(() => {
     let filtered = requests;
 
-    // 根据状态过滤
+    // Filter by status
     const statusMapping = {
       'pending': 'NEW',
       'approved': 'APPROVED', 
@@ -101,7 +100,7 @@ const MobileRequestsPage = () => {
     const mappedStatus = statusMapping[activeTab] || activeTab.toUpperCase();
     filtered = filtered.filter(req => req.status === mappedStatus);
 
-    // 搜索过滤
+    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(req =>
         (req.item_name || req.product_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -117,69 +116,96 @@ const MobileRequestsPage = () => {
     setFilteredRequests(filtered);
   }, [requests, searchTerm, activeTab]);
 
-  const getStatusIcon = (status: string) => {
+  const getStatusConfig = (status: string) => {
     switch (status) {
       case 'NEW':
       case 'pending':
-        return <Clock className="w-4 h-4 text-orange-500" />;
+        return {
+          icon: Clock,
+          text: 'Pending',
+          color: 'text-orange-600',
+          bg: 'bg-gradient-to-r from-orange-100 to-orange-200',
+          dotColor: 'bg-orange-500',
+          borderColor: 'border-orange-200'
+        };
       case 'APPROVED':
       case 'approved':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return {
+          icon: CheckCircle,
+          text: 'Approved',
+          color: 'text-green-600',
+          bg: 'bg-gradient-to-r from-green-100 to-green-200',
+          dotColor: 'bg-green-500',
+          borderColor: 'border-green-200'
+        };
       case 'ORDERED':
       case 'ordered':
-        return <ShoppingCart className="w-4 h-4 text-blue-500" />;
+        return {
+          icon: ShoppingCart,
+          text: 'Ordered',
+          color: 'text-blue-600',
+          bg: 'bg-gradient-to-r from-blue-100 to-blue-200',
+          dotColor: 'bg-blue-500',
+          borderColor: 'border-blue-200'
+        };
       case 'RECEIVED':
       case 'received':
-        return <Package className="w-4 h-4 text-purple-500" />;
+        return {
+          icon: Package,
+          text: 'Received',
+          color: 'text-purple-600',
+          bg: 'bg-gradient-to-r from-purple-100 to-purple-200',
+          dotColor: 'bg-purple-500',
+          borderColor: 'border-purple-200'
+        };
       case 'REJECTED':
       case 'rejected':
-        return <XCircle className="w-4 h-4 text-red-500" />;
+        return {
+          icon: XCircle,
+          text: 'Rejected',
+          color: 'text-red-600',
+          bg: 'bg-gradient-to-r from-red-100 to-red-200',
+          dotColor: 'bg-red-500',
+          borderColor: 'border-red-200'
+        };
       default:
-        return <Clock className="w-4 h-4 text-gray-500" />;
+        return {
+          icon: Clock,
+          text: status,
+          color: 'text-gray-600',
+          bg: 'bg-gradient-to-r from-gray-100 to-gray-200',
+          dotColor: 'bg-gray-500',
+          borderColor: 'border-gray-200'
+        };
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'NEW':
-      case 'pending':
-        return 'Pending';
-      case 'APPROVED':
-      case 'approved':
-        return 'Approved';
-      case 'ORDERED':
-      case 'ordered':
-        return 'Ordered';
-      case 'RECEIVED':
-      case 'received':
-        return 'Received';
-      case 'REJECTED':
-      case 'rejected':
-        return 'Rejected';
+  const getUrgencyConfig = (urgency?: string) => {
+    switch (urgency?.toLowerCase()) {
+      case 'high':
+      case 'urgent':
+        return {
+          text: 'Urgent',
+          color: 'text-red-600',
+          bg: 'bg-gradient-to-r from-red-100 to-red-200',
+          icon: Zap
+        };
+      case 'medium':
+        return {
+          text: 'Medium',
+          color: 'text-orange-600',
+          bg: 'bg-gradient-to-r from-orange-100 to-orange-200',
+          icon: Clock
+        };
+      case 'low':
+        return {
+          text: 'Low',
+          color: 'text-green-600',
+          bg: 'bg-gradient-to-r from-green-100 to-green-200',
+          icon: Clock
+        };
       default:
-        return status;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'NEW':
-      case 'pending':
-        return 'text-orange-600 bg-orange-50';
-      case 'APPROVED':
-      case 'approved':
-        return 'text-green-600 bg-green-50';
-      case 'ORDERED':
-      case 'ordered':
-        return 'text-blue-600 bg-blue-50';
-      case 'RECEIVED':
-      case 'received':
-        return 'text-purple-600 bg-purple-50';
-      case 'REJECTED':
-      case 'rejected':
-        return 'text-red-600 bg-red-50';
-      default:
-        return 'text-gray-600 bg-gray-50';
+        return null;
     }
   };
 
@@ -203,7 +229,7 @@ const MobileRequestsPage = () => {
       });
 
       if (response.ok) {
-        setRefreshKey(prev => prev + 1); // Refresh data
+        setRefreshKey(prev => prev + 1);
         notification.success('Request approved successfully');
       } else {
         notification.error('Failed to approve request');
@@ -224,7 +250,7 @@ const MobileRequestsPage = () => {
       });
 
       if (response.ok) {
-        setRefreshKey(prev => prev + 1); // Refresh data
+        setRefreshKey(prev => prev + 1);
         notification.success('Request rejected successfully');
       } else {
         notification.error('Failed to reject request');
@@ -236,7 +262,6 @@ const MobileRequestsPage = () => {
   };
 
   const handlePlaceOrder = (requestId: number) => {
-    // Find the request and open fund selection modal
     const request = requests.find(req => req.id === requestId);
     if (request) {
       setSelectedRequest(request);
@@ -258,7 +283,7 @@ const MobileRequestsPage = () => {
       });
 
       if (response.ok) {
-        setRefreshKey(prev => prev + 1); // Refresh data
+        setRefreshKey(prev => prev + 1);
         notification.success('Order placed successfully');
       } else {
         notification.error('Failed to place order');
@@ -288,7 +313,7 @@ const MobileRequestsPage = () => {
       });
 
       if (response.ok) {
-        setRefreshKey(prev => prev + 1); // Refresh data
+        setRefreshKey(prev => prev + 1);
         notification.success('Request marked as received');
       } else {
         const errorText = await response.text();
@@ -328,7 +353,7 @@ const MobileRequestsPage = () => {
   };
 
   const handleDetailSave = () => {
-    setRefreshKey(prev => prev + 1); // Refresh data
+    setRefreshKey(prev => prev + 1);
     setIsDetailModalOpen(false);
   };
 
@@ -354,7 +379,6 @@ const MobileRequestsPage = () => {
   };
 
   const handleBatchExport = () => {
-    // Export filtered requests
     const formattedRequests = filteredRequests.map(req => ({
       'Request ID': req.id,
       'Product Name': req.product_name || req.item_name,
@@ -362,7 +386,7 @@ const MobileRequestsPage = () => {
       'Quantity': req.quantity,
       'Unit Price': req.unit_price ? `$${req.unit_price}` : '',
       'Total Price': req.total_price ? `$${req.total_price}` : '',
-      'Status': getStatusText(req.status),
+      'Status': getStatusConfig(req.status).text,
       'Requester': req.requester_name || req.requested_by_name,
       'Department': req.department || '',
       'Laboratory': req.lab || '',
@@ -380,7 +404,7 @@ const MobileRequestsPage = () => {
     const summary = {
       'Export Time': new Date().toLocaleString('en-US'),
       'Export Count': filteredRequests.length,
-      'Status Filter': getStatusText(activeTab),
+      'Status Filter': getStatusConfig(activeTab).text,
       'Total Value': `$${filteredRequests.reduce((sum, req) => sum + (parseFloat(req.total_price) || 0), 0).toFixed(2)}`
     };
 
@@ -397,10 +421,13 @@ const MobileRequestsPage = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading requests...</p>
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-cyan-400 rounded-full animate-spin mx-auto" style={{animationDirection: 'reverse', animationDuration: '1.5s'}}></div>
+          </div>
+          <p className="mt-6 text-gray-600 font-medium">Loading requests...</p>
         </div>
       </div>
     );
@@ -408,13 +435,15 @@ const MobileRequestsPage = () => {
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Package className="w-12 h-12 text-red-500 mx-auto" />
-          <p className="mt-4 text-red-600">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex items-center justify-center p-4">
+        <div className="text-center bg-white/80 backdrop-blur-xl rounded-2xl p-8 shadow-lg border border-white/20">
+          <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Package className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-red-600 font-medium mb-4">{error}</p>
           <Button 
             onClick={() => window.location.reload()} 
-            className="mt-4 bg-blue-500 hover:bg-blue-600"
+            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
           >
             Retry
           </Button>
@@ -424,287 +453,364 @@ const MobileRequestsPage = () => {
   }
 
   return (
-    <div className="p-4 space-y-4 bg-gray-50 min-h-screen pb-20">
-      {/* Header */}
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-800">Requests</h1>
-        <p className="text-gray-600">{filteredRequests.length} requests found</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-40">
+        <div className="w-full h-full" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.2'%3E%3Ccircle cx='7' cy='7' r='1'/%3E%3Ccircle cx='53' cy='7' r='1'/%3E%3Ccircle cx='7' cy='53' r='1'/%3E%3Ccircle cx='53' cy='53' r='1'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+        }}></div>
       </div>
-
-      {/* Status Tabs */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="flex">
-          {[
-            { key: 'pending', label: 'New', apiKey: 'NEW' },
-            { key: 'approved', label: 'Approved', apiKey: 'APPROVED' },
-            { key: 'ordered', label: 'Ordered', apiKey: 'ORDERED' },
-            { key: 'received', label: 'Received', apiKey: 'RECEIVED' }
-          ].map((tab) => {
-            const count = requests.filter(req => req.status === tab.apiKey).length;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as 'pending' | 'approved' | 'ordered' | 'received')}
-                className={`flex-1 flex flex-col items-center py-3 px-2 text-sm font-medium transition-colors border-b-2 ${
-                  activeTab === tab.key
-                    ? 'border-blue-500 text-blue-600 bg-blue-50'
-                    : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span className={`mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  activeTab === tab.key
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+      
+      <div className="relative z-10 p-4 space-y-6 pb-40">
+        {/* Header */}
+        <div className="text-center py-4">
+          <div className="inline-flex items-center space-x-3 bg-white/80 backdrop-blur-xl rounded-2xl px-6 py-4 shadow-lg border border-white/20">
+            <div className="w-10 h-10 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl flex items-center justify-center">
+              <ShoppingCart className="w-5 h-5 text-white" />
+            </div>
+            <div className="text-left">
+              <h1 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                Requests
+              </h1>
+              <p className="text-gray-500 text-sm">{filteredRequests.length} requests found</p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          type="text"
-          placeholder="Search requests..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      {/* Requests List */}
-      <div className="space-y-3">
-        {filteredRequests.map((request) => (
-          <Card key={request.id} className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex-1 mr-3" onClick={() => handleViewDetails(request)}>
-                  <h3 className="font-semibold text-gray-800 text-lg cursor-pointer hover:text-blue-600">
-                    {request.product_name || request.item_name}
-                  </h3>
-                  {request.specifications && (
-                    <p className="text-sm text-gray-600 mt-1">{request.specifications}</p>
-                  )}
-                </div>
-                <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center ${getStatusColor(request.status)}`}>
-                  {getStatusIcon(request.status)}
-                  <span className="ml-1">{getStatusText(request.status)}</span>
-                </div>
-              </div>
+        {/* Status Tabs */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+          <div className="grid grid-cols-4">
+            {[
+              { key: 'pending', label: 'New', apiKey: 'NEW', color: 'orange' },
+              { key: 'approved', label: 'Approved', apiKey: 'APPROVED', color: 'green' },
+              { key: 'ordered', label: 'Ordered', apiKey: 'ORDERED', color: 'blue' },
+              { key: 'received', label: 'Received', apiKey: 'RECEIVED', color: 'purple' }
+            ].map((tab) => {
+              const count = requests.filter(req => req.status === tab.apiKey).length;
+              const isActive = activeTab === tab.key;
               
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center">
-                    <Package className="w-4 h-4 mr-2" />
-                    <span>Qty: {request.quantity}</span>
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as 'pending' | 'approved' | 'ordered' | 'received')}
+                  className={`relative flex flex-col items-center py-4 px-2 text-sm font-semibold transition-all duration-300 ${
+                    isActive
+                      ? `text-${tab.color}-700 bg-gradient-to-b from-${tab.color}-50 to-${tab.color}-100`
+                      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="mb-2">{tab.label}</span>
+                  <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold transition-all duration-300 ${
+                    isActive
+                      ? `bg-gradient-to-r from-${tab.color}-200 to-${tab.color}-300 text-${tab.color}-800 shadow-sm`
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {count}
+                  </div>
+                  {isActive && (
+                    <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-${tab.color}-500 to-${tab.color}-600 rounded-t-full`}></div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-4 shadow-lg border border-white/20">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Input
+              type="text"
+              placeholder="Search requests, products, requesters..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-12 h-12 bg-white/70 border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+            />
+          </div>
+        </div>
+
+        {/* Requests List */}
+        <div className="space-y-4">
+          {filteredRequests.map((request) => {
+            const statusConfig = getStatusConfig(request.status);
+            const urgencyConfig = getUrgencyConfig(request.urgency);
+            // const StatusIcon = statusConfig.icon;
+            
+            return (
+              <div key={request.id} className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
+                {/* Header */}
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1 mr-3" onClick={() => handleViewDetails(request)}>
+                    <div className="flex items-center space-x-3 mb-2">
+                      <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                        <Package className="w-5 h-5 text-white" />
+                      </div>
+                      <h3 className="font-bold text-gray-800 text-lg cursor-pointer hover:text-purple-600 transition-colors">
+                        {request.product_name || request.item_name}
+                      </h3>
+                    </div>
+                    {request.specifications && (
+                      <p className="text-sm text-gray-600 ml-13 mb-2 bg-gradient-to-r from-gray-50 to-blue-50 p-2 rounded-lg">
+                        {request.specifications}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end space-y-2">
+                    <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.color} border border-white/20`}>
+                      <div className={`w-2 h-2 ${statusConfig.dotColor} rounded-full mr-2`}></div>
+                      {statusConfig.text}
+                    </div>
+                    {urgencyConfig && (
+                      <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${urgencyConfig.bg} ${urgencyConfig.color} border border-white/20`}>
+                        <urgencyConfig.icon className="w-3 h-3 mr-1" />
+                        {urgencyConfig.text}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Details Grid */}
+                <div className="space-y-3 mb-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl">
+                      <Package className="w-4 h-4 text-blue-600" />
+                      <span className="font-semibold text-gray-800">Qty: {request.quantity}</span>
+                    </div>
+                    
+                    {request.unit_price && (
+                      <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
+                        <DollarSign className="w-4 h-4 text-green-600" />
+                        <span className="font-semibold text-green-700">${request.unit_price}</span>
+                      </div>
+                    )}
                   </div>
                   
-                  {request.unit_price && (
-                    <div className="flex items-center">
-                      <span className="text-green-600 font-semibold">${request.unit_price}</span>
+                  <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
+                    <User className="w-4 h-4 text-purple-600" />
+                    <span className="font-medium text-gray-700">
+                      By: {request.requester_name || request.requested_by_name}
+                    </span>
+                  </div>
+                  
+                  {request.vendor && (
+                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl">
+                      <div className="w-4 h-4 text-center text-indigo-600">🏪</div>
+                      <span className="font-medium text-gray-700">
+                        Vendor: {typeof request.vendor === 'object' && request.vendor !== null
+                          ? (request.vendor as any).name || 'Unknown Vendor'
+                          : request.vendor}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {request.department && (
+                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl">
+                      <Building className="w-4 h-4 text-orange-600" />
+                      <span className="font-medium text-gray-700">Dept: {request.department}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl">
+                    <Clock className="w-4 h-4 text-gray-600" />
+                    <span className="font-medium text-gray-700">
+                      Created: {new Date(request.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  
+                  {request.expected_delivery_date && (
+                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl">
+                      <Calendar className="w-4 h-4 text-teal-600" />
+                      <span className="font-medium text-gray-700">
+                        Expected: {new Date(request.expected_delivery_date).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {request.approved_by_name && (
+                    <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
+                      <span className="text-sm text-green-700 font-medium">
+                        ✓ Approved by: {request.approved_by_name}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {request.notes && (
+                    <div className="p-3 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border border-yellow-200">
+                      <div className="text-xs text-yellow-700 font-semibold mb-1">Notes:</div>
+                      <div className="text-sm text-yellow-800">{request.notes}</div>
                     </div>
                   )}
                 </div>
-                
-                <div className="flex items-center">
-                  <User className="w-4 h-4 mr-2" />
-                  <span>By: {request.requester_name || request.requested_by_name}</span>
-                </div>
-                
-                {request.vendor && (
-                  <div className="flex items-center">
-                    <span className="w-4 h-4 mr-2 text-center">🏪</span>
-                    <span>Vendor: {typeof request.vendor === 'object' && request.vendor !== null
-                      ? (request.vendor as any).name || 'Unknown Vendor'
-                      : request.vendor}</span>
-                  </div>
-                )}
-                
-                {request.department && (
-                  <div className="flex items-center">
-                    <span className="w-4 h-4 mr-2 text-center">🏢</span>
-                    <span>Dept: {request.department}</span>
-                  </div>
-                )}
-                
-                <div className="flex items-center">
-                  <Clock className="w-4 h-4 mr-2" />
-                  <span>Created: {new Date(request.created_at).toLocaleDateString()}</span>
-                </div>
-                
-                {request.expected_delivery_date && (
-                  <div className="flex items-center">
-                    <span className="w-4 h-4 mr-2 text-center">📅</span>
-                    <span>Expected: {new Date(request.expected_delivery_date).toLocaleDateString()}</span>
-                  </div>
-                )}
-                
-                {request.approved_by_name && (
-                  <div className="text-xs text-gray-500">
-                    Approved by: {request.approved_by_name}
-                  </div>
-                )}
-                
-                {request.notes && (
-                  <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                    Notes: {request.notes}
-                  </div>
-                )}
-              </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap gap-2 mt-4">
-                {/* Primary Actions based on status */}
-                {request.status === 'NEW' && user?.is_staff && (
-                  <>
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-2">
+                  {/* Primary Actions based on status */}
+                  {request.status === 'NEW' && user?.is_staff && (
+                    <>
+                      <Button
+                        onClick={() => handleApproveRequest(request.id)}
+                        className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => handleRejectRequest(request.id)}
+                        className="flex-1 bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Reject
+                      </Button>
+                    </>
+                  )}
+                  
+                  {request.status === 'APPROVED' && user?.is_staff && (
                     <Button
-                      onClick={() => handleApproveRequest(request.id)}
-                      className="flex-1 bg-green-500 hover:bg-green-600 text-white text-sm py-2"
+                      onClick={() => handlePlaceOrder(request.id)}
+                      className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
                     >
-                      <CheckCircle className="w-4 h-4 mr-1" />
-                      Approve
+                      <ShoppingCart className="w-4 h-4 mr-2" />
+                      Place Order
                     </Button>
+                  )}
+                  
+                  {request.status === 'ORDERED' && user?.is_staff && (
                     <Button
-                      onClick={() => handleRejectRequest(request.id)}
-                      className="flex-1 bg-red-500 hover:bg-red-600 text-white text-sm py-2"
+                      onClick={() => handleMarkReceived(request)}
+                      className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
                     >
-                      <XCircle className="w-4 h-4 mr-1" />
-                      Reject
+                      <Package className="w-4 h-4 mr-2" />
+                      Mark Received
                     </Button>
-                  </>
-                )}
-                
-                {request.status === 'APPROVED' && user?.is_staff && (
+                  )}
+                  
+                  {request.status === 'RECEIVED' && (
+                    <Button
+                      onClick={() => handleReorder(request.id)}
+                      className="flex-1 bg-gradient-to-r from-gray-600 to-slate-600 hover:from-gray-700 hover:to-slate-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Reorder
+                    </Button>
+                  )}
+                  
+                  {/* Secondary Actions */}
                   <Button
-                    onClick={() => handlePlaceOrder(request.id)}
-                    className="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-sm py-2"
+                    onClick={() => handleViewDetails(request)}
+                    className="bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 text-blue-600 font-semibold rounded-xl border border-blue-200 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    <ShoppingCart className="w-4 h-4 mr-1" />
-                    Place Order
+                    <Eye className="w-4 h-4 mr-2" />
+                    Details
                   </Button>
-                )}
-                
-                {request.status === 'ORDERED' && user?.is_staff && (
+                  
                   <Button
-                    onClick={() => handleMarkReceived(request)}
-                    className="flex-1 bg-purple-500 hover:bg-purple-600 text-white text-sm py-2"
+                    onClick={() => handleShowHistory(request.id)}
+                    className="bg-gradient-to-r from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100 text-gray-600 font-semibold rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    <Package className="w-4 h-4 mr-1" />
-                    Mark Received
+                    <History className="w-4 h-4 mr-2" />
+                    History
                   </Button>
-                )}
-                
-                {request.status === 'RECEIVED' && (
-                  <Button
-                    onClick={() => handleReorder(request.id)}
-                    className="flex-1 bg-gray-500 hover:bg-gray-600 text-white text-sm py-2"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-1" />
-                    Reorder
-                  </Button>
-                )}
-                
-                {/* Secondary Actions */}
-                <Button
-                  onClick={() => handleViewDetails(request)}
-                  className="bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm py-2 px-3"
-                >
-                  <Eye className="w-4 h-4 mr-1" />
-                  Details
-                </Button>
-                
-                <Button
-                  onClick={() => handleShowHistory(request.id)}
-                  className="bg-gray-50 hover:bg-gray-100 text-gray-600 text-sm py-2 px-3"
-                >
-                  <History className="w-4 h-4 mr-1" />
-                  History
-                </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredRequests.length === 0 && !loading && (
-        <div className="text-center py-8">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No requests found</p>
-          <p className="text-sm text-gray-400 mt-2">
-            No {getStatusText(activeTab).toLowerCase()} requests found
-          </p>
+            );
+          })}
         </div>
-      )}
 
-      {/* Export Section */}
-      {filteredRequests.length > 0 && (
-        <div className="mb-4 p-4 bg-white rounded-lg shadow-sm">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-sm font-medium text-gray-700">Export Options</h3>
-              <p className="text-xs text-gray-500">{filteredRequests.length} requests in current view</p>
+        {/* Empty State */}
+        {filteredRequests.length === 0 && !loading && (
+          <div className="text-center py-12 bg-white/80 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20">
+            <div className="w-20 h-20 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShoppingCart className="w-10 h-10 text-gray-400" />
             </div>
+            <h3 className="text-lg font-bold text-gray-600 mb-2">No requests found</h3>
+            <p className="text-gray-500 mb-6">
+              No {getStatusConfig(activeTab).text.toLowerCase()} requests found
+            </p>
             <Button
-              onClick={handleBatchExport}
-              className="bg-green-500 hover:bg-green-600 text-white text-sm py-2"
+              onClick={handleCreateRequest}
+              className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
             >
-              <FileDown className="w-4 h-4 mr-1" />
-              Export to Excel
+              <Plus className="w-4 h-4 mr-2" />
+              Create Request
             </Button>
           </div>
+        )}
+
+        {/* Export Section */}
+        {filteredRequests.length > 0 && (
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center space-x-3 mb-2">
+                  <div className="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center">
+                    <FileDown className="w-4 h-4 text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-800">Export Options</h3>
+                </div>
+                <p className="text-sm text-gray-500 ml-11">
+                  {filteredRequests.length} requests in current view
+                </p>
+              </div>
+              <Button
+                onClick={handleBatchExport}
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <FileDown className="w-4 h-4 mr-2" />
+                Export to Excel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Action Button */}
+        <div className="fixed bottom-20 right-4 z-50">
+          <button
+            onClick={handleCreateRequest}
+            className="w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 transform hover:scale-110 active:scale-95"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
         </div>
-      )}
 
-      {/* Floating Action Button */}
-      <button
-        onClick={handleCreateRequest}
-        className="fixed bottom-20 right-4 w-16 h-16 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-colors z-50"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
-
-      {/* Modals */}
-      <RequestFormModal
-        isOpen={isRequestFormModalOpen}
-        onClose={() => setIsRequestFormModalOpen(false)}
-        onSave={handleRequestSaved}
-        token={token}
-      />
-      
-      <RequestDetailModal
-        isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
-        onSave={handleDetailSave}
-        token={token}
-        request={selectedRequest}
-      />
-      
-      <RequestHistoryModal
-        isOpen={isHistoryModalOpen}
-        onClose={() => setIsHistoryModalOpen(false)}
-        history={historyData}
-      />
-      
-      <MarkReceivedModal
-        isOpen={isReceivedModalOpen}
-        onClose={() => setIsReceivedModalOpen(false)}
-        onSave={handleSaveReceived}
-        token={token}
-        request={selectedRequest}
-      />
-      
-      <FundSelectionModal
-        isOpen={isFundSelectionModalOpen}
-        onClose={() => setIsFundSelectionModalOpen(false)}
-        onPlaceOrder={handlePlaceOrderWithFund}
-        token={token}
-        request={selectedRequest}
-      />
+        {/* Modals */}
+        <MobileRequestFormModal
+          isOpen={isRequestFormModalOpen}
+          onClose={() => setIsRequestFormModalOpen(false)}
+          onSave={handleRequestSaved}
+          token={token}
+        />
+        
+        <RequestDetailModal
+          isOpen={isDetailModalOpen}
+          onClose={() => setIsDetailModalOpen(false)}
+          onSave={handleDetailSave}
+          token={token}
+          request={selectedRequest}
+        />
+        
+        <RequestHistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => setIsHistoryModalOpen(false)}
+          history={historyData}
+        />
+        
+        <MobileMarkReceivedModal
+          isOpen={isReceivedModalOpen}
+          onClose={() => setIsReceivedModalOpen(false)}
+          onSave={handleSaveReceived}
+          token={token}
+          request={selectedRequest}
+        />
+        
+        <FundSelectionModal
+          isOpen={isFundSelectionModalOpen}
+          onClose={() => setIsFundSelectionModalOpen(false)}
+          onPlaceOrder={handlePlaceOrderWithFund}
+          token={token}
+          request={selectedRequest}
+        />
+      </div>
     </div>
   );
 };
