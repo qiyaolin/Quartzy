@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { ChevronDown, Edit, Trash2, AlertTriangle, Clock, Package, History } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, Edit, Trash2, AlertTriangle, Clock, Package, History, QrCode, Printer, X } from 'lucide-react';
+import BarcodeComponent from './BarcodeComponent.tsx';
 
 const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, onBatchAction }) => {
     const [expandedGroups, setExpandedGroups] = useState({});
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
+    const [showBarcodeModal, setShowBarcodeModal] = useState(null);
     
     const toggleGroup = (groupId) => { setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] })); };
     
@@ -218,6 +221,12 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                             <th className="table-header-cell">Total Amount</th>
                             <th className="table-header-cell">Expiration Status</th>
                             <th className="table-header-cell">Type</th>
+                            <th className="table-header-cell">
+                                <div className="flex items-center space-x-2">
+                                    <QrCode className="w-4 h-4 text-gray-500" />
+                                    <span>Barcode</span>
+                                </div>
+                            </th>
                             <th className="table-header-cell w-24">Actions</th>
                         </tr>
                     </thead>
@@ -261,6 +270,24 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                 </td>
                                 <td className="table-cell">
                                     <span className="badge badge-secondary">{group.item_type?.name || 'N/A'}</span>
+                                </td>
+                                <td className="table-cell">
+                                    {group.instances[0]?.barcode ? (
+                                        <div className="flex items-center space-x-2">
+                                            <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                                                {group.instances[0].barcode}
+                                            </code>
+                                            <button
+                                                onClick={() => setShowBarcodeModal(group.instances[0])}
+                                                className="p-1 hover:bg-primary-50 rounded transition-colors"
+                                                title="Print barcode label"
+                                            >
+                                                <Printer className="w-3 h-3 text-gray-500 hover:text-primary-600" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-gray-400">No barcode</span>
+                                    )}
                                 </td>
                                 <td className="table-cell">
                                     <div className="flex items-center space-x-1">
@@ -327,6 +354,24 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                         <span className="badge badge-secondary text-xs">{group.item_type?.name || 'N/A'}</span>
                                     </td>
                                     <td className="table-cell">
+                                        {instance.barcode ? (
+                                            <div className="flex items-center space-x-2">
+                                                <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                                                    {instance.barcode}
+                                                </code>
+                                                <button
+                                                    onClick={() => setShowBarcodeModal(instance)}
+                                                    className="p-1 hover:bg-primary-50 rounded transition-colors"
+                                                    title="Print barcode label"
+                                                >
+                                                    <Printer className="w-3 h-3 text-gray-500 hover:text-primary-600" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-400">No barcode</span>
+                                        )}
+                                    </td>
+                                    <td className="table-cell">
                                         <div className="flex items-center space-x-1">
                                             <button 
                                                 onClick={() => onEdit(instance)} 
@@ -358,6 +403,34 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                     </tbody>
                 </table>
             </div>
+            
+            {/* Barcode Modal */}
+            {showBarcodeModal && createPortal(
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex justify-center items-center p-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+                    <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+                        <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
+                            <h3 className="text-lg font-semibold">Barcode Label</h3>
+                            <button
+                                onClick={() => setShowBarcodeModal(null)}
+                                className="p-2 hover:bg-gray-100 rounded"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-4">
+                            <BarcodeComponent
+                                barcodeData={showBarcodeModal.barcode}
+                                itemName={showBarcodeModal.name}
+                                onPrint={() => {
+                                    console.log('Barcode printed for:', showBarcodeModal.barcode);
+                                    setShowBarcodeModal(null);
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 };

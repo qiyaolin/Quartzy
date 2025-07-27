@@ -66,6 +66,6 @@ class ItemSerializer(serializers.ModelSerializer):
             'properties', 'expiration_date', 'lot_number', 'received_date',
             'expiration_alert_days', 'storage_temperature', 'storage_conditions',
             'last_used_date', 'days_until_expiration', 'expiration_status',
-            'is_low_stock', 'needs_attention', 'fund_id', 'fund_name'
+            'is_low_stock', 'needs_attention', 'fund_id', 'fund_name', 'barcode'
         ]
         read_only_fields = ['serial_number', 'created_at', 'updated_at', 'days_until_expiration', 'expiration_status', 'is_low_stock', 'needs_attention', 'fund_name'] 

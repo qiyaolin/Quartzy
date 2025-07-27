@@ -114,6 +114,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 
             if (response.ok) {
                 const data = await response.json();
+                console.log('API Response:', data); // Debug log
                 if (data.results && data.results.length > 0) {
                     const item = data.results[0];
                     // Only allow checkout if the item is not archived
@@ -128,7 +129,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                     setError('No item found with this barcode');
                 }
             } else {
-                setError('Failed to lookup barcode');
+                const errorData = await response.text();
+                console.error('API Error:', response.status, errorData); // Debug log
+                setError(`Failed to lookup barcode (${response.status})`);
             }
         } catch (err) {
             setError('Error looking up barcode');

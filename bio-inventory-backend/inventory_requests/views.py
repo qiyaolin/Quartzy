@@ -151,6 +151,7 @@ class RequestViewSet(viewsets.ModelViewSet):
             location_id=location_id,
             price=req_object.unit_price,
             fund_id=req_object.fund_id,  # Include fund_id from the request
+            barcode=req_object.barcode,  # Include barcode from the request
         )
 
         # Handle partial delivery
@@ -383,7 +384,8 @@ class RequestViewSet(viewsets.ModelViewSet):
                     unit=req_object.unit_size,
                     location_id=location_id,
                     price=req_object.unit_price,
-                    fund_id=req_object.fund_id
+                    fund_id=req_object.fund_id,
+                    barcode=req_object.barcode  # Include barcode from the request
                 )
                 
                 # Create history record

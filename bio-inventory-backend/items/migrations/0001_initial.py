@@ -54,6 +54,7 @@ class Migration(migrations.Migration):
                 ('url', models.URLField(blank=True, help_text='Link to the product page.')),
                 ('low_stock_threshold', models.PositiveIntegerField(blank=True, help_text='Threshold to trigger a low stock warning.', null=True)),
                 ('is_archived', models.BooleanField(default=False)),
+                ('barcode', models.CharField(blank=True, help_text='Unique barcode for this item', max_length=50, null=True, unique=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('properties', models.JSONField(blank=True, default=dict, help_text='Type-specific custom fields and values.')),

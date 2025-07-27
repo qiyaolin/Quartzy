@@ -19,7 +19,7 @@ class ItemTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ('name', 'serial_number', 'item_type', 'vendor', 'quantity', 'unit', 'location', 'owner', 'updated_at')
+    list_display = ('name', 'serial_number', 'item_type', 'vendor', 'quantity', 'unit', 'location', 'owner', 'barcode', 'updated_at')
     list_filter = ('item_type', 'vendor', 'location', 'owner', 'is_archived')
     search_fields = ('name', 'serial_number', 'catalog_number', 'properties__icontains')
 
@@ -29,7 +29,7 @@ class ItemAdmin(admin.ModelAdmin):
     # Customize the field layout in the add/edit form
     fieldsets = (
         ('Core Information', {
-            'fields': ('name', 'item_type', 'owner', 'is_archived')
+            'fields': ('name', 'item_type', 'owner', 'is_archived', 'barcode')
         }),
         ('Supplier & Catalog', {
             'fields': ('vendor', 'catalog_number', 'price', 'url')

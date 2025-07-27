@@ -5,6 +5,7 @@ import { buildApiUrl, API_ENDPOINTS } from './config/api.ts';
 import { useDevice } from './hooks/useDevice.ts';
 import AlertsBanner from './components/AlertsBanner.tsx';
 import Header from './components/Header.tsx';
+import MobileSidebarDrawer from './components/mobile/MobileSidebarDrawer.tsx';
 import InventorySidebar from './components/InventorySidebar.tsx';
 import RequestsSidebar from './components/RequestsSidebar.tsx';
 import UserManagementSidebar from './components/UserManagementSidebar.tsx';
@@ -16,13 +17,17 @@ import UserFormModal from './modals/UserFormModal.tsx';
 import ConfirmDeleteUserModal from './modals/ConfirmDeleteUserModal.tsx';
 
 import InventoryPage from './pages/InventoryPage.tsx';
+import MobileInventoryPage from './pages/MobileInventoryPage.tsx';
 import RequestsPage from './pages/RequestsPage.tsx';
+import MobileRequestsPage from './pages/MobileRequestsPage.tsx';
 import ReportsPage from './pages/ReportsPage.tsx';
+import MobileDashboardPage from './pages/MobileDashboardPage.tsx';
 import UserManagementPage from './pages/UserManagementPage.tsx';
+import MobileUsersPage from './pages/MobileUsersPage.tsx';
 import FundingPage from './pages/FundingPage.tsx';
 
 const MainApp = () => {
-    const { token } = useContext(AuthContext);
+    const { token, user, logout } = useContext(AuthContext);
     const notification = useNotification();
     const device = useDevice();
     const [activePage, setActivePage] = useState('inventory');
@@ -173,17 +178,106 @@ const MainApp = () => {
 
     const renderPage = () => {
         switch (activePage) {
-            case 'inventory': return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
-            case 'requests': return <RequestsPage onAddRequestClick={() => setIsRequestFormModalOpen(true)} refreshKey={refreshKey} filters={requestFilters} onFilterChange={handleRequestFilterChange} highlightRequestId={highlightRequestId} />;
-            case 'reports': return <ReportsPage 
-                onNavigateToInventory={() => navigateToPage('inventory')}
-                onOpenAddItemModal={handleOpenAddItemModal}
-                onOpenNewRequestModal={() => setIsRequestFormModalOpen(true)}
-                onSetInventoryFilters={setInventoryFilters}
-            />;
+            case 'inventory': 
+                return device.isMobile ? (
+                    <MobileInventoryPage 
+                        onEditItem={handleOpenEditItemModal} 
+                        onDeleteItem={handleOpenDeleteModal} 
+                        refreshKey={refreshKey} 
+                        filters={inventoryFilters}
+                        onAddItemClick={handleOpenAddItemModal}
+                        onAddRequestClick={() => setIsRequestFormModalOpen(true)}
+                        onMenuToggle={() => setIsSidebarOpen(true)}
+                        token={token}
+                    />
+                ) : (
+                    <InventoryPage 
+                        onEditItem={handleOpenEditItemModal} 
+                        onDeleteItem={handleOpenDeleteModal} 
+                        refreshKey={refreshKey} 
+                        filters={inventoryFilters} 
+                    />
+                );
+            case 'requests': 
+                return device.isMobile ? (
+                    <MobileRequestsPage 
+                        onAddRequestClick={() => setIsRequestFormModalOpen(true)}
+                        refreshKey={refreshKey} 
+                        filters={requestFilters} 
+                        onFilterChange={handleRequestFilterChange}
+                        highlightRequestId={highlightRequestId}
+                        onMenuToggle={() => setIsSidebarOpen(true)}
+                        token={token}
+                    />
+                ) : (
+                    <RequestsPage 
+                        onAddRequestClick={() => setIsRequestFormModalOpen(true)} 
+                        refreshKey={refreshKey} 
+                        filters={requestFilters} 
+                        onFilterChange={handleRequestFilterChange} 
+                        highlightRequestId={highlightRequestId} 
+                    />
+                );
+            case 'reports': 
+                return device.isMobile ? (
+                    <MobileDashboardPage 
+                        onNavigateToInventory={() => navigateToPage('inventory')}
+                        onOpenAddItemModal={handleOpenAddItemModal}
+                        onOpenNewRequestModal={() => setIsRequestFormModalOpen(true)}
+                        onSetInventoryFilters={setInventoryFilters}
+                        onMenuToggle={() => setIsSidebarOpen(true)}
+                        token={token}
+                    />
+                ) : (
+                    <ReportsPage 
+                        onNavigateToInventory={() => navigateToPage('inventory')}
+                        onOpenAddItemModal={handleOpenAddItemModal}
+                        onOpenNewRequestModal={() => setIsRequestFormModalOpen(true)}
+                        onSetInventoryFilters={setInventoryFilters}
+                    />
+                );
             case 'funding': return <FundingPage />;
-            case 'users': return <UserManagementPage onEditUser={handleOpenEditUserModal} onDeleteUser={handleOpenDeleteUserModal} refreshKey={refreshKey} users={users} setUsers={setUsers} />;
-            default: return <InventoryPage onEditItem={handleOpenEditItemModal} onDeleteItem={handleOpenDeleteModal} refreshKey={refreshKey} filters={inventoryFilters} />;
+            case 'users': 
+                return device.isMobile ? (
+                    <MobileUsersPage 
+                        onEditUser={handleOpenEditUserModal}
+                        onDeleteUser={handleOpenDeleteUserModal}
+                        refreshKey={refreshKey}
+                        users={users}
+                        setUsers={setUsers}
+                        onMenuToggle={() => setIsSidebarOpen(true)}
+                        onAddUserClick={handleOpenAddUserModal}
+                        token={token}
+                    />
+                ) : (
+                    <UserManagementPage 
+                        onEditUser={handleOpenEditUserModal} 
+                        onDeleteUser={handleOpenDeleteUserModal} 
+                        refreshKey={refreshKey} 
+                        users={users} 
+                        setUsers={setUsers} 
+                    />
+                );
+            default: 
+                return device.isMobile ? (
+                    <MobileInventoryPage 
+                        onEditItem={handleOpenEditItemModal} 
+                        onDeleteItem={handleOpenDeleteModal} 
+                        refreshKey={refreshKey} 
+                        filters={inventoryFilters}
+                        onAddItemClick={handleOpenAddItemModal}
+                        onAddRequestClick={() => setIsRequestFormModalOpen(true)}
+                        onMenuToggle={() => setIsSidebarOpen(true)}
+                        token={token}
+                    />
+                ) : (
+                    <InventoryPage 
+                        onEditItem={handleOpenEditItemModal} 
+                        onDeleteItem={handleOpenDeleteModal} 
+                        refreshKey={refreshKey} 
+                        filters={inventoryFilters} 
+                    />
+                );
         }
     }
 
@@ -264,24 +358,39 @@ const MainApp = () => {
 
     return (
         <div className="bg-secondary-50 font-sans antialiased h-screen flex flex-col">
-            <Header 
-                activePage={activePage} 
-                onNavigate={navigateToPage}
-                inventoryFilters={inventoryFilters}
-                requestFilters={requestFilters}
-                handleInventoryFilterChange={handleInventoryFilterChange}
-                handleRequestFilterChange={handleRequestFilterChange}
-                device={device}
-                isSidebarOpen={isSidebarOpen}
-                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-            />
+            {/* Desktop Header */}
+            {!device.isMobile && (
+                <Header 
+                    activePage={activePage} 
+                    onNavigate={navigateToPage}
+                    inventoryFilters={inventoryFilters}
+                    requestFilters={requestFilters}
+                    handleInventoryFilterChange={handleInventoryFilterChange}
+                    handleRequestFilterChange={handleRequestFilterChange}
+                    device={device}
+                    isSidebarOpen={isSidebarOpen}
+                    onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                />
+            )}
             <AlertsBanner />
             <div className="flex flex-grow overflow-hidden relative">
-                {renderSidebar()}
+                {!device.isMobile && renderSidebar()}
                 <div className={`flex-1 ${device.isMobile ? 'w-full' : ''}`}>
                     {renderPage()}
                 </div>
             </div>
+            
+            {/* Mobile Sidebar Drawer */}
+            {device.isMobile && (
+                <MobileSidebarDrawer
+                    isOpen={isSidebarOpen}
+                    onClose={() => setIsSidebarOpen(false)}
+                    activePage={activePage}
+                    onNavigate={navigateToPage}
+                    user={user}
+                    onLogout={logout}
+                />
+            )}
 
             {/* Modals */}
             <ItemFormModal 

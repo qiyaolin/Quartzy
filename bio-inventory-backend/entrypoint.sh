@@ -18,6 +18,10 @@ python force_fix_migration.py || true
 echo "运行数据库迁移..."
 python manage.py migrate --noinput
 
+# 检查Item表schema
+echo "检查Item表schema..."
+python check_item_schema.py
+
 # 创建超级用户（如果不存在）
 echo "创建管理员用户..."
 python startup.py

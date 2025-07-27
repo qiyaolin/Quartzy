@@ -640,6 +640,159 @@
   .mobile-card:active {
     @apply bg-gray-50;
   }
+
+  /* Mobile-specific animations */
+  .animate-scale-98 {
+    animation: scale98 0.15s ease-out;
+  }
+
+  @keyframes scale98 {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.98); }
+    100% { transform: scale(1); }
+  }
+
+  /* Mobile swipe indicators */
+  .swipe-indicator {
+    @apply absolute top-2 left-1/2 transform -translate-x-1/2 w-8 h-1 bg-gray-300 rounded-full;
+  }
+
+  /* Mobile pull-to-refresh indicator */
+  .pull-indicator {
+    @apply w-6 h-6 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin;
+  }
+
+  /* Enhanced mobile touch feedback */
+  .touch-feedback {
+    @apply transition-transform duration-150 active:scale-95;
+  }
+
+  /* Mobile FAB positioning */
+  .fab-container {
+    @apply fixed bottom-20 right-4 z-40;
+  }
+
+  /* Mobile drawer animations */
+  .drawer-enter {
+    animation: drawerSlideUp 0.3s ease-out;
+  }
+
+  .drawer-exit {
+    animation: drawerSlideDown 0.3s ease-out;
+  }
+
+  @keyframes drawerSlideUp {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes drawerSlideDown {
+    from {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+  }
+
+  /* Mobile optimized input focus */
+  @media (max-width: 768px) {
+    .input:focus {
+      transform: scale(1.02);
+      @apply shadow-lg;
+    }
+    
+    /* Prevent zoom on input focus in iOS */
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+    
+    /* Enhanced mobile buttons */
+    .btn {
+      @apply min-h-11 touch-manipulation;
+    }
+    
+    /* Mobile modal optimization */
+    .modal-panel {
+      @apply mx-4 my-8 max-h-[90vh] overflow-y-auto;
+    }
+    
+    /* Mobile page layout consistency */
+    .mobile-page {
+      @apply min-h-screen bg-gray-50;
+    }
+    
+    .mobile-content {
+      @apply px-4 pb-4;
+    }
+    
+    /* Mobile card consistency */
+    .mobile-list-card {
+      @apply bg-white rounded-xl shadow-sm border border-gray-200 mb-4 overflow-hidden transition-all duration-200 touch-manipulation active:scale-[0.98];
+    }
+    
+    .mobile-card-content {
+      @apply p-5;
+    }
+    
+    /* Mobile stats grid */
+    .mobile-stats-grid-2 {
+      @apply grid grid-cols-2 gap-4;
+    }
+    
+    .mobile-stats-grid-3 {
+      @apply grid grid-cols-3 gap-4;
+    }
+    
+    .mobile-stats-card {
+      @apply bg-white rounded-xl p-5 shadow-sm border border-gray-100 min-h-[120px] transition-all duration-200;
+    }
+    
+    .mobile-stats-card-sm {
+      @apply bg-white rounded-xl p-5 shadow-sm border border-gray-100 min-h-[100px] transition-all duration-200;
+    }
+    
+    /* Mobile action buttons */
+    .mobile-action-button {
+      @apply min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-colors duration-200 touch-manipulation;
+    }
+    
+    /* Mobile status badges */
+    .mobile-status-badge {
+      @apply flex items-center space-x-1 px-3 py-1 rounded-full min-h-[24px];
+    }
+    
+    /* Mobile section spacing */
+    .mobile-section {
+      @apply mb-6;
+    }
+    
+    /* Mobile loading states */
+    .mobile-skeleton {
+      @apply bg-white rounded-xl animate-pulse;
+    }
+    
+    /* Mobile empty states */
+    .mobile-empty-state {
+      @apply text-center py-12;
+    }
+    
+    .mobile-empty-title {
+      @apply text-gray-400 text-lg mb-2;
+    }
+    
+    .mobile-empty-description {
+      @apply text-gray-500 text-sm;
+    }
+  }
 }
 
 /* Enhanced Custom Scrollbar */
