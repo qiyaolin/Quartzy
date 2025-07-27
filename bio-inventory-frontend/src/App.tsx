@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { AuthProvider, AuthContext } from './components/AuthContext.tsx';
 import { NotificationProvider } from './contexts/NotificationContext.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
@@ -16,7 +16,7 @@ const App = () => (
 );
 
 const AuthConsumer = () => {
-  const context = React.useContext(AuthContext);
+  const context = useContext(AuthContext);
   
   if (!context) {
     return (

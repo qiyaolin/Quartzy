@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BarChart3, PieChart, TrendingUp, Download, Calendar, DollarSign, AlertTriangle, Target } from 'lucide-react';
+import { BarChart3, PieChart, TrendingUp, Download, DollarSign, AlertTriangle, Target } from 'lucide-react';
 import { exportMultiSheetExcel } from '../../utils/excelExport.ts';
 
 const BudgetReports = ({ funds, transactions, budgetSummary, token }) => {

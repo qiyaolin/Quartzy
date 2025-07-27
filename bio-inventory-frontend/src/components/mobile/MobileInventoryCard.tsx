@@ -18,13 +18,19 @@ interface MobileInventoryCardProps {
   onEdit: (item: InventoryItem) => void;
   onDelete: (item: InventoryItem) => void;
   onClick?: (item: InventoryItem) => void;
+  isSelected?: boolean;
+  onSelectionChange?: (item: InventoryItem, selected: boolean) => void;
+  showSelection?: boolean;
 }
 
 const MobileInventoryCard: React.FC<MobileInventoryCardProps> = ({
   item,
   onEdit,
   onDelete,
-  onClick
+  onClick,
+  isSelected = false,
+  onSelectionChange,
+  showSelection = false
 }) => {
   const isLowStock = item.low_stock_threshold && item.quantity <= item.low_stock_threshold;
   const isExpiringSoon = item.expiration_date && 
@@ -36,14 +42,37 @@ const MobileInventoryCard: React.FC<MobileInventoryCardProps> = ({
     return 'border-l-success-500 bg-white';
   };
 
+  const handleCardClick = () => {
+    if (showSelection && onSelectionChange) {
+      onSelectionChange(item, !isSelected);
+    } else {
+      onClick?.(item);
+    }
+  };
+
   return (
     <div 
-      className={`bg-white rounded-xl shadow-sm border border-gray-200 ${getStatusColor()} border-l-4 mb-4 overflow-hidden transition-all duration-200 touch-manipulation active:scale-[0.98]`}
-      onClick={() => onClick?.(item)}
+      className={`bg-white rounded-xl shadow-sm border border-gray-200 ${getStatusColor()} border-l-4 mb-4 overflow-hidden transition-all duration-200 touch-manipulation active:scale-[0.98] ${
+        isSelected ? 'ring-2 ring-primary-500 bg-primary-50' : ''
+      }`}
+      onClick={handleCardClick}
     >
       {/* Header */}
       <div className="p-5">
         <div className="flex items-start justify-between mb-3">
+          {showSelection && (
+            <div className="flex items-center mr-3">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onSelectionChange?.(item, e.target.checked);
+                }}
+                className="w-5 h-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              />
+            </div>
+          )}
           <h3 className="font-semibold text-gray-900 text-base flex-1 pr-3 leading-snug">
             {item.name}
           </h3>

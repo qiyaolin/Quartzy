@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { DollarSign, Plus, BarChart3, Receipt, AlertTriangle, TrendingUp, Wallet, CreditCard } from 'lucide-react';
+import { DollarSign, BarChart3, Receipt, AlertTriangle, Wallet, CreditCard } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import FundManagement from '../components/funding/FundManagement.tsx';
 import TransactionRecords from '../components/funding/TransactionRecords.tsx';

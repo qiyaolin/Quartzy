@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { Bell, X, Check, Trash2, Settings, Filter } from 'lucide-react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { Bell, X, Check, Trash2, Filter } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
@@ -44,7 +44,7 @@ const NotificationCenter: React.FC = () => {
     is_read?: boolean;
   }>({});
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!token) return;
     
     setLoading(true);
@@ -67,9 +67,9 @@ const NotificationCenter: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, filter, notification]);
 
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     if (!token) return;
 
     try {
@@ -84,20 +84,20 @@ const NotificationCenter: React.FC = () => {
     } catch (error) {
       console.error('Failed to fetch notification summary:', error);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (isOpen) {
       fetchNotifications();
     }
     fetchSummary();
-  }, [token, isOpen, filter]);
+  }, [token, isOpen, filter, fetchNotifications, fetchSummary]);
 
   // Poll for new notifications every 30 seconds
   useEffect(() => {
     const interval = setInterval(fetchSummary, 30000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [fetchSummary]);
 
   const markAsRead = async (notificationId: number) => {
     try {

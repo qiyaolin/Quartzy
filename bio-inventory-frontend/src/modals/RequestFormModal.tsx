@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Package, DollarSign, User, Tag, Save, AlertCircle, ShoppingCart } from 'lucide-react';
+import { X, Package, DollarSign, Tag, Save, AlertCircle, ShoppingCart } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {

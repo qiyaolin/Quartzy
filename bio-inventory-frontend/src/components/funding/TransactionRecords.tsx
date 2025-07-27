@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Download, Calendar, DollarSign, Package, User, FileText } from 'lucide-react';
+import { Search, Download, Calendar, DollarSign, Package, User, FileText } from 'lucide-react';
 import { exportToExcel } from '../../utils/excelExport.ts';
 
 const TransactionRecords = ({ transactions, funds, onRefresh, token }) => {

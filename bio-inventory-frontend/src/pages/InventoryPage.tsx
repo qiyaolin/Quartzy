@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useContext } from 'react';
-import { AlertTriangle, Clock, Package, QrCode } from 'lucide-react';
+import { AlertTriangle, QrCode } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import InventoryTable from '../components/InventoryTable.tsx';

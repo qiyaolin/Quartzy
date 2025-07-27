@@ -3,11 +3,13 @@ import { useDevice } from '../hooks/useDevice.ts';
 import { useMobileErrorHandler, useMobileLoadingState } from '../hooks/useMobileErrorHandler.ts';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 import { validateFilterOptions, safeApiCall, safeArrayMap, formatErrorMessage } from '../utils/dataValidation.ts';
+import { useNotification } from '../contexts/NotificationContext.tsx';
 import MobileHeader from '../components/mobile/MobileHeader.tsx';
 import MobileInventoryCard from '../components/mobile/MobileInventoryCard.tsx';
 import { InventoryFAB } from '../components/mobile/MobileFloatingActionButton.tsx';
 import { InventoryStatsCards } from '../components/mobile/MobileStatsCards.tsx';
 import MobileFilterDrawer from '../components/mobile/MobileFilterDrawer.tsx';
+import MobileBarcodeScanner from '../components/mobile/MobileBarcodeScanner.tsx';
 
 interface InventoryItem {
   id: number;
@@ -31,6 +33,9 @@ interface MobileInventoryPageProps {
   onAddItemClick: () => void;
   onAddRequestClick?: () => void;
   onMenuToggle: () => void;
+  onFilterChange?: (key: string, value: any) => void;
+  onClearAllFilters?: () => void;
+  onSearchChange?: (value: string) => void;
   token: string;
 }
 
@@ -42,9 +47,13 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
   onAddItemClick,
   onAddRequestClick,
   onMenuToggle,
+  onFilterChange,
+  onClearAllFilters,
+  onSearchChange,
   token
 }) => {
   const device = useDevice();
+  const notification = useNotification();
   const errorHandler = useMobileErrorHandler({
     maxRetries: 3,
     onError: (error) => console.error('Mobile Inventory Error:', error),
@@ -54,6 +63,7 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
   
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [isBarcodePickerOpen, setIsBarcodePickerOpen] = useState(false);
   const [searchValue, setSearchValue] = useState(filters.search || '');
   const [stats, setStats] = useState({
     totalItems: 0,
@@ -217,13 +227,17 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
   }, [token]);
 
   const handleFilterChange = (key: string, value: any) => {
-    // This would need to be connected to the parent component's filter state
-    console.log('Filter change:', key, value);
+    // Connect to parent component's filter state through props
+    if (typeof onFilterChange === 'function') {
+      onFilterChange(key, value);
+    }
   };
 
   const handleClearFilters = () => {
-    // This would need to clear all filters
-    console.log('Clear all filters');
+    // Clear all filters through parent component
+    if (typeof onClearAllFilters === 'function') {
+      onClearAllFilters();
+    }
   };
 
   const handleLowStockClick = () => {
@@ -236,10 +250,63 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
     handleFilterChange('expired', ['true']);
   };
 
+  // Debounced search function
   const handleSearchChange = (value: string) => {
     setSearchValue(value);
-    // Debounce search to avoid too many API calls
-    // This should be connected to parent component's filter state
+    
+    // Clear previous timeout
+    if ((window as any).searchTimeout) {
+      clearTimeout((window as any).searchTimeout);
+    }
+    
+    // Set new timeout for debounced search
+    (window as any).searchTimeout = setTimeout(() => {
+      if (typeof onSearchChange === 'function') {
+        onSearchChange(value);
+      }
+    }, 300);
+  };
+
+  // Barcode checkout functionality
+  const handleBarcodeCheckout = () => {
+    setIsBarcodePickerOpen(true);
+  };
+
+  const processBarcode = async (barcode: string) => {
+    try {
+      loadingState.setLoading('checkout', true);
+      
+      const checkoutData = {
+        barcode: barcode,
+        checkout_date: new Date().toISOString(),
+        notes: `Mobile checkout via barcode scan: ${barcode}`
+      };
+
+      const response = await fetch(buildApiUrl('/api/items/checkout_by_barcode/'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify(checkoutData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        notification.success(`Successfully checked out item: ${result.item_name || 'Unknown item'}`);
+        
+        // Refresh inventory data
+        fetchInventory();
+      } else {
+        const errorData = await response.json();
+        notification.error(`Checkout failed: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Barcode checkout error:', error);
+      notification.error(`Failed to checkout item: ${error.message}`);
+    } finally {
+      loadingState.setLoading('checkout', false);
+    }
   };
 
   if (!device.isMobile) {
@@ -308,8 +375,16 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
 
       {/* Items List */}
       <div className="px-4 pb-4">
-        {loadingState.isLoading('inventory') ? (
+        {loadingState.isLoading('inventory') || loadingState.isLoading('checkout') ? (
           <div className="space-y-3">
+            {loadingState.isLoading('checkout') && (
+              <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 text-center">
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                  <span className="text-primary-700 font-medium">Processing checkout...</span>
+                </div>
+              </div>
+            )}
             {[...Array(6)].map((_, i) => (
               <div key={i} className="bg-white rounded-lg h-32 animate-pulse"></div>
             ))}
@@ -337,7 +412,8 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
       <InventoryFAB
         onAddItem={onAddItemClick}
         onScanBarcode={() => {
-          console.log('Barcode scanning feature not implemented yet');
+          // Open barcode scanner for checkout
+          handleBarcodeCheckout();
         }}
       />
 
@@ -349,6 +425,16 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
         filters={filterSections}
         onFilterChange={handleFilterChange}
         onClearAll={handleClearFilters}
+      />
+
+      {/* Barcode Scanner */}
+      <MobileBarcodeScanner
+        isOpen={isBarcodePickerOpen}
+        onClose={() => setIsBarcodePickerOpen(false)}
+        onScan={() => {}} // This is called when barcode is detected but before confirmation
+        onConfirm={processBarcode} // This is called when user confirms checkout
+        title="Scan for Checkout"
+        token={token}
       />
     </div>
   );

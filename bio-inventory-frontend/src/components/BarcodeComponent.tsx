@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Printer, Download } from 'lucide-react';
 
 // Singleton DYMO loader to prevent script conflicts
@@ -196,14 +196,7 @@ const BarcodeComponent: React.FC<BarcodeComponentProps> = ({
         setCustomText(itemName);
     }, [itemName]);
 
-    // Generate preview when framework is loaded or data changes
-    useEffect(() => {
-        if (isFrameworkLoaded) {
-            generatePreview();
-        }
-    }, [isFrameworkLoaded, barcodeData, customText, fontSize, isBold]);
-
-    const generatePreview = () => {
+    const generatePreview = useCallback(() => {
         try {
             const dymo = dymoLoader.getDymo();
             if (!dymo) return;
@@ -218,7 +211,14 @@ const BarcodeComponent: React.FC<BarcodeComponentProps> = ({
             console.error('Preview generation failed:', e);
             setError(`Preview generation failed: ${e}`);
         }
-    };
+    }, [barcodeData, customText, fontSize, isBold, getLabelXml]);
+
+    // Generate preview when framework is loaded or data changes
+    useEffect(() => {
+        if (isFrameworkLoaded) {
+            generatePreview();
+        }
+    }, [isFrameworkLoaded, generatePreview]);
 
     const handlePrint = async () => {
         if (!isFrameworkLoaded) {

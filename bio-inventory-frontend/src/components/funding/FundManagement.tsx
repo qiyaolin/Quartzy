@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Archive, AlertTriangle, DollarSign, Calendar, User, Building } from 'lucide-react';
+import { Plus, Edit, Archive, DollarSign, Calendar, User, Building } from 'lucide-react';
 import FundModal from './FundModal.tsx';
 import { buildApiUrl } from '../../config/api.ts';
 

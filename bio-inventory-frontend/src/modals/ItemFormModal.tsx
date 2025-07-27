@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Package, DollarSign, Calendar, MapPin, User, Tag, Beaker, Save, AlertCircle } from 'lucide-react';
+import { X, Package, DollarSign, Calendar, MapPin, Tag, Beaker, Save, AlertCircle } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {

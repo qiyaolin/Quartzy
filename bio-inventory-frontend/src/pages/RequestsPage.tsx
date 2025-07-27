@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
-import { AlertTriangle, Loader } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { useNotification } from '../contexts/NotificationContext.tsx';
 import RequestsTable from '../components/RequestsTable.tsx';

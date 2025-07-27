@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AlertTriangle, Loader, Users, Shield, ShieldOff, Edit, Trash2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import Pagination from '../components/Pagination.tsx';
 import UsersTable from '../components/UsersTable.tsx';

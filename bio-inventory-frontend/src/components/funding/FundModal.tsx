@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, User, Building, FileText } from 'lucide-react';
+import { X, DollarSign, Calendar, Building, FileText } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
 
 const FundModal = ({ isOpen, onClose, fund, mode, onSave, token }) => {

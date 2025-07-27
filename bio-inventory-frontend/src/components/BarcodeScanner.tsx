@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Camera, X, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { buildApiUrl } from '../config/api.ts';
 import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
@@ -21,19 +21,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
     const [isScanning, setIsScanning] = useState(false);
     const [scanningError, setScanningError] = useState<string>('');
 
-    useEffect(() => {
-        if (isOpen) {
-            initializeScanner();
-        } else {
-            cleanup();
-        }
-
-        return () => {
-            cleanup();
-        };
-    }, [isOpen]);
-
-    const initializeScanner = async () => {
+    const initializeScanner = useCallback(async () => {
         try {
             const reader = new BrowserMultiFormatReader();
             setCodeReader(reader);
@@ -59,7 +47,27 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
             console.error('Error initializing scanner:', err);
             setScanningError('Failed to initialize camera scanner');
         }
-    };
+    }, []);
+
+    const cleanup = useCallback(() => {
+        if (codeReader) {
+            codeReader.reset();
+        }
+        setIsScanning(false);
+        setScanningError('');
+    }, [codeReader]);
+
+    useEffect(() => {
+        if (isOpen) {
+            initializeScanner();
+        } else {
+            cleanup();
+        }
+
+        return () => {
+            cleanup();
+        };
+    }, [isOpen, initializeScanner, cleanup]);
 
     const startScanning = async (reader: BrowserMultiFormatReader, deviceId: string) => {
         try {
@@ -89,14 +97,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
             setScanningError('Failed to start camera');
             setIsScanning(false);
         }
-    };
-
-    const cleanup = () => {
-        if (codeReader) {
-            codeReader.reset();
-        }
-        setIsScanning(false);
-        setScanningError('');
     };
 
     const handleBarcodeDetected = async (barcode: string) => {
