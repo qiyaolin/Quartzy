@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, status
 from rest_framework.filters import SearchFilter # Import SearchFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -38,7 +38,7 @@ class ItemViewSet(viewsets.ModelViewSet):
     serializer_class = ItemSerializer
     filterset_class = ItemFilter # Connect the filter class
     filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter
-    search_fields = ['name', 'catalog_number', 'vendor__name'] # Define fields that the SearchFilter will search across
+    search_fields = ['name', 'catalog_number', 'vendor__name', 'barcode'] # Define fields that the SearchFilter will search across
     
     @action(detail=False, methods=['get'])
     def alerts(self, request):
@@ -145,4 +145,64 @@ class ItemViewSet(viewsets.ModelViewSet):
         return Response({
             'count': expiring_items.count(),
             'items': serializer.data
+        })
+
+    @action(detail=True, methods=['post'])
+    def checkout(self, request, pk=None):
+        """
+        Custom action to checkout an item by marking it as archived.
+        """
+        item = self.get_object()
+        
+        if item.is_archived:
+            return Response({'error': 'Item is already checked out.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        barcode = request.data.get('barcode')
+        notes = request.data.get('notes', f'Checked out via barcode scan: {barcode}')
+
+        # Mark item as archived (checked out)
+        item.is_archived = True
+        item.last_used_date = date.today()
+        item.save()
+
+        return Response({
+            'status': 'Item checked out successfully',
+            'item_id': item.id,
+            'barcode': item.barcode,
+            'checked_out_by': request.user.username,
+            'checkout_date': date.today()
+        })
+
+    @action(detail=False, methods=['post'])
+    def checkout_by_barcode(self, request):
+        """
+        Checkout an item by barcode without knowing the item ID.
+        This searches for an active (non-archived) item with the given barcode.
+        """
+        barcode = request.data.get('barcode')
+        notes = request.data.get('notes', f'Checked out via barcode scan: {barcode}')
+
+        if not barcode:
+            return Response({'error': 'Barcode is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Find the item with this barcode that is not archived
+        try:
+            item = Item.objects.get(barcode=barcode, is_archived=False)
+        except Item.DoesNotExist:
+            return Response({'error': 'No available item found with this barcode.'}, status=status.HTTP_404_NOT_FOUND)
+        except Item.MultipleObjectsReturned:
+            return Response({'error': 'Multiple items found with this barcode.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Mark item as archived (checked out)
+        item.is_archived = True
+        item.last_used_date = date.today()
+        item.save()
+
+        # Return the item details
+        serializer = self.get_serializer(item)
+        return Response({
+            'status': 'Item checked out successfully',
+            'item': serializer.data,
+            'checked_out_by': request.user.username,
+            'checkout_date': date.today()
         })

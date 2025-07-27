@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { Camera, X, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { buildApiUrl } from '../config/api.ts';
+import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
 
 interface BarcodeScannerProps {
     isOpen: boolean;
@@ -11,76 +12,91 @@ interface BarcodeScannerProps {
 
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan, onConfirm }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [stream, setStream] = useState<MediaStream | null>(null);
+    const [codeReader, setCodeReader] = useState<BrowserMultiFormatReader | null>(null);
     const [scannedBarcode, setScannedBarcode] = useState<string>('');
     const [itemData, setItemData] = useState<any>(null);
     const [error, setError] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
     const [showConfirmation, setShowConfirmation] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
+    const [scanningError, setScanningError] = useState<string>('');
 
     useEffect(() => {
         if (isOpen) {
-            startCamera();
+            initializeScanner();
         } else {
-            stopCamera();
+            cleanup();
         }
 
         return () => {
-            stopCamera();
+            cleanup();
         };
     }, [isOpen]);
 
-    const startCamera = async () => {
+    const initializeScanner = async () => {
         try {
-            const mediaStream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    facingMode: 'environment',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                }
-            });
-            setStream(mediaStream);
-            if (videoRef.current) {
-                videoRef.current.srcObject = mediaStream;
+            const reader = new BrowserMultiFormatReader();
+            setCodeReader(reader);
+            
+            // 获取可用的视频设备
+            const videoInputDevices = await reader.listVideoInputDevices();
+            
+            if (videoInputDevices.length === 0) {
+                setScanningError('No camera devices found');
+                return;
             }
+
+            // 尝试使用后置摄像头（环境摄像头）
+            const backCamera = videoInputDevices.find(device => 
+                device.label.toLowerCase().includes('back') || 
+                device.label.toLowerCase().includes('environment')
+            );
+            
+            const selectedDeviceId = backCamera ? backCamera.deviceId : videoInputDevices[0].deviceId;
+            
+            startScanning(reader, selectedDeviceId);
         } catch (err) {
-            setError('Could not access camera. Please ensure camera permissions are enabled.');
+            console.error('Error initializing scanner:', err);
+            setScanningError('Failed to initialize camera scanner');
         }
     };
 
-    const stopCamera = () => {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            setStream(null);
+    const startScanning = async (reader: BrowserMultiFormatReader, deviceId: string) => {
+        try {
+            setIsScanning(true);
+            setScanningError('');
+            
+            // 使用连续扫描模式
+            reader.decodeFromVideoDevice(deviceId, videoRef.current!, (result, err) => {
+                if (result) {
+                    const barcode = result.getText();
+                    console.log('Barcode detected:', barcode);
+                    // 停止扫描并处理结果
+                    setIsScanning(false);
+                    reader.reset();
+                    handleBarcodeDetected(barcode);
+                }
+                
+                if (err && !(err instanceof NotFoundException)) {
+                    console.error('Scanning error:', err);
+                    setScanningError('Error scanning barcode. Please try again.');
+                    setIsScanning(false);
+                }
+                // NotFoundException 是正常的，表示当前帧没有找到条形码，继续扫描
+            });
+        } catch (err) {
+            console.error('Error starting scan:', err);
+            setScanningError('Failed to start camera');
+            setIsScanning(false);
         }
     };
 
-    const captureFrame = () => {
-        if (!videoRef.current || !canvasRef.current) return;
-
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-
-        if (context) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0);
-
-            // Here you would typically use a barcode scanning library like QuaggaJS or ZXing
-            // For demo purposes, we'll simulate barcode detection
-            simulateBarcodeDetection(canvas);
+    const cleanup = () => {
+        if (codeReader) {
+            codeReader.reset();
         }
-    };
-
-    const simulateBarcodeDetection = (canvas: HTMLCanvasElement) => {
-        // This is a simulation - in real implementation, you'd use a barcode scanning library
-        // For now, we'll allow manual input for testing
-        const manualBarcode = prompt('Enter barcode (simulation):');
-        if (manualBarcode) {
-            handleBarcodeDetected(manualBarcode);
-        }
+        setIsScanning(false);
+        setScanningError('');
     };
 
     const handleBarcodeDetected = async (barcode: string) => {
@@ -89,8 +105,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
         setError('');
 
         try {
-            // Look up item data based on barcode - first check requests (items that have been received)
-            const response = await fetch(buildApiUrl(`/api/requests/?barcode=${barcode}`), {
+            // Look up item data based on barcode from items endpoint
+            const response = await fetch(buildApiUrl(`/api/items/?search=${barcode}`), {
                 headers: {
                     'Authorization': `Token ${localStorage.getItem('token')}`
                 }
@@ -99,14 +115,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
             if (response.ok) {
                 const data = await response.json();
                 if (data.results && data.results.length > 0) {
-                    const request = data.results[0];
-                    // Only allow checkout if the request has been received (is now in inventory)
-                    if (request.status === 'RECEIVED') {
-                        setItemData(request);
+                    const item = data.results[0];
+                    // Only allow checkout if the item is not archived
+                    if (!item.is_archived) {
+                        setItemData(item);
                         setShowConfirmation(true);
                         onScan(barcode);
                     } else {
-                        setError(`Item not available for checkout. Status: ${request.status}`);
+                        setError('Item has already been checked out');
                     }
                 } else {
                     setError('No item found with this barcode');
@@ -163,12 +179,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                 <span className="font-semibold text-green-800">Item Available for Checkout</span>
                             </div>
                             <div className="space-y-2 text-sm">
-                                <p><strong>Item:</strong> {itemData.item_name}</p>
+                                <p><strong>Item:</strong> {itemData.name}</p>
                                 <p><strong>Barcode:</strong> {scannedBarcode}</p>
-                                <p><strong>Status:</strong> {itemData.status}</p>
-                                <p><strong>Originally requested by:</strong> {itemData.requested_by?.username}</p>
+                                <p><strong>Serial Number:</strong> {itemData.serial_number}</p>
+                                <p><strong>Quantity:</strong> {itemData.quantity} {itemData.unit}</p>
+                                {itemData.owner && <p><strong>Owner:</strong> {itemData.owner.username}</p>}
                                 {itemData.vendor && <p><strong>Vendor:</strong> {itemData.vendor.name}</p>}
                                 {itemData.catalog_number && <p><strong>Catalog #:</strong> {itemData.catalog_number}</p>}
+                                {itemData.location && <p><strong>Location:</strong> {itemData.location.name}</p>}
                             </div>
                         </div>
                         
@@ -180,7 +198,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                 Confirm Checkout
                             </button>
                             <button
-                                onClick={() => setShowConfirmation(false)}
+                                onClick={() => {
+                                    setShowConfirmation(false);
+                                    setScannedBarcode('');
+                                    setItemData(null);
+                                    setError('');
+                                    // 重新开始扫描
+                                    setTimeout(() => initializeScanner(), 100);
+                                }}
                                 className="flex-1 btn btn-secondary"
                             >
                                 Scan Again
@@ -195,35 +220,64 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                 ref={videoRef}
                                 autoPlay
                                 playsInline
+                                muted
                                 className="w-full h-64 object-cover"
-                            />
-                            <canvas
-                                ref={canvasRef}
-                                style={{ display: 'none' }}
                             />
                             
                             {/* Scan overlay */}
                             <div className="absolute inset-0 flex items-center justify-center">
                                 <div className="border-2 border-white border-dashed rounded-lg w-48 h-24 flex items-center justify-center">
-                                    <span className="text-white text-sm font-medium">Position barcode here</span>
+                                    {isScanning ? (
+                                        <div className="flex items-center text-white text-sm font-medium">
+                                            <Loader className="w-4 h-4 mr-2 animate-spin" />
+                                            Scanning...
+                                        </div>
+                                    ) : (
+                                        <span className="text-white text-sm font-medium">Position barcode here</span>
+                                    )}
                                 </div>
                             </div>
+
+                            {/* Scanning status indicator */}
+                            {isScanning && (
+                                <div className="absolute top-4 left-4 right-4">
+                                    <div className="bg-blue-500 text-white px-3 py-2 rounded-lg text-sm flex items-center">
+                                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                                        Camera is actively scanning for barcodes...
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {error && (
+                        {(error || scanningError) && (
                             <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center">
                                 <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-                                <span className="text-red-700 text-sm">{error}</span>
+                                <span className="text-red-700 text-sm">{error || scanningError}</span>
+                            </div>
+                        )}
+
+                        {isLoading && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center">
+                                <Loader className="w-5 h-5 text-blue-600 mr-2 animate-spin" />
+                                <span className="text-blue-700 text-sm">Looking up barcode information...</span>
                             </div>
                         )}
 
                         <div className="flex space-x-3">
                             <button
-                                onClick={captureFrame}
-                                disabled={isLoading}
+                                onClick={() => {
+                                    setScanningError('');
+                                    setError('');
+                                    if (codeReader && videoRef.current) {
+                                        // 重新开始扫描
+                                        cleanup();
+                                        setTimeout(() => initializeScanner(), 100);
+                                    }
+                                }}
+                                disabled={isLoading || isScanning}
                                 className="flex-1 btn btn-primary"
                             >
-                                {isLoading ? 'Processing...' : 'Capture & Scan'}
+                                {isScanning ? 'Scanning...' : isLoading ? 'Processing...' : 'Restart Scanner'}
                             </button>
                             <button
                                 onClick={handleClose}

@@ -240,19 +240,56 @@
   /* Enhanced responsive design */
   @media (max-width: 768px) {
     .table-cell {
-      @apply px-4 py-3 text-xs;
+      @apply px-3 py-2 text-xs;
     }
     .table-header-cell {
-      @apply px-4 py-3 text-2xs;
+      @apply px-3 py-2 text-2xs;
     }
     .card {
-      @apply rounded-xl;
+      @apply rounded-xl mx-2;
     }
     .card-body {
-      @apply p-4;
+      @apply p-3;
     }
     .btn {
       @apply px-3 py-2 text-sm;
+    }
+    .sidebar {
+      @apply shadow-2xl;
+    }
+    /* 移动端表格优化 */
+    .table {
+      @apply text-xs;
+    }
+    /* 移动端输入框优化 */
+    .input {
+      @apply py-2.5 text-base; /* 防止iOS缩放 */
+    }
+    /* 移动端模态框优化 */
+    .modal-panel {
+      @apply mx-4 max-w-none w-auto;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .table-cell {
+      @apply px-2 py-1.5 text-2xs;
+    }
+    .table-header-cell {
+      @apply px-2 py-1.5 text-3xs;
+    }
+    .card {
+      @apply rounded-lg mx-3;
+    }
+    .card-body {
+      @apply p-2;
+    }
+    .btn {
+      @apply px-2 py-1.5 text-xs;
+    }
+    /* 超小屏幕优化 */
+    .btn-xs {
+      @apply px-1.5 py-1 text-2xs;
     }
   }
   
@@ -564,6 +601,44 @@
 
   .safe-area-inset-right {
     padding-right: env(safe-area-inset-right);
+  }
+
+  /* Mobile Utilities */
+  .mobile-hidden {
+    @apply md:block hidden;
+  }
+
+  .mobile-only {
+    @apply md:hidden block;
+  }
+
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  /* Mobile-friendly tap targets */
+  .tap-target {
+    @apply min-h-11 min-w-11 flex items-center justify-center;
+  }
+
+  /* Prevent zoom on iOS */
+  .no-zoom {
+    font-size: 16px;
+  }
+
+  /* Mobile scroll optimization */
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Mobile card optimizations */
+  .mobile-card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-3;
+  }
+
+  .mobile-card:active {
+    @apply bg-gray-50;
   }
 }
 

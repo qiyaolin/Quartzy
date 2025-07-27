@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from './components/AuthContext.tsx';
 import { useNotification } from './contexts/NotificationContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from './config/api.ts';
+import { useDevice } from './hooks/useDevice.ts';
 import AlertsBanner from './components/AlertsBanner.tsx';
 import Header from './components/Header.tsx';
 import InventorySidebar from './components/InventorySidebar.tsx';
@@ -23,7 +24,9 @@ import FundingPage from './pages/FundingPage.tsx';
 const MainApp = () => {
     const { token } = useContext(AuthContext);
     const notification = useNotification();
+    const device = useDevice();
     const [activePage, setActivePage] = useState('inventory');
+    const [isSidebarOpen, setIsSidebarOpen] = useState(!device.isMobile);
     const [isItemFormModalOpen, setIsItemFormModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -184,6 +187,81 @@ const MainApp = () => {
         }
     }
 
+    // 移动端自动关闭侧边栏
+    useEffect(() => {
+        if (device.isMobile) {
+            setIsSidebarOpen(false);
+        } else {
+            setIsSidebarOpen(true);
+        }
+    }, [device.isMobile]);
+
+    const shouldShowSidebar = () => {
+        return ['inventory', 'requests', 'users'].includes(activePage) && (!device.isMobile || isSidebarOpen);
+    };
+
+    const renderSidebar = () => {
+        if (!shouldShowSidebar()) return null;
+
+        const sidebarClasses = `
+            ${device.isMobile 
+                ? 'fixed inset-y-0 left-0 z-50 w-80 transform transition-transform duration-300 ease-in-out'
+                : 'relative'
+            }
+            ${device.isMobile && !isSidebarOpen ? '-translate-x-full' : 'translate-x-0'}
+        `;
+
+        let SidebarComponent = null;
+        let sidebarProps = {};
+
+        if (activePage === 'inventory') {
+            SidebarComponent = InventorySidebar;
+            sidebarProps = {
+                onAddItemClick: handleOpenAddItemModal,
+                filters: inventoryFilters,
+                onFilterChange: handleInventoryFilterChange,
+                filterOptions: filterOptions,
+                isMobile: device.isMobile,
+                onClose: () => setIsSidebarOpen(false)
+            };
+        } else if (activePage === 'requests') {
+            SidebarComponent = RequestsSidebar;
+            sidebarProps = {
+                onAddRequestClick: () => setIsRequestFormModalOpen(true),
+                filters: requestFilters,
+                onFilterChange: handleRequestFilterChange,
+                filterOptions: filterOptions,
+                isMobile: device.isMobile,
+                onClose: () => setIsSidebarOpen(false)
+            };
+        } else if (activePage === 'users') {
+            SidebarComponent = UserManagementSidebar;
+            sidebarProps = {
+                onAddUserClick: handleOpenAddUserModal,
+                users: users,
+                userSearch: userSearch,
+                onUserSearchChange: setUserSearch,
+                isMobile: device.isMobile,
+                onClose: () => setIsSidebarOpen(false)
+            };
+        }
+
+        return (
+            <>
+                <div className={sidebarClasses}>
+                    {SidebarComponent && <SidebarComponent {...sidebarProps} />}
+                </div>
+                {/* 移动端遮罩层 */}
+                {device.isMobile && isSidebarOpen && (
+                    <div 
+                        className="fixed inset-0 bg-black bg-opacity-50 z-40"
+                        onClick={() => setIsSidebarOpen(false)}
+                    />
+                )}
+            </>
+        );
+    };
+
     return (
         <div className="bg-secondary-50 font-sans antialiased h-screen flex flex-col">
             <Header 
@@ -193,13 +271,16 @@ const MainApp = () => {
                 requestFilters={requestFilters}
                 handleInventoryFilterChange={handleInventoryFilterChange}
                 handleRequestFilterChange={handleRequestFilterChange}
+                device={device}
+                isSidebarOpen={isSidebarOpen}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             />
             <AlertsBanner />
             <div className="flex flex-grow overflow-hidden relative">
-                {activePage === 'inventory' && <InventorySidebar onAddItemClick={handleOpenAddItemModal} filters={inventoryFilters} onFilterChange={handleInventoryFilterChange} filterOptions={filterOptions} />}
-                {activePage === 'requests' && <RequestsSidebar onAddRequestClick={() => setIsRequestFormModalOpen(true)} filters={requestFilters} onFilterChange={handleRequestFilterChange} filterOptions={filterOptions} />}
-                {activePage === 'users' && <UserManagementSidebar onAddUserClick={handleOpenAddUserModal} users={users} userSearch={userSearch} onUserSearchChange={setUserSearch} />}
-                {renderPage()}
+                {renderSidebar()}
+                <div className={`flex-1 ${device.isMobile ? 'w-full' : ''}`}>
+                    {renderPage()}
+                </div>
             </div>
 
             {/* Modals */}

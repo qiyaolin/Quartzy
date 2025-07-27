@@ -184,19 +184,43 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         console.log('Processing barcode checkout:', barcode, itemData);
         
         if (itemData) {
-            // Process checkout - this should mark the item as checked out
             try {
-                // In a real implementation, you would call an API to process the checkout
-                // For now, we'll just show a success message
-                notification.success(`Successfully checked out: ${itemData.item_name}`);
-                
-                // You might want to update the inventory count here
-                // await processCheckout(itemData.id, barcode);
-                
-                // Refresh the inventory data
-                // fetchInventory();
+                // 检查物品是否已经归档
+                if (itemData.is_archived) {
+                    notification.error('Item has already been checked out');
+                    setIsScannerOpen(false);
+                    return;
+                }
+
+                // 使用物品条形码出库API
+                const checkoutData = {
+                    barcode: barcode,
+                    checkout_date: new Date().toISOString(),
+                    notes: `Checked out via barcode scan: ${barcode}`
+                };
+
+                const response = await fetch(buildApiUrl('/api/items/checkout_by_barcode/'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Token ${token}`
+                    },
+                    body: JSON.stringify(checkoutData)
+                });
+
+                if (response.ok) {
+                    await response.json();
+                    notification.success(`Successfully checked out: ${itemData.name}`);
+                    
+                    // 刷新库存数据
+                    fetchInventory();
+                } else {
+                    const errorData = await response.json();
+                    notification.error(`Failed to checkout: ${errorData.error || 'Unknown error'}`);
+                }
                 
             } catch (error) {
+                console.error('Checkout error:', error);
                 notification.error(`Failed to checkout item: ${error.message}`);
             }
         } else {

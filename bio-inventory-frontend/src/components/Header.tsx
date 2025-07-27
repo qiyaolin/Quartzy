@@ -1,14 +1,12 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { 
     Search, 
-    MoreVertical, 
     FileText, 
     Package, 
     History, 
     Users, 
     LogOut, 
     DollarSign, 
-    Bell,
     Settings,
     ChevronDown,
     Menu,
@@ -18,7 +16,7 @@ import {
 import { AuthContext } from './AuthContext.tsx';
 import NotificationCenter from './NotificationCenter.tsx';
 
-const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, handleInventoryFilterChange, handleRequestFilterChange }) => {
+const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, handleInventoryFilterChange, handleRequestFilterChange, device, isSidebarOpen, onToggleSidebar }) => {
     const { user, logout } = useContext(AuthContext);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -66,6 +64,17 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
                             <span className="text-xs text-gray-500 -mt-1 hidden sm:block font-medium">Bio Inventory System</span>
                         </div>
                     </div>
+                    
+                    {/* Sidebar toggle button (only on pages with sidebar) */}
+                    {['inventory', 'requests', 'users'].includes(activePage) && (
+                        <button 
+                            onClick={onToggleSidebar}
+                            className="p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-200 active:scale-95 mr-2"
+                            aria-label="Toggle sidebar"
+                        >
+                            <Menu className="w-5 h-5 text-gray-600" />
+                        </button>
+                    )}
                     
                     {/* Mobile menu button */}
                     <button 

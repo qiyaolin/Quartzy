@@ -75,6 +75,7 @@ class Item(models.Model):
     # Metadata
     url = models.URLField(blank=True, help_text="Link to the product page.")
     low_stock_threshold = models.PositiveIntegerField(null=True, blank=True, help_text="Threshold to trigger a low stock warning.")
+    barcode = models.CharField(max_length=50, unique=True, null=True, blank=True, help_text="Unique barcode for this item")
     is_archived = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -116,6 +117,11 @@ class Item(models.Model):
     def needs_attention(self):
         """Check if item needs attention (expired, expiring soon, or low stock)"""
         return self.expiration_status in ['EXPIRED', 'EXPIRING_SOON'] or self.is_low_stock
+
+    def save(self, *args, **kwargs):
+        if not self.barcode:
+            self.barcode = f"ITM-{uuid.uuid4().hex[:8].upper()}"
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.serial_number})"

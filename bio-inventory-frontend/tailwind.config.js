@@ -119,7 +119,23 @@ module.exports = {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
         display: ['Inter', 'system-ui', 'sans-serif'],
       },
+      screens: {
+        'xs': '480px',
+        'sm': '640px',
+        'md': '768px',
+        'lg': '1024px',
+        'xl': '1280px',
+        '2xl': '1536px',
+        // Custom breakpoints for mobile-first design
+        'mobile': { 'max': '767px' },
+        'tablet': { 'min': '768px', 'max': '1023px' },
+        'desktop': { 'min': '1024px' },
+        // Touch device detection
+        'touch': { 'raw': '(hover: none) and (pointer: coarse)' },
+        'no-touch': { 'raw': '(hover: hover) and (pointer: fine)' },
+      },
       fontSize: {
+        '3xs': ['0.5rem', { lineHeight: '0.625rem' }],
         '2xs': ['0.625rem', { lineHeight: '0.75rem' }],
         'xs': ['0.75rem', { lineHeight: '1rem' }],
         'sm': ['0.875rem', { lineHeight: '1.25rem' }],

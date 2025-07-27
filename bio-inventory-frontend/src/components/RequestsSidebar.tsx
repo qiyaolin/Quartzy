@@ -1,9 +1,23 @@
 import React from 'react';
-import { PlusCircle, Search, Upload, Download } from 'lucide-react';
+import { PlusCircle, Search, Upload, Download, X } from 'lucide-react';
 import SidebarFilter from './SidebarFilter.tsx';
 
-const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOptions }) => (
-    <aside className="sidebar w-72 p-4 md:p-6 flex flex-col h-full animate-fade-in hidden lg:flex">
+const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOptions, isMobile = false, onClose }) => (
+    <aside className={`sidebar ${isMobile ? 'w-80' : 'w-72'} p-4 md:p-6 flex flex-col h-full animate-fade-in bg-white shadow-xl`}>
+        {/* 移动端关闭按钮 */}
+        {isMobile && (
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900">Request Filters</h2>
+                <button 
+                    onClick={onClose}
+                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                    aria-label="Close sidebar"
+                >
+                    <X className="w-5 h-5 text-gray-600" />
+                </button>
+            </div>
+        )}
+        
         <div className="flex-grow overflow-y-auto space-y-6">
             <div className="space-y-4">
                 <button onClick={onAddRequestClick} className="btn btn-primary w-full py-3 text-base font-semibold shadow-soft hover:shadow-medium transition-all duration-200 hover:-translate-y-0.5">
