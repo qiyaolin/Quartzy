@@ -140,58 +140,25 @@ bio-inventory-backend/fix_migration.py
 # 打印服务器测试文件
 dymo-print-server-nodejs/quick_test.py
 
-# 调试说明文档（中文）
-*修复*.md
-*问题修复*.md
-*修复报告*.md
-*Implementation-Summary*.md
-*Implementation-Summary.md
-*UI优化*.md
-*移动端*.md
-*白屏*.md
-*部署*.md
-*迁移*.md
-*打印*.md
-*功能*.md
-*测试*.md
-*诊断*.md
-*解决*.md
+# Markdown文件过滤规则
+# 排除大部分.md文件，但保留重要的项目文档
+*.md
 
-# 具体的调试文档
-DYMO打印数据传递问题修复.md
-隔离打印流程修复报告.md
-URL参数截断问题修复报告.md
-移动端库存条码打印功能集中式重构.md
-移动端库存条码打印功能.md
-生物库存管理系统后端迁移.md
-CENTRALIZED_PRINTING_SETUP.md
-生物库存管理系统集中式标签打印重构.md
-移动端Notification功能修复.md
-ZBar-WASM-Implementation-Summary.md
-MobileHomeInterfaceIssueFix.md
-移动端Home界面问题修复.md
-生物库存管理系统移动端UI优化.md
-修复移动端Requests界面MarkReceived功能缺陷.md
-mobile-fixes-complete-summary.md
-mobile-fixes-summary.md
-修复React移动端白屏问题.md
-React移动端白屏问题修复.md
-移动端白屏修复与UI优化.md
-生物库存管理系统移动端优化.md
-AppEngine后端服务器诊断修复.md
-DjangoItem模型Barcode字段迁移问题修复.md
-cloud-deployment-guide.md
-checkout-implementation-summary.md
-mobile-responsive-testing.md
-Django数据库字段冲突修复.md
-Django管理员界面访问问题修复.md
-解决前端无法连接到后端API的问题.md
-解决GoogleAppEngine部署的Django后端无法访问的问题.md
-修复完成报告.md
-barcode_field_analysis_report.md
-production_migration_guide.md
-MOBILE_UI_GUIDE.md
-DEPLOYMENT_GUIDE.md
+# 保留的重要.md文件（使用负向模式重新包含）
+!README.md
+!*/README.md
+!CONTRIBUTING.md
+!LICENSE.md
+!CHANGELOG.md
+!SECURITY.md
+!API.md
+!INSTALL.md
+!USAGE.md
+
+# 保留项目特定的重要文档
+!CENTRALIZED_PRINTING_SETUP.md
+!bio-inventory-frontend/MOBILE_UI_GUIDE.md
+!dymo-print-server-nodejs/DEPLOYMENT_GUIDE.md
 
 # 截图和图片文件
 *.png
