@@ -57,8 +57,6 @@ __pycache__/
 # Configuration files
 *_config.json
 temp_*.json
-print_agent_config.json
-print_server_config.json
 
 # Test files
 test_*.html
