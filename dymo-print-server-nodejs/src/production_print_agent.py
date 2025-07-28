@@ -23,6 +23,7 @@ import threading
 from pathlib import Path
 from datetime import datetime
 import logging
+from label_template_parser import LabelTemplateParser
 
 # Configure logging
 logging.basicConfig(
@@ -38,12 +39,19 @@ logger = logging.getLogger(__name__)
 class ProductionPrintAgent:
     def __init__(self, config_file='print_agent_config.json'):
         """Initialize the production print agent."""
+        # Ensure config file path is relative to script directory
+        if not os.path.isabs(config_file):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_file = os.path.join(script_dir, config_file)
+        
+        logger.info(f"Loading configuration from: {config_file}")
         self.config = self.load_config(config_file)
         self.backend_url = self.config.get('backend_url', 'http://localhost:8000')
         self.api_token = self.config.get('api_token', '')
         self.poll_interval = self.config.get('poll_interval', 5)
         self.max_retry_count = self.config.get('max_retry_count', 3)
         self.browser_timeout = self.config.get('browser_timeout', 30)
+        
         # Determine script directory
         script_dir = os.path.dirname(os.path.abspath(__file__))
         template_file = self.config.get('template_path', 'auto_print_template.html')
@@ -58,10 +66,40 @@ class ProductionPrintAgent:
             logger.error(f"Template file not found: {self.template_path}")
             sys.exit(1)
 
+        # Initialize label template parser for dynamic templates
+        self.label_parser = LabelTemplateParser()
+        
+        # Get label file from config
+        label_file = self.config.get('label_file', 'sample.label')
+        
+        # Resolve label file path relative to script directory
+        if not os.path.isabs(label_file):
+            self.label_file_path = os.path.join(script_dir, label_file)
+        else:
+            self.label_file_path = label_file
+        
+        # Check if label file exists
+        self.use_dynamic_templates = os.path.exists(self.label_file_path)
+        if self.use_dynamic_templates:
+            logger.info(f"Using dynamic label template: {self.label_file_path}")
+        else:
+            logger.warning(f"Label file not found: {self.label_file_path}")
+            logger.info("Will use hardcoded template as fallback")
+
+        # Initialize printer selection configuration
+        self.printer_config = self.config.get('printer_selection', {})
+        self.printer_mode = self.printer_config.get('mode', 'auto')
+        self.preferred_printer = self.printer_config.get('preferred_printer', '')
+        logger.info(f"Printer selection mode: {self.printer_mode}")
+        if self.preferred_printer:
+            logger.info(f"Preferred printer: {self.preferred_printer}")
+
         logger.info("Production DYMO Print Agent initialized")
         logger.info(f"Backend URL: {self.backend_url}")
         logger.info(f"Polling interval: {self.poll_interval} seconds")
         logger.info(f"Template path: {self.template_path}")
+        logger.info(f"Auto close browser: {self.config.get('auto_close_browser', True)}")
+        logger.info(f"Debug mode: {self.config.get('debug_mode', False)}")
         if not self.api_token:
             logger.warning("WARNING: No API token configured in print_agent_config.json")
 
@@ -81,6 +119,13 @@ class ProductionPrintAgent:
                     },
                     "poll_interval": 5,
                     "template_path": "auto_print_template.html",
+                    "label_file": "sample.label",
+                    "printer_selection": {
+                        "mode": "auto",
+                        "preferred_printer": "",
+                        "label_printer_keywords": ["Label", "LabelWriter"],
+                        "tape_printer_keywords": ["Tape", "LabelManager"]
+                    },
                     "max_retry_count": 3,
                     "browser_timeout": 30,
                     "auto_close_browser": True,
@@ -149,7 +194,8 @@ class ProductionPrintAgent:
                 'custom_text': str(label_data.get('customText', '')),
                 'font_size': str(label_data.get('fontSize', '8')),
                 'is_bold': 'true' if label_data.get('isBold') else 'false',
-                'timestamp': str(int(time.time()))
+                'timestamp': str(int(time.time())),
+                'template_file': str(label_data.get('templateFile', ''))
             }
             logger.info(f"Extracted print data: {data}")
             return data
@@ -163,8 +209,105 @@ class ProductionPrintAgent:
                 'custom_text': '',
                 'font_size': '8',
                 'is_bold': 'false',
-                'timestamp': str(int(time.time()))
+                'timestamp': str(int(time.time())),
+                'template_file': ''
             }
+
+    def generate_dynamic_label_xml(self, data):
+        """Generate label XML using the configured label file."""
+        try:
+            logger.info(f"Using label template: {self.label_file_path}")
+            
+            # Parse template and generate XML
+            template_info = self.label_parser.parse_label_file(self.label_file_path)
+            
+            # Prepare data for template generation
+            # textbox gets custom_text or item_name, labelbox gets barcode
+            template_data = {
+                'item_name': data.get('item_name', ''),
+                'barcode': data.get('barcode', ''),
+                'custom_text': data.get('custom_text', '') or data.get('item_name', '')
+            }
+            
+            xml_content = self.label_parser.generate_dynamic_xml(template_info, template_data)
+            logger.info(f"Generated dynamic XML for job #{data['job_id']}")
+            
+            return xml_content
+            
+        except Exception as e:
+            logger.error(f"Failed to generate dynamic label XML: {e}")
+            # Fallback to hardcoded template
+            return self.generate_fallback_label_xml(data)
+    
+    def generate_fallback_label_xml(self, data):
+        """Generate fallback label XML when dynamic template fails."""
+        displayText = data.get('custom_text') or data.get('item_name', 'Unknown Item')
+        barcode = data.get('barcode', 'NO_BARCODE')
+        font_size = data.get('font_size', '8')
+        is_bold = data.get('is_bold', 'false') == 'true'
+        
+        return f"""<?xml version="1.0" encoding="utf-8"?>
+<DieCutLabel Version="8.0" Units="twips" MediaType="Default">
+    <PaperOrientation>Portrait</PaperOrientation>
+    <Id>Small30334</Id>
+    <IsOutlined>false</IsOutlined>
+    <PaperName>30334 2-1/4 in x 1-1/4 in</PaperName>
+    <DrawCommands>
+        <RoundRectangle X="0" Y="0" Width="3240" Height="1800" Rx="270" Ry="270" />
+    </DrawCommands>
+    <ObjectInfo>
+        <TextObject>
+            <Name>textbox</Name>
+            <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+            <BackColor Alpha="0" Red="255" Green="255" Blue="255" />
+            <LinkedObjectName />
+            <Rotation>Rotation0</Rotation>
+            <IsMirrored>False</IsMirrored>
+            <IsVariable>False</IsVariable>
+            <GroupID>-1</GroupID>
+            <IsOutlined>False</IsOutlined>
+            <HorizontalAlignment>Center</HorizontalAlignment>
+            <VerticalAlignment>Top</VerticalAlignment>
+            <TextFitMode>ShrinkToFit</TextFitMode>
+            <UseFullFontHeight>True</UseFullFontHeight>
+            <Verticalized>False</Verticalized>
+            <StyledText>
+                <Element>
+                    <String xml:space="preserve">{displayText}</String>
+                    <Attributes>
+                        <Font Family="Arial" Size="{font_size}" Bold="{'True' if is_bold else 'False'}" Italic="False" Underline="False" Strikeout="False" />
+                        <ForeColor Alpha="255" Red="0" Green="0" Blue="0" HueScale="100" />
+                    </Attributes>
+                </Element>
+            </StyledText>
+        </TextObject>
+        <Bounds X="58" Y="86" Width="3125" Height="765" />
+    </ObjectInfo>
+    <ObjectInfo>
+        <BarcodeObject>
+            <Name>labelbox</Name>
+            <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+            <BackColor Alpha="0" Red="255" Green="255" Blue="255" />
+            <LinkedObjectName />
+            <Rotation>Rotation0</Rotation>
+            <IsMirrored>False</IsMirrored>
+            <IsVariable>True</IsVariable>
+            <GroupID>-1</GroupID>
+            <IsOutlined>False</IsOutlined>
+            <Text>{barcode}</Text>
+            <Type>Code128Auto</Type>
+            <Size>Small</Size>
+            <TextPosition>None</TextPosition>
+            <TextFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False" />
+            <CheckSumFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False" />
+            <TextEmbedding>None</TextEmbedding>
+            <ECLevel>0</ECLevel>
+            <HorizontalAlignment>Center</HorizontalAlignment>
+            <QuietZonesPadding Left="0" Top="0" Right="0" Bottom="0" />
+        </BarcodeObject>
+        <Bounds X="58" Y="948.5" Width="3125" Height="607" />
+    </ObjectInfo>
+</DieCutLabel>"""
 
     def build_print_url(self, data):
         """Build file:// URL with query parameters for printing."""
@@ -196,9 +339,46 @@ class ProductionPrintAgent:
         try:
             with open(self.template_path, 'r', encoding='utf-8') as f:
                 html = f.read()
+            
+            # Fix dymo.connect.framework.js path to absolute path
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            framework_path = os.path.join(script_dir, "dymo.connect.framework.js")
+            framework_file_url = f"file:///{framework_path.replace(os.sep, '/')}"
+            
+            # Replace relative path with absolute path
+            html = html.replace('src="dymo.connect.framework.js"', f'src="{framework_file_url}"')
+            
+            # Generate dynamic label XML if templates are enabled
+            dynamic_xml = None
+            if self.use_dynamic_templates:
+                try:
+                    dynamic_xml = self.generate_dynamic_label_xml(data)
+                    logger.info("Generated dynamic label XML for embedding")
+                except Exception as e:
+                    logger.warning(f"Failed to generate dynamic XML, using fallback: {e}")
+            
+            # Prepare embedded data
+            embedded_data = data.copy()
+            if dynamic_xml:
+                embedded_data['dynamic_label_xml'] = dynamic_xml
+                embedded_data['use_dynamic_template'] = True
+            else:
+                embedded_data['use_dynamic_template'] = False
+            
+            # Add printer configuration
+            embedded_data['printer_config'] = {
+                'mode': self.printer_mode,
+                'preferred_printer': self.preferred_printer,
+                'label_keywords': self.printer_config.get('label_printer_keywords', ['Label', 'LabelWriter']),
+                'tape_keywords': self.printer_config.get('tape_printer_keywords', ['Tape', 'LabelManager'])
+            }
+            
+            # Add browser behavior configuration
+            embedded_data['auto_close_browser'] = self.config.get('auto_close_browser', True)
+            
             script = (
                 "<script>\n"
-                f"window.EMBEDDED_PRINT_DATA = {json.dumps(data, ensure_ascii=False, indent=2)};\n"
+                f"window.EMBEDDED_PRINT_DATA = {json.dumps(embedded_data, ensure_ascii=False, indent=2)};\n"
                 "console.log('Embedded print data loaded');\n"
                 "</script>\n"
             )
@@ -248,6 +428,12 @@ class ProductionPrintAgent:
         success = self.execute_browser_print(data)
         if success:
             logger.info(f"Job #{job_id} print command sent")
+            # Wait for print to complete, then mark as completed
+            def mark_completed():
+                time.sleep(10)  # Wait 10 seconds for printing to complete
+                self.update_job_status(job_id, 'completed')
+                logger.info(f"Job #{job_id} marked as completed")
+            threading.Thread(target=mark_completed, daemon=True).start()
         else:
             self.update_job_status(job_id, 'failed', 'Browser print failed')
 

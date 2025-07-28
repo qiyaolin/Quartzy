@@ -1,0 +1,18 @@
+# Log files
+*.log
+
+# Configuration files (keep example)
+src/print_agent_config.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp

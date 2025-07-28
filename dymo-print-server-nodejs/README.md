@@ -1,32 +1,31 @@
 # DYMO Centralized Print System
 
-A production-ready centralized printing solution for DYMO label printers that can be deployed on any Windows computer to serve as a print station.
+A production-ready centralized printing solution for DYMO label printers that can be deployed on **any Windows computer** to serve as a print station. Fully portable and self-contained.
 
 ## Features
-- ✅ Centralized print job management
-- ✅ Automatic job polling from backend server
-- ✅ Reliable data transmission using embedded data method
-- ✅ Auto-close browser windows after printing
-- ✅ Comprehensive error handling and logging
-- ✅ Support for custom text and barcode printing
-- ✅ Production-ready configuration
+- ✅ **Portable**: Works on any Windows computer
+- ✅ **Centralized**: Print job management from remote backend
+- ✅ **Automatic**: Polls backend server for new jobs
+- ✅ **Reliable**: Embedded data transmission method
+- ✅ **Clean**: Auto-close browser windows after printing
+- ✅ **Robust**: Comprehensive error handling and logging
+- ✅ **Flexible**: Support for custom text and barcode printing
+- ✅ **Production-ready**: Stable configuration and deployment
 
 ## Quick Start
 
-1. **Install Requirements**
-   - DYMO Label Framework
-   - Python 3.7+
-   - Connected DYMO printer
+1. **Setup Requirements**
+   - Install DYMO Label Framework from DYMO website
+   - Install Python 3.7+ from python.org (check "Add to PATH")
+   - Connect DYMO printer via USB
 
-2. **Configure**
-   - Edit `src/print_agent_config.json` with your backend URL
-   - Verify DYMO framework path in `src/auto_print_template.html`
+2. **Configure System**
+   - Copy `src/print_agent_config.example.json` to `src/print_agent_config.json`
+   - Edit configuration file with your backend server URL and API token
 
-3. **Run**
-   ```cmd
-   cd src
-   python production_print_agent.py
-   ```
+3. **Start Print Station**
+   - Double-click `start_print_agent.bat`
+   - Or run manually: `python src/production_print_agent.py`
 
 ## File Structure
 ```

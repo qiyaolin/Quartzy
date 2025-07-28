@@ -65,7 +65,7 @@
     <h1>DYMO Auto Print System</h1>
     
     <div class="auto-print-notice">
-        ⚡ Auto Print Mode: System will automatically detect and print labels
+        ⚡ Auto Print Mode: textbox → text content, labelbox → barcode
     </div>
 
     <div class="print-info">
@@ -75,6 +75,9 @@
         <p><strong>Final Display Text:</strong> <span id="finalText" style="color: red; font-weight: bold;">--</span></p>
         <p><strong>Barcode:</strong> <span id="barcodeValue">--</span></p>
         <p><strong>Job ID:</strong> <span id="jobId">--</span></p>
+        <p><strong>Template Mode:</strong> <span id="templateMode" style="color: blue; font-weight: bold;">--</span></p>
+        <p><strong>Printer Mode:</strong> <span id="printerMode" style="color: green; font-weight: bold;">--</span></p>
+        <p><strong>Selected Printer:</strong> <span id="selectedPrinter" style="color: green;">--</span></p>
         <p><strong>Time:</strong> <span id="timestamp">--</span></p>
     </div>
 
@@ -102,7 +105,11 @@
                 customText: window.EMBEDDED_PRINT_DATA.custom_text || null,
                 fontSize: parseInt(window.EMBEDDED_PRINT_DATA.font_size) || 8,
                 isBold: window.EMBEDDED_PRINT_DATA.is_bold === 'true',
-                autoPrint: true // Embedded data always auto prints
+                autoPrint: true, // Embedded data always auto prints
+                auto_close_browser: window.EMBEDDED_PRINT_DATA.auto_close_browser,
+                use_dynamic_template: window.EMBEDDED_PRINT_DATA.use_dynamic_template,
+                dynamic_label_xml: window.EMBEDDED_PRINT_DATA.dynamic_label_xml,
+                printer_config: window.EMBEDDED_PRINT_DATA.printer_config
             };
         }
         
@@ -129,11 +136,24 @@
         document.getElementById('finalText').textContent = finalDisplayText;
         document.getElementById('barcodeValue').textContent = params.barcode;
         document.getElementById('jobId').textContent = params.jobId;
+        document.getElementById('templateMode').textContent = params.use_dynamic_template ? 'Dynamic (.label file)' : 'Hardcoded Fallback';
+        document.getElementById('printerMode').textContent = params.printer_config ? params.printer_config.mode : 'auto';
+        document.getElementById('selectedPrinter').textContent = '--';
         document.getElementById('timestamp').textContent = new Date().toLocaleString();
     }
 
     // Generate label XML
     function generateLabelXml(params) {
+        // Check if we have dynamic template XML
+        if (params.use_dynamic_template && params.dynamic_label_xml) {
+            console.log('Using dynamic label template from configured .label file');
+            console.log('textbox filled with:', params.customText || params.itemName);
+            console.log('labelbox filled with:', params.barcode);
+            return params.dynamic_label_xml;
+        }
+        
+        // Fallback to hardcoded template
+        console.log('Using hardcoded fallback template');
         let displayText = params.customText || params.itemName;
         
         // Ensure display text is not empty
@@ -212,27 +232,11 @@
         statusDiv.className = 'status ' + type;
     }
 
-    // Notify backend print result
+    // Notify backend print result - CORS blocked, handled by Python backend
     function notifyPrintResult(jobId, success, error = null) {
-        if (!jobId || jobId === '0') return;
-        
-        const callbackUrl = `https://lab-inventory-467021.nn.r.appspot.com/api/printing/api/jobs/${jobId}/update-status/`;
-        const data = {
-            status: success ? 'completed' : 'failed',
-            error_message: error
-        };
-        
-        fetch(callbackUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        }).then(response => {
-            // Status update completed
-        }).catch(err => {
-            // Status update failed - silent fail in production
-        });
+        // CORS policy blocks direct API calls from file:// protocol
+        // Status updates are handled by the Python backend instead
+        console.log(`Print result: Job ${jobId} - ${success ? 'SUCCESS' : 'FAILED'}${error ? ': ' + error : ''}`);
     }
 
     // Global parameters storage
@@ -299,6 +303,93 @@
         );
     }
 
+    // Select appropriate printer based on configuration
+    function selectPrinter(printers, printerConfig) {
+        if (!printers || printers.length === 0) {
+            console.log('❌ No printers available for selection');
+            return null;
+        }
+
+        // Log available printers
+        console.log('🖨️ Available printers:', printers.map(p => `${p.name} (Connected: ${p.isConnected})`));
+        console.log('⚙️ Printer configuration:', printerConfig);
+
+        const mode = printerConfig ? printerConfig.mode : 'auto';
+        const preferredPrinter = printerConfig ? printerConfig.preferred_printer : '';
+        
+        console.log(`🎯 Selection mode: ${mode}`);
+        console.log(`🎯 Preferred printer: "${preferredPrinter}"`);
+        
+        // Mode 1: Specific printer name
+        if ((mode === 'specific' || mode === 'type') && preferredPrinter) {
+            console.log(`🔍 Looking for specific printer: "${preferredPrinter}"`);
+            const specificPrinter = printers.find(p => p.name === preferredPrinter);
+            if (specificPrinter && specificPrinter.isConnected) {
+                console.log(`✅ SELECTED: Using specific printer: ${specificPrinter.name}`);
+                return specificPrinter;
+            } else if (specificPrinter && !specificPrinter.isConnected) {
+                console.warn(`⚠️ Specific printer "${preferredPrinter}" found but NOT CONNECTED`);
+            } else {
+                console.warn(`❌ Specific printer "${preferredPrinter}" NOT FOUND`);
+            }
+            console.warn(`⚠️ Falling back to auto selection`);
+        }
+
+        // Mode 2: Label printer preference (for DYMO 450 Duo)
+        const labelKeywords = printerConfig && (printerConfig.label_keywords || printerConfig.label_printer_keywords);
+        if (mode === 'label' && labelKeywords) {
+            console.log(`🏷️ Searching for label printer with keywords:`, labelKeywords);
+            const labelPrinter = printers.find(p => {
+                const nameUpper = p.name.toUpperCase();
+                const hasKeyword = labelKeywords.some(keyword => 
+                    nameUpper.includes(keyword.toUpperCase())
+                );
+                console.log(`  📋 Checking ${p.name}: hasKeyword=${hasKeyword}, connected=${p.isConnected}`);
+                return hasKeyword && p.isConnected;
+            });
+            if (labelPrinter) {
+                console.log(`✅ SELECTED: Using label printer: ${labelPrinter.name}`);
+                return labelPrinter;
+            } else {
+                console.log(`❌ No connected label printer found with matching keywords`);
+            }
+        }
+
+        // Mode 3: Tape printer preference (for DYMO 450 Duo)
+        const tapeKeywords = printerConfig && (printerConfig.tape_keywords || printerConfig.tape_printer_keywords);
+        if (mode === 'tape' && tapeKeywords) {
+            console.log(`📼 Searching for tape printer with keywords:`, tapeKeywords);
+            const tapePrinter = printers.find(p => {
+                const nameUpper = p.name.toUpperCase();
+                const hasKeyword = tapeKeywords.some(keyword => 
+                    nameUpper.includes(keyword.toUpperCase())
+                );
+                console.log(`  📋 Checking ${p.name}: hasKeyword=${hasKeyword}, connected=${p.isConnected}`);
+                return hasKeyword && p.isConnected;
+            });
+            if (tapePrinter) {
+                console.log(`✅ SELECTED: Using tape printer: ${tapePrinter.name}`);
+                return tapePrinter;
+            } else {
+                console.log(`❌ No connected tape printer found with matching keywords`);
+            }
+        }
+
+        // Mode 4: Auto selection (default)
+        console.log(`🔄 Using auto selection fallback`);
+        // First try connected printers
+        const connectedPrinters = printers.filter(p => p.isConnected);
+        if (connectedPrinters.length > 0) {
+            const selectedPrinter = connectedPrinters[0];
+            console.log(`⚠️ AUTO-SELECTED: Using first connected printer: ${selectedPrinter.name}`);
+            return selectedPrinter;
+        }
+
+        // Fallback to first available printer
+        console.log(`⚠️ FALLBACK: Using first available printer: ${printers[0].name}`);
+        return printers[0];
+    }
+
     // Load printers and execute print
     function loadPrintersAndPrint(params) {
         var printersPromise = dymo.label.framework.getPrintersAsync();
@@ -311,10 +402,17 @@
                 return;
             }
 
-            // Select first connected printer
-            const connectedPrinter = printers.find(p => p.isConnected);
-            const selectedPrinter = connectedPrinter || printers[0];
+            // Select appropriate printer
+            const selectedPrinter = selectPrinter(printers, params.printer_config);
+            if (!selectedPrinter) {
+                const error = 'No suitable printer found';
+                showStatus(error, 'error');
+                notifyPrintResult(params.jobId, false, error);
+                return;
+            }
 
+            // Update UI
+            document.getElementById('selectedPrinter').textContent = selectedPrinter.name;
             showStatus(`Using printer: ${selectedPrinter.name}, preparing to print...`, 'info');
 
             try {
@@ -334,8 +432,11 @@
                 
                 // Auto close window after successful print
                 setTimeout(() => {
-                    if (params.autoPrint) {
+                    if (params.autoPrint && params.auto_close_browser !== false) {
+                        console.log('Auto-closing browser window...');
                         window.close();
+                    } else {
+                        console.log('Auto-close disabled, keeping window open');
                     }
                 }, 2000);
                 
@@ -359,6 +460,8 @@
     // Initialize function
     function init() {
         const params = getUrlParams();
+        console.log('🔧 Print parameters loaded:', params);
+        console.log('🔧 Auto close browser setting:', params.auto_close_browser);
         updateDisplay(params);
         
         // Start print process after 500ms delay to ensure page is fully loaded
