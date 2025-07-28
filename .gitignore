@@ -37,18 +37,188 @@ bio-inventory-frontend/yarn-debug.log*
 bio-inventory-frontend/yarn-error.log*
 bio-inventory-frontend/.parcel-cache/
 
-# System
-.DS_Store
-Thumbs.db
+# DYMO Print Server Node.js
+dymo-print-server-nodejs/node_modules/
+dymo-print-server-nodejs/src/__pycache__/
+dymo-print-server-nodejs/src/*.pyc
+dymo-print-server-nodejs/src/*.pyo
+dymo-print-server-nodejs/src/*.pyd
+dymo-print-server-nodejs/src/print_agent.log
+dymo-print-server-nodejs/src/print_agent_config.json
+dymo-print-server-nodejs/quick_test.py
+
+# Root level Python cache and logs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Configuration files
+*_config.json
+temp_*.json
+print_agent_config.json
+print_server_config.json
+
+# Test files
+test_*.html
+test_*.js
+test_*.py
+
+# IDE and development tools
+.vscode/
+.idea/
+.codebuddy/
+.claude/
 *.swp
 *.swo
 
-# VSCode
-.vscode/
+# System files
+.DS_Store
+Thumbs.db
 
-# Logs
-*.log
+# Environment files
+.env
+.env.*
+local_settings.py
+
+# Database files
+*.db
+*.sqlite3
+*.sqlite3-journal
+
+# Coverage and testing
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Deployment
+.gcloudignore
+*.yaml
+*.yml
 
 # Others
 *.bak
-*.tmp 
+*.tmp
+
+# ===== 新增的测试文件和调试文档 =====
+
+# 根目录测试文件
+test_login.html
+test_url_params.html
+test-mobile-notifications.js
+test-mobile-whitscreen.js
+debug-production.js
+
+# 后端测试文件
+bio-inventory-backend/comprehensive_test.py
+bio-inventory-backend/health_check.py
+bio-inventory-backend/quick_deployment_check.py
+bio-inventory-backend/final_barcode_verification.py
+bio-inventory-backend/verify_current_status.py
+bio-inventory-backend/check_migration_status.py
+bio-inventory-backend/final_verification.py
+bio-inventory-backend/test_emergency_migration.py
+bio-inventory-backend/verify_barcode_production.py
+bio-inventory-backend/test_barcode_with_auth.py
+bio-inventory-backend/simple_barcode_test.py
+bio-inventory-backend/test_barcode_field.py
+bio-inventory-backend/check_production_schema.py
+bio-inventory-backend/check_item_schema.py
+bio-inventory-backend/test_deployment.py
+bio-inventory-backend/test_email_specific.py
+bio-inventory-backend/test_email.py
+
+# 后端调试和修复脚本
+bio-inventory-backend/force_add_barcode_migration.py
+bio-inventory-backend/fresh_deployment.py
+bio-inventory-backend/execute_missing_migration.py
+bio-inventory-backend/emergency_barcode_fix.py
+bio-inventory-backend/force_migrate_production.py
+bio-inventory-backend/deploy_barcode_migration.py
+bio-inventory-backend/force_fix_migration.py
+bio-inventory-backend/fix_migration.py
+
+# 打印服务器测试文件
+dymo-print-server-nodejs/quick_test.py
+
+# 调试说明文档（中文）
+*修复*.md
+*问题修复*.md
+*修复报告*.md
+*Implementation-Summary*.md
+*Implementation-Summary.md
+*UI优化*.md
+*移动端*.md
+*白屏*.md
+*部署*.md
+*迁移*.md
+*打印*.md
+*功能*.md
+*测试*.md
+*诊断*.md
+*解决*.md
+
+# 具体的调试文档
+DYMO打印数据传递问题修复.md
+隔离打印流程修复报告.md
+URL参数截断问题修复报告.md
+移动端库存条码打印功能集中式重构.md
+移动端库存条码打印功能.md
+生物库存管理系统后端迁移.md
+CENTRALIZED_PRINTING_SETUP.md
+生物库存管理系统集中式标签打印重构.md
+移动端Notification功能修复.md
+ZBar-WASM-Implementation-Summary.md
+MobileHomeInterfaceIssueFix.md
+移动端Home界面问题修复.md
+生物库存管理系统移动端UI优化.md
+修复移动端Requests界面MarkReceived功能缺陷.md
+mobile-fixes-complete-summary.md
+mobile-fixes-summary.md
+修复React移动端白屏问题.md
+React移动端白屏问题修复.md
+移动端白屏修复与UI优化.md
+生物库存管理系统移动端优化.md
+AppEngine后端服务器诊断修复.md
+DjangoItem模型Barcode字段迁移问题修复.md
+cloud-deployment-guide.md
+checkout-implementation-summary.md
+mobile-responsive-testing.md
+Django数据库字段冲突修复.md
+Django管理员界面访问问题修复.md
+解决前端无法连接到后端API的问题.md
+解决GoogleAppEngine部署的Django后端无法访问的问题.md
+修复完成报告.md
+barcode_field_analysis_report.md
+production_migration_guide.md
+MOBILE_UI_GUIDE.md
+DEPLOYMENT_GUIDE.md
+
+# 截图和图片文件
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+
+# 日志文件（更具体）
+print_server.log
+print_agent.log
+print_server_native.log
+
+# 临时和配置文件
+temp_test_config.json
+requirements_print_server.txt
+create_superuser_instructions.txt
+
+# 脚本文件
+entrypoint*.sh
+start_print_agent.bat
+
+# 开发工具和IDE
+.codebuddy/
+.claude/
+.idea/
+.vscode/ 

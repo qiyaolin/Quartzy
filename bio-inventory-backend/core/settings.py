@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'users',
     'funding',
     'notifications',
+    'printing',
 ]
 
 MIDDLEWARE = [

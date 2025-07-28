@@ -1,13 +1,14 @@
 import { useState, useEffect, useContext } from 'react';
 import { Input } from '../../components/ui/input.tsx';
 import { Button } from '../../components/ui/button.tsx';
-import { Search, Filter, Package, MapPin, Calendar, AlertTriangle, CheckCircle, Scan, DollarSign } from 'lucide-react';
+import { Search, Filter, Package, MapPin, Calendar, AlertTriangle, CheckCircle, Scan, DollarSign, Printer } from 'lucide-react';
 import SpeedDialFab from '../../components/mobile/speed-dial-fab.tsx';
 import { AuthContext } from '../../components/AuthContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
 import MobileItemFormModal from '../../modals/MobileItemFormModal.tsx';
 import { useNotification } from '../../contexts/NotificationContext.tsx';
 import ZBarBarcodeScanner from '../../components/ZBarBarcodeScanner.tsx';
+import MobileBarcodeConfirmDialog from '../../components/mobile/MobileBarcodeConfirmDialog.tsx';
 
 interface InventoryItem {
   id: number;
@@ -34,8 +35,8 @@ const MobileInventoryListPage = () => {
   const [isItemFormModalOpen, setIsItemFormModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  // Scanner selector removed - using ZBar only
-  // Removed scanner type - using ZBar only
+  const [showPrintConfirmDialog, setShowPrintConfirmDialog] = useState(false);
+  const [selectedItemForPrint, setSelectedItemForPrint] = useState<InventoryItem | null>(null);
   const [filters, setFilters] = useState({
     location: '',
     itemType: '',
@@ -198,10 +199,63 @@ const MobileInventoryListPage = () => {
         const errorData = await response.json();
         notification.error(`Checkout failed: ${errorData.error || 'Unknown error'}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Barcode checkout error:', error);
       notification.error(`Failed to checkout item: ${error.message}`);
     }
+  };
+
+  const handleBarcodeClick = (item: InventoryItem) => {
+    if (item.barcode) {
+      setSelectedItemForPrint(item);
+      setShowPrintConfirmDialog(true);
+    }
+  };
+
+  // Centralized print function - sends print job to server
+  const handlePrintConfirm = async () => {
+    if (selectedItemForPrint) {
+      try {
+        setShowPrintConfirmDialog(false);
+        
+        // Send print job to centralized print server
+        const response = await fetch(buildApiUrl('/api/printing/api/jobs/'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Token ${token}`
+          },
+          body: JSON.stringify({
+            label_data: {
+              itemName: selectedItemForPrint.name,
+              barcode: selectedItemForPrint.barcode || '',
+              customText: selectedItemForPrint.name,
+              fontSize: 8,
+              isBold: false
+            },
+            priority: 'normal',
+            item_id: selectedItemForPrint.id
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          notification.success(`Print job sent to server successfully! Job ID: ${result.id || 'N/A'}`);
+          setSelectedItemForPrint(null);
+        } else {
+          const errorData = await response.json();
+          notification.error(`Failed to send print job: ${errorData.error || 'Unknown error'}`);
+        }
+      } catch (error: any) {
+        console.error('Print job submission error:', error);
+        notification.error(`Failed to send print job: ${error.message}`);
+      }
+    }
+  };
+
+  const handleClosePrintDialog = () => {
+    setShowPrintConfirmDialog(false);
+    setSelectedItemForPrint(null);
   };
 
   if (loading) {
@@ -246,7 +300,7 @@ const MobileInventoryListPage = () => {
         }}></div>
       </div>
       
-        <div className="relative z-10 p-4 space-y-6 pb-40">
+      <div className="relative z-10 p-4 space-y-6 pb-40">
         {/* Header */}
         <div className="text-center py-4">
           <div className="inline-flex items-center space-x-3 bg-white/80 backdrop-blur-xl rounded-2xl px-6 py-4 shadow-lg border border-white/20">
@@ -420,11 +474,17 @@ const MobileInventoryListPage = () => {
                   )}
                   
                   {item.barcode && (
-                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl">
+                    <div 
+                      className="flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl cursor-pointer hover:from-indigo-100 hover:to-blue-100 transition-all duration-200 active:scale-95"
+                      onClick={() => handleBarcodeClick(item)}
+                    >
                       <Scan className="w-4 h-4 text-indigo-600" />
                       <span className="text-sm text-indigo-700 font-mono">
                         {item.barcode}
                       </span>
+                      <div className="ml-auto">
+                        <Printer className="w-4 h-4 text-indigo-600" />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -469,10 +529,8 @@ const MobileInventoryListPage = () => {
           onSave={handleItemSaved}
           token={token}
         />
-        
-        {/* Scanner selector removed - using ZBar directly */}
 
-        {/* ZBar WASM Scanner - Only Scanner */}
+        {/* ZBar WASM Scanner */}
         <ZBarBarcodeScanner
           isOpen={showBarcodeScanner}
           onClose={() => setShowBarcodeScanner(false)}
@@ -480,6 +538,15 @@ const MobileInventoryListPage = () => {
           onConfirm={handleBarcodeConfirmed}
           title="ZBar WASM Scanner"
           token={token}
+        />
+
+        {/* Barcode Print Confirmation Dialog - Now uses centralized printing */}
+        <MobileBarcodeConfirmDialog
+          isOpen={showPrintConfirmDialog}
+          onClose={handleClosePrintDialog}
+          onConfirm={handlePrintConfirm}
+          itemName={selectedItemForPrint?.name || ''}
+          barcode={selectedItemForPrint?.barcode || ''}
         />
       </div>
     </div>
