@@ -1,0 +1,15 @@
+{
+  "backend_url": "https://lab-inventory-467021.nn.r.appspot.com",
+  "api_token": "5e4ef32fe77d54a3dccf5181797bd840791465e9",
+  "api_endpoints": {
+    "get_jobs": "/api/printing/api/jobs/",
+    "update_status": "/api/printing/api/jobs/{job_id}/update-status/"
+  },
+  "poll_interval": 3,
+  "template_path": "auto_print_template.html",
+  "max_retry_count": 3,
+  "browser_timeout": 30,
+  "auto_close_browser": true,
+  "concurrent_jobs": 1,
+  "debug_mode": false
+}

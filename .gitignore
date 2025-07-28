@@ -137,8 +137,8 @@ bio-inventory-backend/deploy_barcode_migration.py
 bio-inventory-backend/force_fix_migration.py
 bio-inventory-backend/fix_migration.py
 
-# 打印服务器测试文件
-dymo-print-server-nodejs/quick_test.py
+# 打印服务器测试文件（移除quick_test.py的排除）
+# dymo-print-server-nodejs/quick_test.py
 
 # Markdown文件过滤规则
 # 排除大部分.md文件，但保留重要的项目文档
@@ -160,6 +160,12 @@ dymo-print-server-nodejs/quick_test.py
 !bio-inventory-frontend/MOBILE_UI_GUIDE.md
 !dymo-print-server-nodejs/DEPLOYMENT_GUIDE.md
 
+# dymo-print-server-nodejs 特殊规则
+# 该目录中除了node_modules外，其他文件都是必要的
+!dymo-print-server-nodejs/quick_test.py
+!dymo-print-server-nodejs/start_print_agent.bat
+!dymo-print-server-nodejs/src/print_agent_config.json
+
 # 截图和图片文件
 *.png
 *.jpg
@@ -180,7 +186,7 @@ create_superuser_instructions.txt
 
 # 脚本文件
 entrypoint*.sh
-start_print_agent.bat
+# start_print_agent.bat  # dymo-print-server-nodejs中的启动脚本是必要的
 
 # 开发工具和IDE
 .codebuddy/
