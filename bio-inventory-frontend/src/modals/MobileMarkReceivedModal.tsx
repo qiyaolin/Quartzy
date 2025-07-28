@@ -60,9 +60,11 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
-            <div className="bg-white w-full sm:max-w-lg sm:rounded-lg shadow-xl max-h-[90vh] overflow-hidden sm:max-h-[85vh] rounded-t-2xl sm:rounded-2xl">
+            <div className="bg-white w-full sm:max-w-lg sm:rounded-lg shadow-xl max-h-[100dvh] sm:max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl" style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px))' }}>
                 {/* Header */}
-                <div className="flex justify-between items-center p-4 sm:p-6 border-b bg-white sticky top-0 z-10">
+                <div className="flex justify-between items-center p-4 sm:p-6 border-b bg-white sticky top-0 z-10" style={{ 
+                    paddingTop: 'max(16px, calc(env(safe-area-inset-top, 0px) + 16px))' 
+                }}>
                     <div className="flex-1">
                         <h2 className="text-lg sm:text-xl font-bold text-gray-800">
                             {showBarcodeSection ? 'Print Barcode Label' : 'Mark as Received'}
@@ -80,7 +82,11 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
                 </div>
 
                 {/* Content */}
-                <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-120px)] sm:max-h-[calc(85vh-120px)] pb-8">
+                <div className="p-4 sm:p-6 overflow-y-auto mobile-scroll pb-8" style={{ 
+                    maxHeight: 'calc(100dvh - 180px)', 
+                    minHeight: '200px',
+                    paddingBottom: 'max(100px, calc(env(safe-area-inset-bottom, 0px) + 80px))'
+                }}>
                     {!showBarcodeSection ? (
                         /* Form Section */
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -137,7 +143,9 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="flex flex-col sm:flex-row gap-3 pt-4 pb-20 sm:pb-0">
+                            <div className="flex flex-col sm:flex-row gap-3 pt-4" style={{ 
+                                paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom, 0px) + 80px))' 
+                            }}>
                                 <button 
                                     type="button" 
                                     onClick={handleClose} 
@@ -213,7 +221,9 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
                             </div>
 
                             {/* Done Button */}
-                            <div className="flex justify-end pt-4 pb-20 sm:pb-0">
+                            <div className="flex justify-end pt-4" style={{ 
+                                paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom, 0px) + 80px))' 
+                            }}>
                                 <button 
                                     onClick={handleClose} 
                                     className="w-full sm:w-auto px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"

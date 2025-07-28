@@ -4,20 +4,20 @@ import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {
     const [formData, setFormData] = useState<any>({});
-    const [dropdownData, setDropdownData] = useState<any>({ vendors: [], locations: [], itemTypes: [] });
+    const [dropdownData, setDropdownData] = useState<any>({ vendors: [], locations: [], itemTypes: [], funds: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [customVendor, setCustomVendor] = useState('');
     const isEditMode = initialData !== null;
 
     useEffect(() => {
-        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '' };
+        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', fund_id: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '' };
         if (isEditMode) {
             setFormData({
                 name: initialData.name || '', item_type_id: initialData.item_type?.id || '', vendor_id: initialData.vendor?.id || '',
                 owner_id: initialData.owner?.id || '1', catalog_number: initialData.catalog_number || '', quantity: initialData.quantity || '1.00',
                 unit: initialData.unit || '', location_id: initialData.location?.id || '', price: initialData.price || '',
-                expiration_date: initialData.expiration_date || '', lot_number: initialData.lot_number || '', received_date: initialData.received_date || '',
+                fund_id: initialData.fund_id || '', expiration_date: initialData.expiration_date || '', lot_number: initialData.lot_number || '', received_date: initialData.received_date || '',
                 expiration_alert_days: initialData.expiration_alert_days || '30', storage_temperature: initialData.storage_temperature || '', storage_conditions: initialData.storage_conditions || ''
             });
         } else { setFormData(emptyForm); }
@@ -28,13 +28,22 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
             const fetchDropdownData = async () => {
                 try {
                     const headers = { 'Authorization': `Token ${token}` };
-                    const [vendorsRes, locationsRes, itemTypesRes] = await Promise.all([
+                    const [vendorsRes, locationsRes, itemTypesRes, fundsRes] = await Promise.all([
                         fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
                         fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { headers }),
                         fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.FUNDS), { headers }),
                     ]);
                     const vendors = await vendorsRes.json(); const locations = await locationsRes.json(); const itemTypes = await itemTypesRes.json();
-                    setDropdownData({ vendors, locations, itemTypes });
+                    
+                    // Handle funds response, as it might not exist or might fail
+                    let funds = [];
+                    if (fundsRes.ok) {
+                        const fundsData = await fundsRes.json();
+                        funds = (fundsData.results || fundsData).filter(fund => !fund.is_archived);
+                    }
+                    
+                    setDropdownData({ vendors, locations, itemTypes, funds });
                 } catch (e) { setError('Could not load form data.'); }
             };
             fetchDropdownData();
@@ -97,6 +106,31 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                 const errorData = await response.json(); 
                 throw new Error(JSON.stringify(errorData)); 
             }
+            
+            // If creating a new item with a fund and price, create a transaction for fund deduction
+            if (!isEditMode && finalFormData.fund_id && finalFormData.price && finalFormData.quantity) {
+                try {
+                    const totalCost = parseFloat(finalFormData.price) * parseFloat(finalFormData.quantity);
+                    if (totalCost > 0) {
+                        await fetch(buildApiUrl(API_ENDPOINTS.TRANSACTIONS), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
+                            body: JSON.stringify({
+                                fund_id: finalFormData.fund_id,
+                                amount: totalCost,
+                                transaction_type: 'purchase',
+                                item_name: finalFormData.name,
+                                description: `Purchase of ${finalFormData.name} - ${finalFormData.quantity} ${finalFormData.unit || 'units'}`,
+                                transaction_date: new Date().toISOString().split('T')[0]
+                            })
+                        });
+                    }
+                } catch (transactionError) {
+                    console.error('Failed to create transaction:', transactionError);
+                    // Don't fail the item creation if transaction fails
+                }
+            }
+            
             onSave(); onClose();
         } catch (e) { setError(`Submission failed: ${e.message}`); } finally { setIsSubmitting(false); }
     };
@@ -278,7 +312,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                     </div>
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label htmlFor="price" className="block text-sm font-semibold text-gray-700 mb-2">
                                             <div className="flex items-center space-x-1">
@@ -298,6 +332,34 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                         />
                                     </div>
                                     
+                                    <div>
+                                        <label htmlFor="fund_id" className="block text-sm font-semibold text-gray-700 mb-2">
+                                            <div className="flex items-center space-x-1">
+                                                <DollarSign className="w-4 h-4" />
+                                                <span>Funding Source</span>
+                                            </div>
+                                        </label>
+                                        <select 
+                                            name="fund_id" 
+                                            id="fund_id" 
+                                            value={formData.fund_id} 
+                                            onChange={handleChange} 
+                                            className="select focus:ring-primary-500 focus:border-primary-500"
+                                        >
+                                            <option value="">No funding source</option>
+                                            {dropdownData.funds.map((fund: any) => (
+                                                <option key={fund.id} value={fund.id}>
+                                                    {fund.name} - ${((parseFloat(fund.total_budget) || 0) - (parseFloat(fund.spent_amount) || 0)).toLocaleString()} remaining
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {dropdownData.funds.length === 0 && (
+                                            <p className="text-sm text-gray-500 mt-1">No active funds available</p>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label htmlFor="catalog_number" className="block text-sm font-semibold text-gray-700 mb-2">
                                             Catalog Number

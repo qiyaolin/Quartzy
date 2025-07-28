@@ -5,6 +5,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import mobile fixes */
+@import './styles/mobile-fixes.css';
+@import './styles/speed-dial-animations.css';
+
 @layer base {
   html {
     font-feature-settings: 'cv01', 'cv02', 'cv03', 'cv04', 'ss01', 'ss02';
@@ -723,6 +727,71 @@
     /* Mobile modal optimization */
     .modal-panel {
       @apply mx-4 my-8 max-h-[90vh] overflow-y-auto;
+    }
+    
+    /* Mobile modal enhancements for proper viewport handling */
+    .mobile-modal {
+      max-height: 100dvh !important;
+      max-height: calc(100vh - env(safe-area-inset-top, 0px)) !important;
+    }
+    
+    .mobile-modal-content {
+      max-height: calc(100dvh - 120px) !important;
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px) !important;
+    }
+    
+    /* Prevent keyboard push-up issues */
+    .mobile-modal-form {
+      min-height: 300px;
+      max-height: calc(100dvh - 180px);
+    }
+    
+    /* Safe area modal header */
+    .mobile-modal-header {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 20px) !important;
+    }
+    
+    /* Safe area modal footer */
+    .mobile-modal-footer {
+      padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+    }
+    
+    /* Additional mobile modal improvements */
+    .mobile-modal-backdrop {
+      /* Ensure modal backdrop covers entire screen including safe areas */
+      top: 0 !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+    }
+    
+    /* Prevent modal content from being covered by iOS Safari bars */
+    .mobile-modal-container {
+      min-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+      min-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    }
+    
+    /* Ensure modal content is scrollable when keyboard appears */
+    .mobile-modal-scrollable {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      /* Prevent bounce scrolling affecting modal backdrop */
+    }
+    
+    /* Keyboard handling for iOS */
+    .mobile-modal-input-container {
+      position: relative;
+      z-index: 100;
+    }
+    
+    /* Focus handling for mobile inputs in modals */
+    .mobile-modal input:focus,
+    .mobile-modal select:focus,
+    .mobile-modal textarea:focus {
+      /* Prevent modal from jumping when keyboard appears */
+      scroll-margin-top: 20px;
+      scroll-margin-bottom: 20px;
     }
     
     /* Mobile page layout consistency */

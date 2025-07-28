@@ -1,0 +1,187 @@
+/* Speed Dial FAB 动画效果 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeOutDown {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+
+/* 现代渐变动画 */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* 光晕效果 */
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.3), 0 0 40px rgba(118, 75, 162, 0.2), 0 0 60px rgba(240, 147, 251, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(102, 126, 234, 0.4), 0 0 50px rgba(118, 75, 162, 0.3), 0 0 70px rgba(240, 147, 251, 0.2);
+  }
+}
+
+/* 浮动按钮悬浮效果 */
+.speed-dial-fab {
+  position: relative;
+}
+
+.speed-dial-fab::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.4), rgba(118, 75, 162, 0.4), rgba(240, 147, 251, 0.4));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: -1;
+  filter: blur(8px);
+}
+
+.speed-dial-fab:hover::before {
+  opacity: 1;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* 动作按钮弹性效果 */
+.speed-dial-action {
+  animation-fill-mode: both;
+}
+
+.speed-dial-action.entering {
+  animation: fadeInUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.speed-dial-action.exiting {
+  animation: fadeOutDown 0.2s ease-in;
+}
+
+/* 标签滑入效果 */
+.speed-dial-label {
+  animation-fill-mode: both;
+}
+
+.speed-dial-label.entering {
+  animation: slideInRight 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.speed-dial-label.exiting {
+  animation: slideOutRight 0.2s ease-in;
+}
+
+/* 主按钮旋转效果增强 */
+.speed-dial-main-button {
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background-size: 200% 200%;
+  animation: gradientShift 4s ease infinite;
+}
+
+.speed-dial-main-button.open {
+  transform: rotate(45deg) scale(1.08);
+  animation: glow 2s ease-in-out infinite;
+}
+
+.speed-dial-main-button:hover {
+  animation: glow 1.5s ease-in-out infinite;
+}
+
+/* 背景模糊效果 */
+.speed-dial-backdrop {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* 现代浮动按钮样式增强 */
+.modern-fab {
+  position: relative;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 6s ease infinite;
+  box-shadow: 
+    0 8px 32px rgba(102, 126, 234, 0.3),
+    0 4px 16px rgba(118, 75, 162, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.modern-fab:hover {
+  animation: glow 1.5s ease-in-out infinite, gradientShift 3s ease infinite;
+  transform: scale(1.05);
+}
+
+.modern-fab:active {
+  transform: scale(0.98);
+}
+
+/* 动作按钮现代化样式 */
+.modern-action-button {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 4px 16px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.modern-action-button:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(147, 51, 234, 0.3);
+  box-shadow: 
+    0 12px 40px rgba(147, 51, 234, 0.15),
+    0 6px 20px rgba(147, 51, 234, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}

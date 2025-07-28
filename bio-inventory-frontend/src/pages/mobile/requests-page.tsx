@@ -441,12 +441,12 @@ const MobileRequestsPage = () => {
             <Package className="w-8 h-8 text-white" />
           </div>
           <p className="text-red-600 font-medium mb-4">{error}</p>
-          <Button 
-            onClick={() => window.location.reload()} 
-            className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-          >
-            Retry
-          </Button>
+            <Button
+              onClick={() => window.location.reload()}
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 text-xs px-3 py-2"
+            >
+              Retry
+            </Button>
         </div>
       </div>
     );
@@ -698,7 +698,7 @@ const MobileRequestsPage = () => {
                   {/* Secondary Actions */}
                   <Button
                     onClick={() => handleViewDetails(request)}
-                    className="bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 text-blue-600 font-semibold rounded-xl border border-blue-200 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] border-0"
                   >
                     <Eye className="w-4 h-4 mr-2" />
                     Details
@@ -706,7 +706,7 @@ const MobileRequestsPage = () => {
                   
                   <Button
                     onClick={() => handleShowHistory(request.id)}
-                    className="bg-gradient-to-r from-gray-50 to-slate-50 hover:from-gray-100 hover:to-slate-100 text-gray-600 font-semibold rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+                    className="bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] border-0"
                   >
                     <History className="w-4 h-4 mr-2" />
                     History

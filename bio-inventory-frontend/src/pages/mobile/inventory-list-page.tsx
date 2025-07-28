@@ -1,13 +1,13 @@
 import { useState, useEffect, useContext } from 'react';
 import { Input } from '../../components/ui/input.tsx';
 import { Button } from '../../components/ui/button.tsx';
-import { Search, Filter, Package, MapPin, Calendar, AlertTriangle, CheckCircle, Scan } from 'lucide-react';
+import { Search, Filter, Package, MapPin, Calendar, AlertTriangle, CheckCircle, Scan, DollarSign } from 'lucide-react';
 import SpeedDialFab from '../../components/mobile/speed-dial-fab.tsx';
 import { AuthContext } from '../../components/AuthContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
 import MobileItemFormModal from '../../modals/MobileItemFormModal.tsx';
 import { useNotification } from '../../contexts/NotificationContext.tsx';
-import MobileBarcodeScanner from '../../components/mobile/MobileBarcodeScanner.tsx';
+import ZBarBarcodeScanner from '../../components/ZBarBarcodeScanner.tsx';
 
 interface InventoryItem {
   id: number;
@@ -19,6 +19,8 @@ interface InventoryItem {
   vendor: string | { id: number; name: string; website?: string };
   expiry_date: string | null;
   barcode: string | null;
+  fund_id?: number;
+  fund_name?: string;
   created_at: string;
 }
 
@@ -32,6 +34,8 @@ const MobileInventoryListPage = () => {
   const [isItemFormModalOpen, setIsItemFormModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  // Scanner selector removed - using ZBar only
+  // Removed scanner type - using ZBar only
   const [filters, setFilters] = useState({
     location: '',
     itemType: '',
@@ -386,6 +390,16 @@ const MobileInventoryListPage = () => {
                       {getVendorName(item.vendor)}
                     </span>
                   </div>
+
+                  {/* Fund Information */}
+                  {item.fund_name && (
+                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                      <DollarSign className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm text-blue-700 font-medium">
+                        Fund: {item.fund_name}
+                      </span>
+                    </div>
+                  )}
                   
                   {item.expiry_date && (
                     <div className={`flex items-center space-x-2 p-3 rounded-xl ${
@@ -456,13 +470,15 @@ const MobileInventoryListPage = () => {
           token={token}
         />
         
-        {/* Barcode Scanner */}
-        <MobileBarcodeScanner
+        {/* Scanner selector removed - using ZBar directly */}
+
+        {/* ZBar WASM Scanner - Only Scanner */}
+        <ZBarBarcodeScanner
           isOpen={showBarcodeScanner}
           onClose={() => setShowBarcodeScanner(false)}
           onScan={handleBarcodeScanned}
           onConfirm={handleBarcodeConfirmed}
-          title="Scan Item for Checkout"
+          title="ZBar WASM Scanner"
           token={token}
         />
       </div>

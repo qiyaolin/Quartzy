@@ -1,5 +1,4 @@
-import { useState, useEffect, useContext } from 'react';
-import { Card, CardContent } from '../../components/ui/card.tsx';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { Button } from '../../components/ui/button.tsx';
 import { Bell, AlertTriangle, CheckCircle, Info, Trash2, Check, Calendar, Package, User, Clock, Filter } from 'lucide-react';
 import { AuthContext } from '../../components/AuthContext.tsx';
@@ -9,7 +8,7 @@ interface Notification {
   id: number;
   title: string;
   message: string;
-  type: string;
+  notification_type: string;
   is_read: boolean;
   created_at: string;
   related_item?: string;
@@ -22,6 +21,8 @@ const MobileNotificationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'read'>('all');
+  const [refreshing, setRefreshing] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const authContext = useContext(AuthContext);
   if (!authContext) {
@@ -29,32 +30,46 @@ const MobileNotificationsPage = () => {
   }
   const { token } = authContext;
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      if (!token) return;
+  const fetchNotifications = useCallback(async (isRefresh = false) => {
+    if (!token) return;
 
-      try {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
         setLoading(true);
-        const response = await fetch(buildApiUrl(API_ENDPOINTS.NOTIFICATIONS), {
-          headers: { 'Authorization': `Token ${token}` }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setNotifications(data);
-        } else {
-          setError('Failed to fetch notifications');
-        }
-      } catch (err) {
-        console.error('Error fetching notifications:', err);
-        setError('Network error. Please check your connection.');
-      } finally {
-        setLoading(false);
       }
-    };
+      
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.NOTIFICATIONS), {
+        headers: { 
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    fetchNotifications();
+      if (response.ok) {
+        const data = await response.json();
+        // Handle both paginated response and direct array response
+        const notificationsArray = data.results || data;
+        setNotifications(Array.isArray(notificationsArray) ? notificationsArray : []);
+        setError(''); // Clear any previous errors
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to fetch notifications:', errorData);
+        setError('Failed to fetch notifications');
+      }
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+      setError('Network error. Please check your connection.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [token]);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
 
   useEffect(() => {
     let filtered = notifications;
@@ -76,8 +91,8 @@ const MobileNotificationsPage = () => {
     setFilteredNotifications(filtered);
   }, [notifications, activeFilter]);
 
-  const getNotificationConfig = (type: string) => {
-    switch (type) {
+  const getNotificationConfig = (notification_type: string) => {
+    switch (notification_type) {
       case 'success':
         return {
           icon: CheckCircle,
@@ -117,9 +132,12 @@ const MobileNotificationsPage = () => {
     if (!token) return;
 
     try {
-      const response = await fetch(buildApiUrl(`/api/notifications/${notificationId}/mark_read/`), {
+      const response = await fetch(buildApiUrl(`${API_ENDPOINTS.NOTIFICATIONS}${notificationId}/mark_read/`), {
         method: 'POST',
-        headers: { 'Authorization': `Token ${token}` }
+        headers: { 
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.ok) {
@@ -128,9 +146,14 @@ const MobileNotificationsPage = () => {
             notif.id === notificationId ? { ...notif, is_read: true } : notif
           )
         );
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to mark notification as read:', errorData);
+        setError('Failed to mark notification as read');
       }
     } catch (err) {
       console.error('Error marking notification as read:', err);
+      setError('Network error. Please check your connection.');
     }
   };
 
@@ -138,16 +161,24 @@ const MobileNotificationsPage = () => {
     if (!token) return;
 
     try {
-      const response = await fetch(buildApiUrl(`/api/notifications/${notificationId}/`), {
+      const response = await fetch(buildApiUrl(`${API_ENDPOINTS.NOTIFICATIONS}${notificationId}/`), {
         method: 'DELETE',
-        headers: { 'Authorization': `Token ${token}` }
+        headers: { 
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.ok) {
         setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to delete notification:', errorData);
+        setError('Failed to delete notification');
       }
     } catch (err) {
       console.error('Error deleting notification:', err);
+      setError('Network error. Please check your connection.');
     }
   };
 
@@ -155,18 +186,26 @@ const MobileNotificationsPage = () => {
     if (!token) return;
 
     try {
-      const response = await fetch(buildApiUrl('/api/notifications/mark_all_read/'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.NOTIFICATIONS_MARK_ALL_READ), {
         method: 'POST',
-        headers: { 'Authorization': `Token ${token}` }
+        headers: { 
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
 
       if (response.ok) {
         setNotifications(prev =>
           prev.map(notif => ({ ...notif, is_read: true }))
         );
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Failed to mark all notifications as read:', errorData);
+        setError('Failed to mark all notifications as read');
       }
     } catch (err) {
       console.error('Error marking all notifications as read:', err);
+      setError('Network error. Please check your connection.');
     }
   };
 
@@ -179,7 +218,7 @@ const MobileNotificationsPage = () => {
       return 'Just now';
     } else if (diffInSeconds < 3600) {
       const minutes = Math.floor(diffInSeconds / 60);
-      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+      return `${minutes} min ago`;
     } else if (diffInSeconds < 86400) {
       const hours = Math.floor(diffInSeconds / 3600);
       return `${hours} hour${hours > 1 ? 's' : ''} ago`;
@@ -187,7 +226,7 @@ const MobileNotificationsPage = () => {
       const days = Math.floor(diffInSeconds / 86400);
       return `${days} day${days > 1 ? 's' : ''} ago`;
     } else {
-      return date.toLocaleDateString();
+      return date.toLocaleDateString('en-US');
     }
   };
 
@@ -206,7 +245,7 @@ const MobileNotificationsPage = () => {
       } else if (date.toDateString() === yesterday.toDateString()) {
         groupKey = 'Yesterday';
       } else {
-        groupKey = date.toLocaleDateString();
+        groupKey = date.toLocaleDateString('en-US');
       }
       
       if (!groups[groupKey]) {
@@ -217,6 +256,36 @@ const MobileNotificationsPage = () => {
     
     return groups;
   };
+
+  // Pull-to-refresh handler
+  const handlePullToRefresh = useCallback(() => {
+    fetchNotifications(true);
+  }, [fetchNotifications]);
+
+  // Add touch event handlers for better mobile interaction
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Store initial touch position for potential swipe gestures
+    const touch = e.touches[0];
+    scrollRef.current?.setAttribute('data-touch-start-y', touch.clientY.toString());
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) return;
+
+    const touch = e.touches[0];
+    const startY = parseFloat(scrollElement.getAttribute('data-touch-start-y') || '0');
+    const currentY = touch.clientY;
+    const deltaY = currentY - startY;
+
+    // If user is at the top and pulling down, trigger refresh
+    if (scrollElement.scrollTop === 0 && deltaY > 50 && !refreshing && !loading) {
+      handlePullToRefresh();
+    }
+  }, [handlePullToRefresh, refreshing, loading]);
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const groupedNotifications = groupNotificationsByDate(filteredNotifications);
 
   if (loading) {
     return (
@@ -251,11 +320,13 @@ const MobileNotificationsPage = () => {
     );
   }
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
-  const groupedNotifications = groupNotificationsByDate(filteredNotifications);
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
+    <div 
+      ref={scrollRef}
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 overflow-auto"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+    >
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-40">
         <div className="w-full h-full" style={{
@@ -264,6 +335,18 @@ const MobileNotificationsPage = () => {
       </div>
       
       <div className="relative z-10 p-4 space-y-6 pb-24">
+        {/* Pull-to-refresh indicator */}
+        {refreshing && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+            <div className="bg-white/90 backdrop-blur-xl rounded-full px-4 py-2 shadow-lg border border-white/20">
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-sm font-medium text-gray-700">Refreshing...</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="text-center py-4">
           <div className="inline-flex items-center space-x-3 bg-white/80 backdrop-blur-xl rounded-2xl px-6 py-4 shadow-lg border border-white/20">
@@ -278,6 +361,21 @@ const MobileNotificationsPage = () => {
                 {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
               </p>
             </div>
+            <button
+              onClick={() => handlePullToRefresh()}
+              disabled={refreshing || loading}
+              className="ml-2 p-2 bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 text-blue-600 rounded-lg border border-blue-200 shadow-sm hover:shadow-md transition-all duration-300 disabled:opacity-50"
+              aria-label="Refresh notifications"
+            >
+              <div className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                  <path d="M3 21v-5h5"/>
+                </svg>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -323,7 +421,8 @@ const MobileNotificationsPage = () => {
           <div className="flex justify-end">
             <Button
               onClick={markAllAsRead}
-              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              disabled={loading || refreshing}
+              className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
             >
               <Check className="w-4 h-4 mr-2" />
               Mark All Read
@@ -344,7 +443,7 @@ const MobileNotificationsPage = () => {
               </div>
               <div className="space-y-3">
                 {groupNotifications.map((notification) => {
-                  const config = getNotificationConfig(notification.type);
+                  const config = getNotificationConfig(notification.notification_type);
                   const NotificationIcon = config.icon;
                   
                   return (
@@ -402,21 +501,23 @@ const MobileNotificationsPage = () => {
                         {/* Action Buttons */}
                         <div className="flex flex-col space-y-2 ml-4">
                           {!notification.is_read && (
-                            <Button
+                            <button
                               onClick={() => markAsRead(notification.id)}
                               className="p-2 h-10 w-10 bg-gradient-to-r from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 text-blue-600 rounded-xl border border-blue-200 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-110 active:scale-95"
                               title="Mark as read"
+                              aria-label="Mark as read"
                             >
                               <Check className="w-4 h-4" />
-                            </Button>
+                            </button>
                           )}
-                          <Button
+                          <button
                             onClick={() => deleteNotification(notification.id)}
                             className="p-2 h-10 w-10 bg-gradient-to-r from-red-50 to-pink-50 hover:from-red-100 hover:to-pink-100 text-red-600 rounded-xl border border-red-200 shadow-sm hover:shadow-md transition-all duration-300 transform hover:scale-110 active:scale-95"
                             title="Delete notification"
+                            aria-label="Delete notification"
                           >
                             <Trash2 className="w-4 h-4" />
-                          </Button>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -433,7 +534,7 @@ const MobileNotificationsPage = () => {
             <div className="w-20 h-20 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full flex items-center justify-center mx-auto mb-6">
               <Bell className="w-10 h-10 text-gray-400" />
             </div>
-            <h3 className="text-lg font-bold text-gray-600 mb-2">No notifications found</h3>
+            <h3 className="text-lg font-bold text-gray-600 mb-2">No Notifications</h3>
             <p className="text-gray-500 mb-6">
               {activeFilter === 'unread' ? 'No unread notifications' : 
                activeFilter === 'read' ? 'No read notifications' : 

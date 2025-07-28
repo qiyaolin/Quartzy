@@ -1,7 +1,11 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, X, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { X, CheckCircle, AlertCircle, Loader, Zap } from 'lucide-react';
 import { buildApiUrl } from '../config/api.ts';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
+import { 
+  ZBarBarcodeScanner as ZBarScanner, 
+  ZBarBarcodeValidator,
+  ZBarCameraUtils 
+} from '../utils/zbarBarcodeScanner.ts';
 
 interface BarcodeScannerProps {
     isOpen: boolean;
@@ -12,50 +16,143 @@ interface BarcodeScannerProps {
 
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan, onConfirm }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
-    const [codeReader, setCodeReader] = useState<BrowserMultiFormatReader | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+    const detectorRef = useRef<ZBarScanner | null>(null);
     const [scannedBarcode, setScannedBarcode] = useState<string>('');
+    const [barcodeType, setBarcodeType] = useState('');
     const [itemData, setItemData] = useState<any>(null);
     const [error, setError] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [scanningError, setScanningError] = useState<string>('');
+    const [isDetectorReady, setIsDetectorReady] = useState(false);
 
     const initializeScanner = useCallback(async () => {
         try {
-            const reader = new BrowserMultiFormatReader();
-            setCodeReader(reader);
+            setScanningError('');
+            setIsScanning(true);
             
-            // 获取可用的视频设备
-            const videoInputDevices = await reader.listVideoInputDevices();
-            
-            if (videoInputDevices.length === 0) {
-                setScanningError('No camera devices found');
-                return;
+            // Initialize ZBar detector
+            if (!detectorRef.current) {
+                detectorRef.current = new ZBarScanner({
+                    enableCache: true,
+                    tryHarder: true,
+                    enableAllFormats: true
+                });
             }
-
-            // 尝试使用后置摄像头（环境摄像头）
-            const backCamera = videoInputDevices.find(device => 
-                device.label.toLowerCase().includes('back') || 
-                device.label.toLowerCase().includes('environment')
-            );
+            await detectorRef.current.initialize();
+            setIsDetectorReady(true);
             
-            const selectedDeviceId = backCamera ? backCamera.deviceId : videoInputDevices[0].deviceId;
+            // Start camera
+            await startCamera();
             
-            startScanning(reader, selectedDeviceId);
         } catch (err) {
             console.error('Error initializing scanner:', err);
-            setScanningError('Failed to initialize camera scanner');
+            setScanningError('Failed to access camera. Please ensure camera permissions are granted.');
+            setIsScanning(false);
         }
     }, []);
 
-    const cleanup = useCallback(() => {
-        if (codeReader) {
-            codeReader.reset();
+    const startCamera = useCallback(async () => {
+        try {
+            const constraints = ZBarCameraUtils.getOptimalConstraints();
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            streamRef.current = stream;
+            
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadedmetadata = () => {
+                    if (videoRef.current) {
+                        videoRef.current.play();
+                        startScanning();
+                    }
+                };
+            }
+        } catch (err) {
+            console.error("Camera access error:", err);
+            setScanningError("Unable to access camera");
         }
+    }, []);
+
+    const startScanning = useCallback(() => {
+        const detectFrame = async () => {
+            if (!videoRef.current || !isDetectorReady || !detectorRef.current?.isReady()) {
+                animationFrameRef.current = requestAnimationFrame(detectFrame);
+                return;
+            }
+            
+            try {
+                const results = await detectorRef.current.detectForVideo(videoRef.current);
+                
+                if (results.barcodes.length > 0) {
+                    const bestDetection = results.barcodes[0];
+                    const barcode = bestDetection.value;
+                    
+                    if (barcode && barcode.trim()) {
+                        console.log('ZBar detected barcode:', bestDetection);
+                        setIsScanning(false);
+                        
+                        // Stop animation frame
+                        if (animationFrameRef.current) {
+                            cancelAnimationFrame(animationFrameRef.current);
+                            animationFrameRef.current = null;
+                        }
+                        
+                        // Validate barcode
+                        const validation = ZBarBarcodeValidator.validateBarcode(barcode.trim(), bestDetection.type);
+                        if (!validation.isValid) {
+                            setScanningError(`Invalid barcode: ${validation.errorMessage}`);
+                            setTimeout(() => {
+                                setScanningError('');
+                                initializeScanner();
+                            }, 2000);
+                            return;
+                        }
+                        
+                        handleBarcodeDetected(barcode.trim(), bestDetection.type);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('ZBar detection error:', err);
+            }
+            
+            animationFrameRef.current = requestAnimationFrame(detectFrame);
+        };
+        
+        detectFrame();
+    }, [isDetectorReady, initializeScanner]);
+
+    const cleanup = useCallback(() => {
+        // Stop animation frame
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+        }
+        
+        // Stop camera stream
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        
+        // Reset video element
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+        
+        // Cleanup detector
+        if (detectorRef.current) {
+            detectorRef.current.close();
+            detectorRef.current = null;
+        }
+        
         setIsScanning(false);
         setScanningError('');
-    }, [codeReader]);
+        setIsDetectorReady(false);
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
@@ -69,38 +166,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
         };
     }, [isOpen, initializeScanner, cleanup]);
 
-    const startScanning = async (reader: BrowserMultiFormatReader, deviceId: string) => {
-        try {
-            setIsScanning(true);
-            setScanningError('');
-            
-            // 使用连续扫描模式
-            reader.decodeFromVideoDevice(deviceId, videoRef.current!, (result, err) => {
-                if (result) {
-                    const barcode = result.getText();
-                    console.log('Barcode detected:', barcode);
-                    // 停止扫描并处理结果
-                    setIsScanning(false);
-                    reader.reset();
-                    handleBarcodeDetected(barcode);
-                }
-                
-                if (err && !(err instanceof NotFoundException)) {
-                    console.error('Scanning error:', err);
-                    setScanningError('Error scanning barcode. Please try again.');
-                    setIsScanning(false);
-                }
-                // NotFoundException 是正常的，表示当前帧没有找到条形码，继续扫描
-            });
-        } catch (err) {
-            console.error('Error starting scan:', err);
-            setScanningError('Failed to start camera');
-            setIsScanning(false);
-        }
-    };
 
-    const handleBarcodeDetected = async (barcode: string) => {
+    const handleBarcodeDetected = async (barcode: string, type?: string) => {
         setScannedBarcode(barcode);
+        setBarcodeType(type || 'UNKNOWN');
         setIsLoading(true);
         setError('');
 
@@ -114,7 +183,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
 
             if (response.ok) {
                 const data = await response.json();
-                console.log('API Response:', data); // Debug log
+                console.log('API Response:', data);
                 if (data.results && data.results.length > 0) {
                     const item = data.results[0];
                     // Only allow checkout if the item is not archived
@@ -148,7 +217,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
     };
 
     const handleClose = () => {
+        cleanup();
         setScannedBarcode('');
+        setBarcodeType('');
         setItemData(null);
         setError('');
         setShowConfirmation(false);
@@ -162,8 +233,8 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
             <div className="bg-white rounded-2xl p-6 max-w-lg w-full mx-4">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                        <Camera className="w-6 h-6 mr-2" />
-                        Scan Barcode
+                        <Zap className="w-6 h-6 mr-2 text-purple-600" />
+                        ZBar Scanner
                     </h2>
                     <button
                         onClick={handleClose}
@@ -183,7 +254,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                             </div>
                             <div className="space-y-2 text-sm">
                                 <p><strong>Item:</strong> {itemData.name}</p>
-                                <p><strong>Barcode:</strong> {scannedBarcode}</p>
+                                <p><strong>Barcode:</strong> {ZBarBarcodeValidator.formatBarcodeDisplay(scannedBarcode, barcodeType)} <span className="text-gray-500">({barcodeType})</span></p>
                                 <p><strong>Serial Number:</strong> {itemData.serial_number}</p>
                                 <p><strong>Quantity:</strong> {itemData.quantity} {itemData.unit}</p>
                                 {itemData.owner && <p><strong>Owner:</strong> {itemData.owner.username}</p>}
@@ -206,7 +277,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                     setScannedBarcode('');
                                     setItemData(null);
                                     setError('');
-                                    // 重新开始扫描
+                                    // Restart scanning
                                     setTimeout(() => initializeScanner(), 100);
                                 }}
                                 className="flex-1 btn btn-secondary"
@@ -242,11 +313,21 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                             </div>
 
                             {/* Scanning status indicator */}
-                            {isScanning && (
+                            {isScanning && isDetectorReady && (
+                                <div className="absolute top-4 left-4 right-4">
+                                    <div className="bg-purple-500 text-white px-3 py-2 rounded-lg text-sm flex items-center">
+                                        <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
+                                        ⚡ ZBar WASM Scanner Active
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Initialization indicator */}
+                            {isScanning && !isDetectorReady && (
                                 <div className="absolute top-4 left-4 right-4">
                                     <div className="bg-blue-500 text-white px-3 py-2 rounded-lg text-sm flex items-center">
                                         <Loader className="w-4 h-4 mr-2 animate-spin" />
-                                        Camera is actively scanning for barcodes...
+                                        Initializing ZBar WASM detector...
                                     </div>
                                 </div>
                             )}
@@ -271,11 +352,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                 onClick={() => {
                                     setScanningError('');
                                     setError('');
-                                    if (codeReader && videoRef.current) {
-                                        // 重新开始扫描
-                                        cleanup();
-                                        setTimeout(() => initializeScanner(), 100);
-                                    }
+                                    // Restart scanning
+                                    cleanup();
+                                    setTimeout(() => initializeScanner(), 100);
                                 }}
                                 disabled={isLoading || isScanning}
                                 className="flex-1 btn btn-primary"

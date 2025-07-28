@@ -161,7 +161,7 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
           <h3 className="font-semibold text-gray-900 text-lg flex-1 pr-2 leading-tight">
             {request.item_name}
           </h3>
-          <button className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-full transition-colors duration-200">
+          <button className="p-2 text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors duration-200 shadow-md hover:shadow-lg">
             <Eye size={16} />
           </button>
         </div>

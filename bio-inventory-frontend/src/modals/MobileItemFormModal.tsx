@@ -12,7 +12,7 @@ interface MobileItemFormModalProps {
 
 const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }: MobileItemFormModalProps) => {
     const [formData, setFormData] = useState<any>({});
-    const [dropdownData, setDropdownData] = useState<any>({ vendors: [], locations: [], itemTypes: [] });
+    const [dropdownData, setDropdownData] = useState<any>({ vendors: [], locations: [], itemTypes: [], funds: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [customVendor, setCustomVendor] = useState('');
@@ -29,6 +29,7 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
             unit: '', 
             location_id: '', 
             price: '', 
+            fund_id: '',
             expiration_date: '', 
             lot_number: '', 
             received_date: '', 
@@ -48,6 +49,7 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
                 unit: initialData.unit || '', 
                 location_id: initialData.location?.id || '', 
                 price: initialData.price || '',
+                fund_id: initialData.fund_id || '',
                 expiration_date: initialData.expiration_date || '', 
                 lot_number: initialData.lot_number || '', 
                 received_date: initialData.received_date || '',
@@ -65,15 +67,24 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
             const fetchDropdownData = async () => {
                 try {
                     const headers = { 'Authorization': `Token ${token}` };
-                    const [vendorsRes, locationsRes, itemTypesRes] = await Promise.all([
+                    const [vendorsRes, locationsRes, itemTypesRes, fundsRes] = await Promise.all([
                         fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
                         fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { headers }),
                         fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.FUNDS), { headers }),
                     ]);
                     const vendors = await vendorsRes.json(); 
                     const locations = await locationsRes.json(); 
                     const itemTypes = await itemTypesRes.json();
-                    setDropdownData({ vendors, locations, itemTypes });
+                    
+                    // Handle funds response, as it might not exist or might fail
+                    let funds = [];
+                    if (fundsRes.ok) {
+                        const fundsData = await fundsRes.json();
+                        funds = (fundsData.results || fundsData).filter(fund => !fund.is_archived);
+                    }
+                    
+                    setDropdownData({ vendors, locations, itemTypes, funds });
                 } catch (e) { 
                     setError('Could not load form data.'); 
                 }
@@ -141,6 +152,31 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
                 const errorData = await response.json(); 
                 throw new Error(JSON.stringify(errorData)); 
             }
+            
+            // If creating a new item with a fund and price, create a transaction for fund deduction
+            if (!isEditMode && finalFormData.fund_id && finalFormData.price && finalFormData.quantity) {
+                try {
+                    const totalCost = parseFloat(finalFormData.price) * parseFloat(finalFormData.quantity);
+                    if (totalCost > 0) {
+                        await fetch(buildApiUrl(API_ENDPOINTS.TRANSACTIONS), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
+                            body: JSON.stringify({
+                                fund_id: finalFormData.fund_id,
+                                amount: totalCost,
+                                transaction_type: 'purchase',
+                                item_name: finalFormData.name,
+                                description: `Purchase of ${finalFormData.name} - ${finalFormData.quantity} ${finalFormData.unit || 'units'}`,
+                                transaction_date: new Date().toISOString().split('T')[0]
+                            })
+                        });
+                    }
+                } catch (transactionError) {
+                    console.error('Failed to create transaction:', transactionError);
+                    // Don't fail the item creation if transaction fails
+                }
+            }
+            
             onSave(); 
             onClose();
         } catch (e: any) { 
@@ -154,9 +190,11 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
-            <div className="bg-white w-full sm:max-w-2xl sm:rounded-lg shadow-xl max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl">
+            <div className="bg-white w-full sm:max-w-2xl sm:rounded-lg shadow-xl max-h-[100dvh] sm:max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl" style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px))' }}>
                 {/* Header */}
-                <div className="bg-gradient-to-r from-green-50 to-emerald-100 px-4 sm:px-6 py-5 border-b border-green-200 rounded-t-2xl sticky top-0 z-10">
+                <div className="bg-gradient-to-r from-green-50 to-emerald-100 px-4 sm:px-6 py-5 border-b border-green-200 rounded-t-2xl sticky top-0 z-10" style={{ 
+                    paddingTop: 'max(20px, calc(env(safe-area-inset-top, 0px) + 20px))' 
+                }}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 bg-green-500 rounded-2xl flex items-center justify-center">
@@ -182,7 +220,11 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
 
                 <form onSubmit={handleSubmit} className="flex flex-col h-full">
                     {/* Form Content - Scrollable */}
-                    <div className="px-4 sm:px-6 py-4 space-y-6 overflow-y-auto flex-1" style={{ maxHeight: 'calc(85vh - 200px)' }}>
+                    <div className="px-4 sm:px-6 py-4 space-y-6 overflow-y-auto flex-1 mobile-scroll" style={{ 
+                        maxHeight: 'calc(100dvh - 180px)', 
+                        minHeight: '300px',
+                        paddingBottom: 'max(100px, calc(env(safe-area-inset-bottom, 0px) + 80px))'
+                    }}>
                         {/* Basic Information Section */}
                         <div className="space-y-4">
                             <div className="flex items-center space-x-2 mb-4">
@@ -350,6 +392,32 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
                                     </div>
                                     
                                     <div>
+                                        <label htmlFor="fund_id" className="block text-sm font-semibold text-gray-700 mb-2">
+                                            <div className="flex items-center space-x-1">
+                                                <DollarSign className="w-4 h-4" />
+                                                <span>Funding Source</span>
+                                            </div>
+                                        </label>
+                                        <select 
+                                            name="fund_id" 
+                                            id="fund_id" 
+                                            value={formData.fund_id || ''} 
+                                            onChange={handleChange} 
+                                            className="w-full px-3 py-3 text-base border border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-colors"
+                                        >
+                                            <option value="">No funding source</option>
+                                            {dropdownData.funds.map((fund: any) => (
+                                                <option key={fund.id} value={fund.id}>
+                                                    {fund.name} - ${((parseFloat(fund.total_budget) || 0) - (parseFloat(fund.spent_amount) || 0)).toLocaleString()} remaining
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {dropdownData.funds.length === 0 && (
+                                            <p className="text-sm text-gray-500 mt-1">No active funds available</p>
+                                        )}
+                                    </div>
+                                    
+                                    <div>
                                         <label htmlFor="catalog_number" className="block text-sm font-semibold text-gray-700 mb-2">
                                             Catalog Number
                                         </label>
@@ -422,7 +490,9 @@ const MobileItemFormModal = ({ isOpen, onClose, onSave, token, initialData = nul
                     )}
 
                     {/* Footer - Sticky */}
-                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 sm:px-6 py-4 pb-20 sm:pb-4 border-t border-gray-200 rounded-b-2xl sticky bottom-0 z-10">
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 sm:px-6 py-4 border-t border-gray-200 rounded-b-2xl sticky bottom-0 z-10" style={{ 
+                        paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom, 0px) + 80px))' 
+                    }}>
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-gray-600">
                                 * Required fields

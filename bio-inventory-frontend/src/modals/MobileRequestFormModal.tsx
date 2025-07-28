@@ -95,9 +95,11 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
-            <div className="bg-white w-full sm:max-w-2xl sm:rounded-lg shadow-xl max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl">
+            <div className="bg-white w-full sm:max-w-2xl sm:rounded-lg shadow-xl max-h-[100dvh] sm:max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl" style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px))' }}>
                 {/* Enhanced Header */}
-                <div className="bg-gradient-to-r from-blue-50 to-cyan-100 px-4 sm:px-6 py-5 border-b border-blue-200 rounded-t-2xl sticky top-0 z-10">
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-100 px-4 sm:px-6 py-5 border-b border-blue-200 rounded-t-2xl sticky top-0 z-10" style={{ 
+                    paddingTop: 'max(20px, calc(env(safe-area-inset-top, 0px) + 20px))' 
+                }}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 bg-blue-500 rounded-2xl flex items-center justify-center">
@@ -123,7 +125,11 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
 
                 <form onSubmit={handleSubmit} className="flex flex-col h-full">
                     {/* Form Content - Scrollable */}
-                    <div className="px-4 sm:px-6 py-4 space-y-6 overflow-y-auto flex-1" style={{ maxHeight: 'calc(85vh - 200px)' }}>
+                    <div className="px-4 sm:px-6 py-4 space-y-6 overflow-y-auto flex-1 mobile-scroll" style={{ 
+                        maxHeight: 'calc(100dvh - 180px)', 
+                        minHeight: '300px',
+                        paddingBottom: 'max(20px, env(safe-area-inset-bottom, 0px))'
+                    }}>
                         {/* Basic Information Section */}
                         <div className="space-y-4">
                             <div className="flex items-center space-x-2 mb-4">
@@ -318,29 +324,31 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
                         </div>
                     )}
 
-                    {/* Enhanced Footer - Sticky */}
-                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 sm:px-6 py-4 pb-20 sm:pb-4 border-t border-gray-200 rounded-b-2xl sticky bottom-0 z-10">
+                    {/* Enhanced Footer - Sticky Position */}
+                    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 sm:px-6 py-4 border-t border-gray-200 sticky bottom-0 z-10" style={{ 
+                        paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom, 0px) + 80px))' 
+                    }}>
                         <div className="flex items-center justify-between">
                             <p className="text-sm text-gray-600">
                                 * Required fields
                             </p>
                             <div className="flex space-x-3">
-                                <button 
-                                    type="button" 
-                                    onClick={onClose} 
-                                    className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    type="submit" 
-                                    disabled={isSubmitting} 
-                                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors flex items-center"
-                                >
-                                    {isSubmitting && <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>}
-                                    <Send className="w-4 h-4 mr-2" />
-                                    Submit Request
-                                </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={onClose} 
+                                        className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors min-h-[40px] flex items-center justify-center touch-manipulation text-sm"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        disabled={isSubmitting} 
+                                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors flex items-center justify-center min-h-[40px] min-w-[120px] touch-manipulation text-sm"
+                                    >
+                                        {isSubmitting && <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent mr-2"></div>}
+                                        <Send className="w-3 h-3 mr-2" />
+                                        Submit Request
+                                    </button>
                             </div>
                         </div>
                     </div>

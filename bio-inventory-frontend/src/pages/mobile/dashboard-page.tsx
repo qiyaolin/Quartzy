@@ -9,7 +9,7 @@ import {
   ShoppingCart, 
   Plus,
   Search,
-  BarChart3,
+  ScanLine,
   Activity,
   Zap,
   Star
@@ -17,6 +17,10 @@ import {
 import { AuthContext } from '../../components/AuthContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
 import { useNavigate } from 'react-router-dom';
+import MobileItemFormModal from '../../modals/MobileItemFormModal.tsx';
+import MobileRequestFormModal from '../../modals/MobileRequestFormModal.tsx';
+import ZBarBarcodeScanner from '../../components/ZBarBarcodeScanner.tsx';
+import { useNotification } from '../../contexts/NotificationContext.tsx';
 
 interface DashboardStats {
   total_items: number;
@@ -43,6 +47,10 @@ const MobileDashboardPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isItemFormModalOpen, setIsItemFormModalOpen] = useState(false);
+  const [isRequestFormModalOpen, setIsRequestFormModalOpen] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   
   const authContext = useContext(AuthContext);
   if (!authContext) {
@@ -50,6 +58,7 @@ const MobileDashboardPage = () => {
   }
   const { token, user } = authContext;
   const navigate = useNavigate();
+  const notification = useNotification();
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -210,21 +219,21 @@ const MobileDashboardPage = () => {
     };
 
     fetchDashboardData();
-  }, [token]);
+  }, [token, refreshKey]);
 
   const quickActions = [
     {
       icon: Plus,
       label: 'Add Item',
       color: 'from-blue-500 to-cyan-500',
-      action: () => navigate('/mobile/inventory'),
+      action: () => setIsItemFormModalOpen(true),
       description: 'Add new inventory item'
     },
     {
       icon: ShoppingCart,
       label: 'New Request',
       color: 'from-purple-500 to-pink-500',
-      action: () => navigate('/mobile/requests'),
+      action: () => setIsRequestFormModalOpen(true),
       description: 'Create purchase request'
     },
     {
@@ -235,13 +244,67 @@ const MobileDashboardPage = () => {
       description: 'Search inventory'
     },
     {
-      icon: BarChart3,
-      label: 'Reports',
+      icon: ScanLine,
+      label: 'Scan Out',
       color: 'from-orange-500 to-red-500',
-      action: () => navigate('/reports'),
-      description: 'View analytics'
+      action: () => setShowBarcodeScanner(true),
+      description: 'Scan item checkout'
     }
   ];
+
+  // Handler functions for modals
+  const handleItemSaved = () => {
+    setIsItemFormModalOpen(false);
+    setRefreshKey(prev => prev + 1);
+    notification.success('Item added successfully!');
+  };
+
+  const handleRequestSaved = () => {
+    setIsRequestFormModalOpen(false);
+    setRefreshKey(prev => prev + 1);
+    notification.success('Request created successfully!');
+  };
+
+  const handleBarcodeScanned = (barcode: string) => {
+    console.log('Barcode scanned:', barcode);
+  };
+
+  const handleBarcodeConfirmed = async (barcode: string, itemData?: any) => {
+    if (!token) {
+      notification.error('Authentication required');
+      return;
+    }
+
+    try {
+      const checkoutData = {
+        barcode: barcode,
+        checkout_date: new Date().toISOString(),
+        notes: `Mobile checkout via barcode scan: ${barcode}`
+      };
+
+      const response = await fetch(buildApiUrl('/api/items/checkout_by_barcode/'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify(checkoutData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        notification.success(`Successfully checked out: ${result.item_name || itemData?.name || 'Item'}`);
+        setRefreshKey(prev => prev + 1);
+        setShowBarcodeScanner(false);
+      } else {
+        const errorData = await response.json();
+        notification.error(`Checkout failed: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error('Barcode checkout error:', error);
+      notification.error(`Failed to checkout item: ${error.message}`);
+    }
+  };
 
   const getActivityIcon = (type: string) => {
     switch (type) {
@@ -255,6 +318,27 @@ const MobileDashboardPage = () => {
         return <AlertTriangle className="w-4 h-4 text-orange-600" />;
       default:
         return <Activity className="w-4 h-4 text-gray-600" />;
+    }
+  };
+
+  const getActivityBackgroundColor = (type: string) => {
+    switch (type) {
+      case 'item_added':
+        return 'bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200';
+      case 'request_created':
+        return 'bg-gradient-to-r from-purple-50 to-purple-100 border-purple-200';
+      case 'request_approved':
+        return 'bg-gradient-to-r from-green-50 to-green-100 border-green-200';
+      case 'low_stock':
+        return 'bg-gradient-to-r from-orange-50 to-orange-100 border-orange-200';
+      case 'request_rejected':
+        return 'bg-gradient-to-r from-red-50 to-red-100 border-red-200';
+      case 'order_placed':
+        return 'bg-gradient-to-r from-indigo-50 to-indigo-100 border-indigo-200';
+      case 'item_received':
+        return 'bg-gradient-to-r from-emerald-50 to-emerald-100 border-emerald-200';
+      default:
+        return 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200';
     }
   };
 
@@ -339,63 +423,103 @@ const MobileDashboardPage = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] min-h-[140px] flex flex-col">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0">
                 <Package className="w-6 h-6 text-white" />
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-800">{stats.total_items}</div>
-                <div className="text-xs text-gray-500 font-medium">Total Items</div>
+              <div className="text-right flex-1 ml-3">
+                <div className="text-2xl font-bold text-gray-800 leading-tight">{stats.total_items}</div>
+                <div className="text-xs text-gray-500 font-medium mt-1">Total Items</div>
               </div>
             </div>
-            <div className="w-full bg-blue-100 rounded-full h-2">
-              <div className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-500" style={{width: '85%'}}></div>
+            <div className="mt-auto">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                <span>Status</span>
+                <span className="font-medium">{stats.total_items > 0 ? 'Active' : 'Empty'}</span>
+              </div>
+              <div className="w-full bg-blue-100 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full transition-all duration-500" 
+                  style={{width: stats.total_items > 0 ? '100%' : '0%'}}
+                ></div>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] min-h-[140px] flex flex-col">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-6 h-6 text-white" />
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-800">{stats.low_stock_items}</div>
-                <div className="text-xs text-gray-500 font-medium">Low Stock</div>
+              <div className="text-right flex-1 ml-3">
+                <div className="text-2xl font-bold text-gray-800 leading-tight">{stats.low_stock_items}</div>
+                <div className="text-xs text-gray-500 font-medium mt-1">Low Stock</div>
               </div>
             </div>
-            <div className="w-full bg-orange-100 rounded-full h-2">
-              <div className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full transition-all duration-500" style={{width: '60%'}}></div>
+            <div className="mt-auto">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                <span>Ratio</span>
+                <span className="font-medium">{stats.total_items > 0 ? `${Math.round((stats.low_stock_items / stats.total_items) * 100)}%` : '0%'}</span>
+              </div>
+              <div className="w-full bg-orange-100 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full transition-all duration-500" 
+                  style={{width: stats.total_items > 0 ? `${Math.min((stats.low_stock_items / stats.total_items) * 100, 100)}%` : '0%'}}
+                ></div>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] min-h-[140px] flex flex-col">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
                 <ShoppingCart className="w-6 h-6 text-white" />
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-800">{stats.pending_requests}</div>
-                <div className="text-xs text-gray-500 font-medium">Pending</div>
+              <div className="text-right flex-1 ml-3">
+                <div className="text-2xl font-bold text-gray-800 leading-tight">{stats.pending_requests}</div>
+                <div className="text-xs text-gray-500 font-medium mt-1">Pending</div>
               </div>
             </div>
-            <div className="w-full bg-purple-100 rounded-full h-2">
-              <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500" style={{width: '40%'}}></div>
+            <div className="mt-auto">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                <span>Status</span>
+                <span className="font-medium">{stats.pending_requests === 0 ? 'Complete' : 'Processing'}</span>
+              </div>
+              <div className="w-full bg-purple-100 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500" 
+                  style={{width: stats.pending_requests > 0 ? `${Math.min((stats.pending_requests / 10) * 100, 100)}%` : '0%'}}
+                ></div>
+              </div>
             </div>
           </div>
 
-          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center">
+          <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] min-h-[140px] flex flex-col">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
                 <TrendingUp className="w-6 h-6 text-white" />
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-800">{stats.efficiency_score}%</div>
-                <div className="text-xs text-gray-500 font-medium">Efficiency</div>
+              <div className="text-right flex-1 ml-3">
+                <div className="text-2xl font-bold text-gray-800 leading-tight">{stats.efficiency_score}%</div>
+                <div className="text-xs text-gray-500 font-medium mt-1">Efficiency</div>
               </div>
             </div>
-            <div className="w-full bg-green-100 rounded-full h-2">
-              <div className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500" style={{width: `${stats.efficiency_score}%`}}></div>
+            <div className="mt-auto">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
+                <span>Level</span>
+                <span className="font-medium">
+                  {stats.efficiency_score >= 90 ? 'Excellent' : 
+                   stats.efficiency_score >= 75 ? 'Good' : 
+                   stats.efficiency_score >= 60 ? 'Fair' : 'Poor'}
+                </span>
+              </div>
+              <div className="w-full bg-green-100 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500" 
+                  style={{width: `${stats.efficiency_score}%`}}
+                ></div>
+              </div>
             </div>
           </div>
         </div>
@@ -445,7 +569,7 @@ const MobileDashboardPage = () => {
           <div className="space-y-3">
             {stats.recent_activities.length > 0 ? (
               stats.recent_activities.slice(0, 5).map((activity) => (
-                <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-100">
+                <div key={activity.id} className={`flex items-start space-x-3 p-3 rounded-xl border ${getActivityBackgroundColor(activity.type)}`}>
                   <div className="flex-shrink-0 mt-1">
                     {getActivityIcon(activity.type)}
                   </div>
@@ -508,6 +632,34 @@ const MobileDashboardPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {token && (
+        <>
+          <MobileItemFormModal
+            isOpen={isItemFormModalOpen}
+            onClose={() => setIsItemFormModalOpen(false)}
+            onSave={handleItemSaved}
+            token={token}
+          />
+          
+          <MobileRequestFormModal
+            isOpen={isRequestFormModalOpen}
+            onClose={() => setIsRequestFormModalOpen(false)}
+            onSave={handleRequestSaved}
+            token={token}
+          />
+          
+          <ZBarBarcodeScanner
+            isOpen={showBarcodeScanner}
+            onClose={() => setShowBarcodeScanner(false)}
+            onScan={handleBarcodeScanned}
+            onConfirm={handleBarcodeConfirmed}
+            title="Scan Out Item"
+            token={token}
+          />
+        </>
+      )}
     </div>
   );
 };
