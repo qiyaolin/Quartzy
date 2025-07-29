@@ -6,10 +6,10 @@ interface RequestItem {
   item_name: string;
   quantity: number;
   unit: string;
-  requested_by: string;
+  requested_by: string | { username?: string; name?: string; first_name?: string; email?: string } | null;
   request_date: string;
   status: string;
-  vendor?: string;
+  vendor?: string | { name?: string };
   notes?: string;
   urgency?: string;
 }
@@ -158,10 +158,10 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
       {/* Header */}
       <div className="p-4 pb-3">
         <div className="flex items-start justify-between mb-2">
-          <h3 className="font-semibold text-gray-900 text-lg flex-1 pr-2 leading-tight">
+          <h3 className="font-semibold text-gray-900 text-lg flex-1 pr-3 leading-tight">
             {request.item_name}
           </h3>
-          <button className="p-2 text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors duration-200 shadow-md hover:shadow-lg">
+          <button className="min-w-[36px] min-h-[36px] flex items-center justify-center text-white bg-blue-600 hover:bg-blue-700 rounded-full transition-colors duration-200 shadow-md hover:shadow-lg flex-shrink-0">
             <Eye size={16} />
           </button>
         </div>
@@ -196,9 +196,17 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
           <User size={16} className="text-gray-400 flex-shrink-0" />
           <span className="font-medium min-w-0">Requested by:</span>
           <span className="truncate">
-            {typeof request.requested_by === 'object' && request.requested_by !== null
-              ? (request.requested_by as any).name || 'Unknown User'
-              : request.requested_by}
+            {(() => {
+              // Handle different data structures for requested_by
+              if (typeof request.requested_by === 'string' && request.requested_by) {
+                return request.requested_by;
+              } else if (typeof request.requested_by === 'object' && request.requested_by !== null) {
+                const userObj = request.requested_by as any;
+                return userObj.username || userObj.name || userObj.first_name || userObj.email || 'Unknown User';
+              } else {
+                return 'Unknown User';
+              }
+            })()}
           </span>
         </div>
         
