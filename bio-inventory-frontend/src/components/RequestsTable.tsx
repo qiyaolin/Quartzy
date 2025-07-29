@@ -1,8 +1,7 @@
 import React, { useContext, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, ShoppingCart, RotateCcw, QrCode, Printer, X } from 'lucide-react';
+import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, ShoppingCart, RotateCcw, QrCode, Printer } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
-import BarcodeComponent from './BarcodeComponent.tsx';
+import PrintBarcodeModal from './PrintBarcodeModal.tsx';
 import { useDevice } from '../hooks/useDevice.ts';
 
 const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onReorder, onShowHistory, onViewDetails, onBatchAction, currentStatus }) => {
@@ -10,7 +9,8 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
     const device = useDevice();
     const [selectedRequests, setSelectedRequests] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
-    const [showBarcodeModal, setShowBarcodeModal] = useState(null);
+    const [showPrintModal, setShowPrintModal] = useState(false);
+    const [selectedRequestForPrint, setSelectedRequestForPrint] = useState(null);
     
     const handleSelectAll = (checked) => {
         setSelectAll(checked);
@@ -181,7 +181,10 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                                     {req.barcode}
                                                 </code>
                                                 <button
-                                                    onClick={() => setShowBarcodeModal(req)}
+                                                    onClick={() => {
+                                                        setSelectedRequestForPrint(req);
+                                                        setShowPrintModal(true);
+                                                    }}
                                                     className="p-1 hover:bg-primary-50 rounded transition-colors"
                                                     title="Print barcode label"
                                                 >
@@ -259,7 +262,7 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
             ) : (
                 /* Desktop Table Layout */
                 <div className="overflow-x-auto">
-                    <table className="table">
+                    <table className="table table-fixed">
                         <thead className="table-header">
                             <tr>
                                 <th className="table-header-cell w-12">
@@ -270,43 +273,43 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                         onChange={(e) => handleSelectAll(e.target.checked)}
                                     />
                                 </th>
-                                <th className="table-header-cell">
+                                <th className="table-header-cell w-1/4 max-w-xs">
                                     <div className="flex items-center space-x-2">
                                         <FileText className="w-4 h-4 text-gray-500" />
                                         <span>Item Details</span>
                                     </div>
                                 </th>
-                                <th className="table-header-cell">
+                                <th className="table-header-cell w-1/6">
                                     <div className="flex items-center space-x-2">
                                         <Package className="w-4 h-4 text-gray-500" />
                                         <span>Vendor</span>
                                     </div>
                                 </th>
-                                <th className="table-header-cell">
+                                <th className="table-header-cell w-20">
                                     <div className="flex items-center space-x-2">
                                         <DollarSign className="w-4 h-4 text-gray-500" />
                                         <span>Price</span>
                                     </div>
                                 </th>
-                                <th className="table-header-cell">
+                                <th className="table-header-cell w-1/6">
                                     <div className="flex items-center space-x-2">
                                         <User className="w-4 h-4 text-gray-500" />
                                         <span>Requested By</span>
                                     </div>
                                 </th>
-                                <th className="table-header-cell">
+                                <th className="table-header-cell w-24">
                                     <div className="flex items-center space-x-2">
                                         <Clock className="w-4 h-4 text-gray-500" />
                                         <span>Status</span>
                                     </div>
                                 </th>
-                                <th className="table-header-cell">
+                                <th className="table-header-cell w-32">
                                     <div className="flex items-center space-x-2">
                                         <QrCode className="w-4 h-4 text-gray-500" />
                                         <span>Barcode</span>
                                     </div>
                                 </th>
-                                <th className="table-header-cell">Actions</th>
+                                <th className="table-header-cell w-40">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="table-body">
@@ -320,30 +323,30 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                             onChange={(e) => handleSelectRequest(req.id, e.target.checked)}
                                         />
                                     </td>
-                                    <td className="table-cell">
+                                    <td className="table-cell w-1/4 max-w-xs">
                                         <div 
                                             className="cursor-pointer hover:bg-primary-50 py-1 px-2 rounded transition-colors group"
                                             onClick={() => onViewDetails && onViewDetails(req)}
                                         >
-                                            <div className="font-medium text-gray-900 group-hover:text-primary-700 text-sm">
+                                            <div className="font-medium text-gray-900 group-hover:text-primary-700 text-sm truncate" title={req.item_name}>
                                                 {req.item_name}
                                             </div>
                                             {req.catalog_number && (
-                                                <div className="text-xs text-gray-500 mt-0.5">
+                                                <div className="text-xs text-gray-500 mt-0.5 truncate" title={`Cat: ${req.catalog_number}`}>
                                                     Cat: {req.catalog_number}
                                                 </div>
                                             )}
                                             {req.notes && (
                                                 <div className="text-xs text-gray-400 mt-0.5 truncate" title={req.notes}>
-                                                    {req.notes.length > 40 ? req.notes.substring(0, 40) + '...' : req.notes}
+                                                    {req.notes.length > 30 ? req.notes.substring(0, 30) + '...' : req.notes}
                                                 </div>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="table-cell">
-                                        <div className="text-sm text-gray-700 font-medium">{req.vendor?.name || 'N/A'}</div>
+                                    <td className="table-cell w-1/6">
+                                        <div className="text-sm text-gray-700 font-medium truncate" title={req.vendor?.name || 'N/A'}>{req.vendor?.name || 'N/A'}</div>
                                     </td>
-                                    <td className="table-cell">
+                                    <td className="table-cell w-20">
                                         <div className="font-mono font-bold text-gray-900 text-lg">${req.unit_price}</div>
                                         {req.quantity > 1 && (
                                             <div className="text-xs text-gray-500 mt-1">
@@ -351,24 +354,27 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                             </div>
                                         )}
                                     </td>
-                                    <td className="table-cell">
+                                    <td className="table-cell w-1/6">
                                         <div className="flex items-center space-x-2">
                                             <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
                                                 {req.requested_by?.username ? req.requested_by.username.charAt(0).toUpperCase() : '?'}
                                             </div>
-                                            <span className="text-sm font-medium text-gray-700">{req.requested_by?.username || 'N/A'}</span>
+                                            <span className="text-sm font-medium text-gray-700 truncate" title={req.requested_by?.username || 'N/A'}>{req.requested_by?.username || 'N/A'}</span>
                                         </div>
                                     </td>
-                                    <td className="table-cell">{getStatusBadge(req.status)}</td>
-                                    <td className="table-cell">
+                                    <td className="table-cell w-24">{getStatusBadge(req.status)}</td>
+                                    <td className="table-cell w-32">
                                         {req.barcode ? (
                                             <div className="flex items-center space-x-2">
-                                                <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
-                                                    {req.barcode}
+                                                <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono truncate" title={req.barcode}>
+                                                    {req.barcode.length > 8 ? req.barcode.substring(0, 8) + '...' : req.barcode}
                                                 </code>
                                                 <button
-                                                    onClick={() => setShowBarcodeModal(req)}
-                                                    className="p-1 hover:bg-primary-50 rounded transition-colors"
+                                                    onClick={() => {
+                                                        setSelectedRequestForPrint(req);
+                                                        setShowPrintModal(true);
+                                                    }}
+                                                    className="p-1 hover:bg-primary-50 rounded transition-colors flex-shrink-0"
                                                     title="Print barcode label"
                                                 >
                                                     <Printer className="w-3 h-3 text-gray-500 hover:text-primary-600" />
@@ -378,7 +384,7 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                             <span className="text-xs text-gray-400">No barcode</span>
                                         )}
                                     </td>
-                                    <td className="table-cell">
+                                    <td className="table-cell w-40">
                                         <div className="flex items-center space-x-1">
                                             {user?.is_staff && req.status === 'NEW' && (
                                                 <button 
@@ -429,32 +435,20 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                 </div>
             )}
             
-            {/* Barcode Modal */}
-            {showBarcodeModal && createPortal(
-                <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex justify-center items-center p-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-                    <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-                        <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
-                            <h3 className="text-lg font-semibold">Barcode Label</h3>
-                            <button
-                                onClick={() => setShowBarcodeModal(null)}
-                                className="p-2 hover:bg-gray-100 rounded"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div className="p-4">
-                            <BarcodeComponent
-                                barcodeData={showBarcodeModal.barcode}
-                                itemName={showBarcodeModal.item_name}
-                                onPrint={() => {
-                                    console.log('Barcode printed for:', showBarcodeModal.barcode);
-                                    setShowBarcodeModal(null);
-                                }}
-                            />
-                        </div>
-                    </div>
-                </div>,
-                document.body
+            {/* Centralized Print Modal */}
+            {selectedRequestForPrint?.barcode && (
+                <PrintBarcodeModal
+                    isOpen={showPrintModal}
+                    onClose={() => {
+                        setShowPrintModal(false);
+                        setSelectedRequestForPrint(null);
+                    }}
+                    itemName={selectedRequestForPrint.item_name}
+                    barcode={selectedRequestForPrint.barcode}
+                    itemId={selectedRequestForPrint.id}
+                    allowTextEdit={true}
+                    priority="normal"
+                />
             )}
         </div>
     );

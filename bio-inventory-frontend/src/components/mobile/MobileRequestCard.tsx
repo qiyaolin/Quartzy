@@ -12,6 +12,8 @@ interface RequestItem {
   vendor?: string | { name?: string };
   notes?: string;
   urgency?: string;
+  received_by_name?: string;
+  approved_by_name?: string;
 }
 
 interface MobileRequestCardProps {
@@ -121,6 +123,7 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
         }
         break;
       case 'APPROVED':
+      case 'ORDERED':
         if (onMarkReceived) {
           buttons.push({
             icon: ShoppingCart,
@@ -194,9 +197,16 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
       <div className="px-4 pb-4 space-y-2">
         <div className="flex items-center space-x-3 text-sm text-gray-600">
           <User size={16} className="text-gray-400 flex-shrink-0" />
-          <span className="font-medium min-w-0">Requested by:</span>
+          <span className="font-medium min-w-0">
+            {request.status === 'RECEIVED' ? 'Received by:' : 'Requested by:'}
+          </span>
           <span className="truncate">
             {(() => {
+              // For RECEIVED status, show received_by_name if available
+              if (request.status === 'RECEIVED' && request.received_by_name) {
+                return request.received_by_name;
+              }
+              
               // Handle different data structures for requested_by
               if (typeof request.requested_by === 'string' && request.requested_by) {
                 return request.requested_by;

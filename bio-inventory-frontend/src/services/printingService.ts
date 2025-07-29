@@ -1,4 +1,4 @@
-import api from '../config/api';
+import { buildApiUrl } from '../config/api.ts';
 
 export interface LabelData {
   itemName: string;
@@ -42,13 +42,33 @@ export interface CreatePrintJobRequest {
 }
 
 class PrintingService {
+  private getToken(): string {
+    // Get token from localStorage - same pattern used in other components
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+    return token;
+  }
   /**
    * Queue a new print job
    */
   async queuePrintJob(data: CreatePrintJobRequest): Promise<PrintJob> {
     try {
-      const response = await api.post('/printing/api/queue-job/', data);
-      return response.data;
+      const response = await fetch(buildApiUrl('/printing/api/queue-job/'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${this.getToken()}`
+        },
+        body: JSON.stringify(data)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
     } catch (error) {
       console.error('Failed to queue print job:', error);
       throw error;
@@ -60,9 +80,22 @@ class PrintingService {
    */
   async getPrintJobs(status?: string): Promise<PrintJob[]> {
     try {
-      const params = status ? { status } : {};
-      const response = await api.get('/printing/api/jobs/', { params });
-      return response.data.results || response.data;
+      const url = status 
+        ? buildApiUrl(`/printing/api/jobs/?status=${encodeURIComponent(status)}`)
+        : buildApiUrl('/printing/api/jobs/');
+        
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Token ${this.getToken()}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return data.results || data;
     } catch (error) {
       console.error('Failed to fetch print jobs:', error);
       throw error;
@@ -74,8 +107,17 @@ class PrintingService {
    */
   async getPrintJob(jobId: number): Promise<PrintJob> {
     try {
-      const response = await api.get(`/printing/api/jobs/${jobId}/`);
-      return response.data;
+      const response = await fetch(buildApiUrl(`/printing/api/jobs/${jobId}/`), {
+        headers: {
+          'Authorization': `Token ${this.getToken()}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
     } catch (error) {
       console.error('Failed to fetch print job:', error);
       throw error;
@@ -87,8 +129,18 @@ class PrintingService {
    */
   async retryPrintJob(jobId: number): Promise<PrintJob> {
     try {
-      const response = await api.post(`/printing/api/jobs/${jobId}/retry/`);
-      return response.data;
+      const response = await fetch(buildApiUrl(`/printing/api/jobs/${jobId}/retry/`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${this.getToken()}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
     } catch (error) {
       console.error('Failed to retry print job:', error);
       throw error;
@@ -100,8 +152,17 @@ class PrintingService {
    */
   async getPrintStats(): Promise<PrintJobStats> {
     try {
-      const response = await api.get('/printing/api/stats/');
-      return response.data;
+      const response = await fetch(buildApiUrl('/printing/api/stats/'), {
+        headers: {
+          'Authorization': `Token ${this.getToken()}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      return await response.json();
     } catch (error) {
       console.error('Failed to fetch print stats:', error);
       throw error;

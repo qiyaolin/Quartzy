@@ -107,23 +107,35 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
     if (!isOpen || !request) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] flex flex-col">
-                <div className="p-6 border-b border-secondary-200 flex justify-between items-center flex-shrink-0">
-                    <div>
-                        <h2 className="text-2xl font-bold text-secondary-900">Select Fund for Order</h2>
-                        <p className="text-secondary-600 mt-1">Choose which fund to use for this order (optional)</p>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-end sm:items-center p-0 sm:p-4">
+            <div className="bg-white w-full sm:max-w-2xl sm:rounded-lg shadow-xl max-h-[100dvh] sm:max-h-[85vh] overflow-hidden rounded-t-2xl sm:rounded-2xl flex flex-col" style={{ maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px))' }}>
+                <div className="bg-gradient-to-r from-blue-50 to-cyan-100 px-4 sm:px-6 py-5 border-b border-blue-200 rounded-t-2xl sticky top-0 z-10 flex-shrink-0" style={{ 
+                    paddingTop: 'max(20px, calc(env(safe-area-inset-top, 0px) + 20px))' 
+                }}>
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-blue-500 rounded-2xl flex items-center justify-center">
+                                <DollarSign className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Select Fund for Order</h2>
+                                <p className="text-sm text-blue-700">Choose which fund to use for this order (optional)</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={onClose}
+                            className="p-2.5 rounded-xl hover:bg-blue-200 transition-all duration-200 group hover:scale-105"
+                            disabled={placing}
+                        >
+                            <X className="w-5 h-5 text-gray-600 group-hover:text-gray-800" />
+                        </button>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 rounded-full hover:bg-secondary-100 transition-colors"
-                        disabled={placing}
-                    >
-                        <X className="w-6 h-6 text-secondary-600" />
-                    </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto flex-1 min-h-0">
+                <div className="px-4 sm:px-6 py-4 overflow-y-auto flex-1 min-h-0 mobile-scroll" style={{ 
+                    maxHeight: 'calc(100dvh - 180px)', 
+                    minHeight: '300px'
+                }}>
                     {/* Order Summary */}
                     <div className="bg-primary-50 rounded-lg p-4 mb-6">
                         <h3 className="text-lg font-semibold text-primary-900 mb-3 flex items-center">
@@ -279,55 +291,59 @@ const FundSelectionModal = ({ isOpen, onClose, request, onPlaceOrder, token }) =
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center p-6 border-t border-secondary-200 bg-secondary-50 flex-shrink-0">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="btn btn-secondary"
-                        disabled={placing}
-                    >
-                        Cancel
-                    </button>
-                    <div className="flex space-x-3">
-                        {funds.length > 0 && (
+                <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 sm:px-6 py-4 border-t border-gray-200 sticky bottom-0 z-10 flex-shrink-0" style={{ 
+                    paddingBottom: 'max(20px, calc(env(safe-area-inset-bottom, 0px) + 20px))' 
+                }}>
+                    <div className="flex flex-col space-y-3 sm:flex-row sm:justify-between sm:items-center sm:space-y-0">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors min-h-[40px] flex items-center justify-center touch-manipulation text-sm order-2 sm:order-1"
+                            disabled={placing}
+                        >
+                            Cancel
+                        </button>
+                        <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3 order-1 sm:order-2">
+                            {funds.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        setSelectedFund('');
+                                        handlePlaceOrder();
+                                    }}
+                                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors flex items-center justify-center min-h-[40px] touch-manipulation text-sm"
+                                    disabled={placing}
+                                >
+                                    {placing ? (
+                                        <div className="flex items-center">
+                                            <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent mr-2"></div>
+                                            Placing Order...
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <Package className="w-3 h-3 mr-2" />
+                                            Place Order Without Fund
+                                        </>
+                                    )}
+                                </button>
+                            )}
                             <button
-                                onClick={() => {
-                                    setSelectedFund('');
-                                    handlePlaceOrder();
-                                }}
-                                className="btn btn-secondary"
-                                disabled={placing}
+                                onClick={handlePlaceOrder}
+                                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors flex items-center justify-center min-h-[40px] min-w-[120px] touch-manipulation text-sm"
+                                disabled={placing || (funds.length > 0 && !selectedFund)}
                             >
                                 {placing ? (
                                     <div className="flex items-center">
-                                        <div className="loading-spinner w-4 h-4 mr-2"></div>
+                                        <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent mr-2"></div>
                                         Placing Order...
                                     </div>
                                 ) : (
                                     <>
-                                        <Package className="w-4 h-4 mr-2" />
-                                        Place Order Without Fund
+                                        <Package className="w-3 h-3 mr-2" />
+                                        {selectedFund ? 'Place Order with Fund' : 'Place Order'}
                                     </>
                                 )}
                             </button>
-                        )}
-                        <button
-                            onClick={handlePlaceOrder}
-                            className="btn btn-primary"
-                            disabled={placing || (funds.length > 0 && !selectedFund)}
-                        >
-                            {placing ? (
-                                <div className="flex items-center">
-                                    <div className="loading-spinner w-4 h-4 mr-2"></div>
-                                    Placing Order...
-                                </div>
-                            ) : (
-                                <>
-                                    <Package className="w-4 h-4 mr-2" />
-                                    {selectedFund ? 'Place Order with Fund' : 'Place Order'}
-                                </>
-                            )}
-                        </button>
+                        </div>
                     </div>
                 </div>
             </div>

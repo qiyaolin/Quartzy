@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ChevronDown, Edit, Trash2, AlertTriangle, Clock, Package, History, QrCode, Printer, X } from 'lucide-react';
-import BarcodeComponent from './BarcodeComponent.tsx';
+import { ChevronDown, Edit, Trash2, AlertTriangle, Clock, Package, History, QrCode, Printer } from 'lucide-react';
+import PrintBarcodeModal from './PrintBarcodeModal.tsx';
 
 const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, onBatchAction }) => {
     const [expandedGroups, setExpandedGroups] = useState({});
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
-    const [showBarcodeModal, setShowBarcodeModal] = useState(null);
+    const [showPrintModal, setShowPrintModal] = useState(false);
+    const [selectedItemForPrint, setSelectedItemForPrint] = useState(null);
     
     const toggleGroup = (groupId) => { setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] })); };
     
@@ -278,7 +278,10 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                                 {group.instances[0].barcode}
                                             </code>
                                             <button
-                                                onClick={() => setShowBarcodeModal(group.instances[0])}
+                                                onClick={() => {
+                                                    setSelectedItemForPrint(group.instances[0]);
+                                                    setShowPrintModal(true);
+                                                }}
                                                 className="p-1 hover:bg-primary-50 rounded transition-colors"
                                                 title="Print barcode label"
                                             >
@@ -360,7 +363,10 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                                     {instance.barcode}
                                                 </code>
                                                 <button
-                                                    onClick={() => setShowBarcodeModal(instance)}
+                                                    onClick={() => {
+                                                        setSelectedItemForPrint(instance);
+                                                        setShowPrintModal(true);
+                                                    }}
                                                     className="p-1 hover:bg-primary-50 rounded transition-colors"
                                                     title="Print barcode label"
                                                 >
@@ -404,32 +410,20 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                 </table>
             </div>
             
-            {/* Barcode Modal */}
-            {showBarcodeModal && createPortal(
-                <div className="fixed inset-0 bg-black bg-opacity-50 z-[9999] flex justify-center items-center p-4" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
-                    <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-                        <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white z-10">
-                            <h3 className="text-lg font-semibold">Barcode Label</h3>
-                            <button
-                                onClick={() => setShowBarcodeModal(null)}
-                                className="p-2 hover:bg-gray-100 rounded"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-                        <div className="p-4">
-                            <BarcodeComponent
-                                barcodeData={showBarcodeModal.barcode}
-                                itemName={showBarcodeModal.name}
-                                onPrint={() => {
-                                    console.log('Barcode printed for:', showBarcodeModal.barcode);
-                                    setShowBarcodeModal(null);
-                                }}
-                            />
-                        </div>
-                    </div>
-                </div>,
-                document.body
+            {/* Centralized Print Modal */}
+            {selectedItemForPrint?.barcode && (
+                <PrintBarcodeModal
+                    isOpen={showPrintModal}
+                    onClose={() => {
+                        setShowPrintModal(false);
+                        setSelectedItemForPrint(null);
+                    }}
+                    itemName={selectedItemForPrint.name}
+                    barcode={selectedItemForPrint.barcode}
+                    itemId={selectedItemForPrint.id}
+                    allowTextEdit={true}
+                    priority="normal"
+                />
             )}
         </div>
     );

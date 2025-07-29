@@ -8,6 +8,7 @@ import MobileRequestCard from '../components/mobile/MobileRequestCard.tsx';
 import { RequestsFAB } from '../components/mobile/MobileFloatingActionButton.tsx';
 import { RequestsStatsCards } from '../components/mobile/MobileStatsCards.tsx';
 import MobileFilterDrawer from '../components/mobile/MobileFilterDrawer.tsx';
+import MobileMarkReceivedModal from '../modals/MobileMarkReceivedModal.tsx';
 
 interface RequestItem {
   id: number;
@@ -20,6 +21,8 @@ interface RequestItem {
   vendor?: string;
   notes?: string;
   urgency?: string;
+  received_by_name?: string;
+  approved_by_name?: string;
 }
 
 interface MobileRequestsPageProps {
@@ -51,6 +54,8 @@ const MobileRequestsPage: React.FC<MobileRequestsPageProps> = ({
   
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [isMarkReceivedModalOpen, setIsMarkReceivedModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<RequestItem | null>(null);
   const [searchValue, setSearchValue] = useState(filters.search || '');
   const [stats, setStats] = useState({
     newRequests: 0,
@@ -215,8 +220,37 @@ const MobileRequestsPage: React.FC<MobileRequestsPageProps> = ({
   };
 
   const handleMarkReceived = (request: RequestItem) => {
-    // TODO: Implement mark as received logic
-    console.log('Marking as received:', request.id);
+    setSelectedRequest(request);
+    setIsMarkReceivedModalOpen(true);
+  };
+
+  const handleSaveReceived = async (id: number, data: any) => {
+    try {
+      console.log('Sending mark_received request:', { id, data });
+      const response = await fetch(buildApiUrl(`/api/requests/${id}/mark_received/`), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+      
+      console.log('Mark received response status:', response.status);
+      const responseText = await response.text();
+      console.log('Mark received response:', responseText);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to mark as received: ${responseText}`);
+      }
+      
+      fetchRequests(); // Refresh list on success
+      // Don't close modal immediately - let the modal handle the success state
+    } catch (error) {
+      console.error('Mark received error:', error);
+      errorHandler.handleError(error, 'MARK_RECEIVED');
+      throw error; // Re-throw so modal can handle it
+    }
   };
 
   const handleReopenRequest = (request: RequestItem) => {
@@ -339,6 +373,15 @@ const MobileRequestsPage: React.FC<MobileRequestsPageProps> = ({
         filters={filterSections}
         onFilterChange={handleFilterChange}
         onClearAll={handleClearFilters}
+      />
+
+      {/* Mark Received Modal */}
+      <MobileMarkReceivedModal
+        isOpen={isMarkReceivedModalOpen}
+        onClose={() => setIsMarkReceivedModalOpen(false)}
+        onSave={handleSaveReceived}
+        token={token}
+        request={selectedRequest}
       />
     </div>
   );

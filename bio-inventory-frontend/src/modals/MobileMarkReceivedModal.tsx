@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Printer, X, CheckCircle } from 'lucide-react';
-import BarcodeComponent from '../components/BarcodeComponent.tsx';
+import PrintBarcodeModal from '../components/PrintBarcodeModal.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
@@ -9,26 +9,32 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
     const [locations, setLocations] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showBarcodeSection, setShowBarcodeSection] = useState(false);
+    const [showPrintModal, setShowPrintModal] = useState(false);
     
     useEffect(() => {
-        if (isOpen) {
-            const fetchLocations = async () => {
-                try {
-                    const response = await fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { 
-                        headers: { 'Authorization': `Token ${token}` } 
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        setLocations(data);
+        if (isOpen && request) {
+            // If request status is ORDERED and has barcode, show barcode section directly
+            if (request.status === 'ORDERED' && request.barcode) {
+                setShowBarcodeSection(true);
+            } else {
+                const fetchLocations = async () => {
+                    try {
+                        const response = await fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { 
+                            headers: { 'Authorization': `Token ${token}` } 
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            setLocations(data);
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch locations:', error);
                     }
-                } catch (error) {
-                    console.error('Failed to fetch locations:', error);
-                }
-            };
-            fetchLocations();
-            setQuantityReceived(request?.quantity || 1);
-            setShowBarcodeSection(false);
-            setLocationId('');
+                };
+                fetchLocations();
+                setQuantityReceived(request?.quantity || 1);
+                setShowBarcodeSection(false);
+                setLocationId('');
+            }
         }
     }, [isOpen, request, token]);
 
@@ -70,7 +76,9 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
                             {showBarcodeSection ? 'Print Barcode Label' : 'Mark as Received'}
                         </h2>
                         <p className="mt-1 text-sm text-gray-600">
-                            {showBarcodeSection ? 'Item successfully received' : `Receiving: ${request?.item_name || request?.product_name}`}
+                            {showBarcodeSection 
+                                ? (request?.status === 'ORDERED' ? 'Item is ready for printing' : 'Item successfully received')
+                                : `Receiving: ${request?.item_name || request?.product_name}`}
                         </p>
                     </div>
                     <button
@@ -182,10 +190,10 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
                                     <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 mr-3 flex-shrink-0" />
                                     <div>
                                         <h3 className="text-base font-semibold text-green-800 mb-1">
-                                            Item Successfully Received
+                                            {request?.status === 'ORDERED' ? 'Ready to Print Label' : 'Item Successfully Received'}
                                         </h3>
                                         <p className="text-sm text-green-700">
-                                            <strong>{request?.item_name || request?.product_name}</strong> has been marked as received and added to inventory.
+                                            <strong>{request?.item_name || request?.product_name}</strong> {request?.status === 'ORDERED' ? 'is ready for barcode label printing.' : 'has been marked as received and added to inventory.'}
                                         </p>
                                     </div>
                                 </div>
@@ -201,15 +209,22 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
                                 </div>
                                 
                                 {request?.barcode ? (
-                                    <div className="bg-white border border-gray-200 rounded-lg">
-                                        <BarcodeComponent
-                                            barcodeData={request.barcode}
-                                            itemName={request.item_name || request.product_name}
-                                            allowTextEdit={true}
-                                            onPrint={() => {
-                                                console.log('Barcode printed for received item:', request.barcode);
-                                            }}
-                                        />
+                                    <div className="bg-gray-50 rounded-lg p-4">
+                                        <div className="text-center mb-4">
+                                            <div className="text-sm text-gray-600 mb-2">
+                                                <p><strong>Item:</strong> {request.item_name || request.product_name}</p>
+                                                <p><strong>Barcode:</strong> {request.barcode}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-center">
+                                            <button
+                                                onClick={() => setShowPrintModal(true)}
+                                                className="w-full sm:w-auto px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors flex items-center justify-center"
+                                            >
+                                                <Printer className="w-4 h-4 mr-2" />
+                                                Print Label
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -235,6 +250,19 @@ const MobileMarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) =>
                     )}
                 </div>
             </div>
+
+            {/* Centralized Print Modal */}
+            {request?.barcode && (
+                <PrintBarcodeModal
+                    isOpen={showPrintModal}
+                    onClose={() => setShowPrintModal(false)}
+                    itemName={request.item_name || request.product_name}
+                    barcode={request.barcode}
+                    itemId={request.id}
+                    allowTextEdit={true}
+                    priority="normal"
+                />
+            )}
         </div>
     );
 };

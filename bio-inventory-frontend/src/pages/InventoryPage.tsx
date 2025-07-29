@@ -231,7 +231,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     };
 
     return (
-        <main className="flex-grow p-4 md:p-6 lg:p-8 overflow-y-auto animate-fade-in">
+        <main className="flex-grow p-4 md:p-6 lg:p-8 animate-fade-in">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-secondary-900 mb-2">Inventory</h1>

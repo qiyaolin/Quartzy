@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Printer, X } from 'lucide-react';
-import BarcodeComponent from '../components/BarcodeComponent.tsx';
+import PrintBarcodeModal from '../components/PrintBarcodeModal.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
@@ -9,6 +9,7 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
     const [locations, setLocations] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showBarcodeSection, setShowBarcodeSection] = useState(false);
+    const [showPrintModal, setShowPrintModal] = useState(false);
     useEffect(() => {
         if (isOpen) {
             const fetchLocations = async () => {
@@ -136,15 +137,28 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                                     <Printer className="w-5 h-5 text-gray-500" />
                                 </div>
                                 
-                                {request?.barcode && (
-                                    <BarcodeComponent
-                                        barcodeData={request.barcode}
-                                        itemName={request.item_name}
-                                        allowTextEdit={true}
-                                        onPrint={() => {
-                                            console.log('Barcode printed for received item:', request.barcode);
-                                        }}
-                                    />
+                                {request?.barcode ? (
+                                    <div className="bg-gray-50 rounded-lg p-4">
+                                        <div className="text-center mb-4">
+                                            <div className="text-sm text-gray-600 mb-2">
+                                                <p><strong>Item:</strong> {request.item_name}</p>
+                                                <p><strong>Barcode:</strong> {request.barcode}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-center">
+                                            <button
+                                                onClick={() => setShowPrintModal(true)}
+                                                className="btn btn-primary btn-sm flex items-center space-x-2"
+                                            >
+                                                <Printer className="w-4 h-4" />
+                                                <span>Print Label</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-gray-50 rounded-lg p-4 text-center">
+                                        <p className="text-gray-500">No barcode available for this item</p>
+                                    </div>
                                 )}
                             </div>
 
@@ -160,6 +174,19 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                     )}
                 </div>
             </div>
+
+            {/* Centralized Print Modal */}
+            {request?.barcode && (
+                <PrintBarcodeModal
+                    isOpen={showPrintModal}
+                    onClose={() => setShowPrintModal(false)}
+                    itemName={request.item_name}
+                    barcode={request.barcode}
+                    itemId={request.id}
+                    allowTextEdit={true}
+                    priority="normal"
+                />
+            )}
         </div>
     );
 };

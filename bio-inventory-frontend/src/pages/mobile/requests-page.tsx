@@ -25,6 +25,7 @@ interface Request {
   requested_by_name: string;
   requested_by: number;
   approved_by_name?: string;
+  received_by_name?: string;
   created_at: string;
   updated_at: string;
   requested_date?: string;
@@ -540,31 +541,53 @@ const MobileRequestsPage = () => {
             return (
               <div key={request.id} className="bg-white/80 backdrop-blur-xl rounded-2xl p-5 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]">
                 {/* Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex-1 mr-3" onClick={() => handleViewDetails(request)}>
-                    <div className="flex items-center space-x-3 mb-2">
-                      <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                        <Package className="w-5 h-5 text-white" />
-                      </div>
-                      <h3 className="font-bold text-gray-800 text-lg cursor-pointer hover:text-purple-600 transition-colors">
-                        {request.product_name || request.item_name}
+                <div className="flex items-start mb-4 gap-3">
+                  <div className="flex items-center min-w-0 flex-1" onClick={() => handleViewDetails(request)}>
+                    <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Package className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1 ml-3">
+                      <h3 className="font-bold text-gray-800 text-lg cursor-pointer hover:text-purple-600 transition-colors min-w-0 overflow-hidden leading-tight">
+                        <span className="block truncate" title={request.product_name || request.item_name}>
+                          {(request.product_name || request.item_name).length > 20 
+                            ? `${(request.product_name || request.item_name).substring(0, 20)}...`
+                            : (request.product_name || request.item_name)
+                          }
+                        </span>
                       </h3>
                     </div>
-                    {request.specifications && (
-                      <p className="text-sm text-gray-600 ml-13 mb-2 bg-gradient-to-r from-gray-50 to-blue-50 p-2 rounded-lg">
-                        {request.specifications}
-                      </p>
-                    )}
                   </div>
-                  <div className="flex flex-col items-end space-y-2">
-                    <div className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.color} border border-white/20`}>
-                      <div className={`w-2 h-2 ${statusConfig.dotColor} rounded-full mr-2`}></div>
-                      {statusConfig.text}
+                  <div className="flex flex-col items-end space-y-2 flex-shrink-0" style={{ minWidth: '110px', maxWidth: '110px' }}>
+                    <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.color} border border-white/20 w-full justify-center`}>
+                      <div className={`w-2 h-2 ${statusConfig.dotColor} rounded-full mr-1 flex-shrink-0`}></div>
+                      <span className="truncate text-center">{statusConfig.text}</span>
                     </div>
                     {urgencyConfig && (
-                      <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${urgencyConfig.bg} ${urgencyConfig.color} border border-white/20`}>
-                        <urgencyConfig.icon className="w-3 h-3 mr-1" />
-                        {urgencyConfig.text}
+                      <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${urgencyConfig.bg} ${urgencyConfig.color} border border-white/20 w-full justify-center`}>
+                        <urgencyConfig.icon className="w-3 h-3 mr-1 flex-shrink-0" />
+                        <span className="truncate text-center">{urgencyConfig.text}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Specifications - moved outside header */}
+                <div className="mb-4" onClick={() => handleViewDetails(request)}>
+                  <div className="flex-1">
+                    {request.specifications && (
+                      <div className="ml-13 bg-gradient-to-r from-gray-50 to-blue-50 p-2 rounded-lg overflow-hidden">
+                        <p className="text-sm text-gray-600 overflow-hidden" style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          lineHeight: '1.4rem',
+                          maxHeight: '2.8rem'
+                        }} title={request.specifications}>
+                          {request.specifications.length > 80 
+                            ? `${request.specifications.substring(0, 80)}...`
+                            : request.specifications
+                          }
+                        </p>
                       </div>
                     )}
                   </div>
@@ -589,7 +612,11 @@ const MobileRequestsPage = () => {
                   <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
                     <User className="w-4 h-4 text-purple-600" />
                     <span className="font-medium text-gray-700">
-                      By: {request.requester_name || request.requested_by_name}
+                      {request.status === 'RECEIVED' ? (
+                        `Received by: ${request.received_by_name || 'Unknown'}`
+                      ) : (
+                        `By: ${request.requester_name || request.requested_by_name}`
+                      )}
                     </span>
                   </div>
                   
