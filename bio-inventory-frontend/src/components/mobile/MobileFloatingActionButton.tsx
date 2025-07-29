@@ -47,10 +47,16 @@ const MobileFloatingActionButton: React.FC<MobileFloatingActionButtonProps> = ({
         />
       )}
       
-      <div className="fixed bottom-20 right-4 z-50">
+      <div 
+        className="fixed right-4 z-40 flex flex-col items-end" 
+        style={{ 
+          bottom: '5.5rem',
+          pointerEvents: isExpanded ? 'auto' : 'none'
+        }}
+      >
         {/* Secondary actions */}
         {isExpanded && actions.length > 0 && (
-          <div className="mb-4 space-y-3">
+          <div className="mb-4 space-y-3" style={{ pointerEvents: 'auto' }}>
             {actions.map((action, index) => {
               const ActionIcon = action.icon;
               return (
@@ -80,6 +86,7 @@ const MobileFloatingActionButton: React.FC<MobileFloatingActionButtonProps> = ({
           className={`w-14 h-14 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center ${
             isExpanded ? 'rotate-45' : ''
           }`}
+          style={{ pointerEvents: 'auto' }}
         >
           {isExpanded && actions.length > 0 ? (
             <X size={24} />
@@ -98,23 +105,40 @@ export const InventoryFAB: React.FC<{
   onScanBarcode: () => void;
 }> = ({ onAddItem, onScanBarcode }) => {
   return (
-    <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end space-y-3">
+    <div 
+      className="fixed z-40 flex flex-col items-end space-y-2" 
+      style={{ 
+        right: '0.75rem', // More right than right-4 (1rem)
+        bottom: '5rem',   // Closer to bottom navigation
+        pointerEvents: 'none' // Allow touch events to pass through container
+      }}
+    >
       {/* Camera button for scan barcode checkout */}
       <button
         onClick={onScanBarcode}
-        className="w-12 h-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center"
+        className="w-11 h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center touch-manipulation"
         title="Scan Barcode Checkout"
+        style={{ 
+          touchAction: 'manipulation',
+          pointerEvents: 'auto' // Re-enable pointer events for button
+        }}
       >
-        <Camera size={20} />
+        <Camera size={18} />
       </button>
       
       {/* Main Add Item button */}
       <button
         onClick={onAddItem}
-        className="w-14 h-14 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center"
+        className="w-13 h-13 bg-primary-600 hover:bg-primary-700 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center touch-manipulation"
         title="Add Item"
+        style={{ 
+          touchAction: 'manipulation',
+          pointerEvents: 'auto', // Re-enable pointer events for button
+          width: '3.25rem',
+          height: '3.25rem'
+        }}
       >
-        <Plus size={24} />
+        <Plus size={22} />
       </button>
     </div>
   );

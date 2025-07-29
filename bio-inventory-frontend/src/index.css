@@ -673,7 +673,8 @@
 
   /* Mobile FAB positioning */
   .fab-container {
-    @apply fixed bottom-20 right-4 z-40;
+    @apply fixed right-4 z-40;
+    bottom: 5.5rem; /* Clear spacing above bottom navigation */
   }
 
   /* Mobile drawer animations */

@@ -282,7 +282,7 @@ const DesktopApp = () => {
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             />
             <AlertsBanner />
-            <div className="flex flex-grow overflow-hidden relative">
+            <div className="flex flex-grow relative" style={{ minHeight: 'calc(100vh - 120px)' }}>
                 {renderSidebar()}
                 <div className="flex-1 w-full">
                     {renderPage()}

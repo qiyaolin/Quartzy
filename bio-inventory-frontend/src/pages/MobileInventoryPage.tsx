@@ -293,7 +293,15 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
 
       if (response.ok) {
         const result = await response.json();
-        notification.success(`Successfully checked out item: ${result.item_name || 'Unknown item'}`);
+        const itemName = result.item?.name || 'Unknown item';
+        const remainingQty = result.quantity_remaining || 0;
+        const isArchived = result.is_archived || false;
+        
+        if (isArchived) {
+          notification.success(`✅ ${itemName} - Last unit checked out (Item fully consumed)`);
+        } else {
+          notification.success(`✅ ${itemName} - 1 unit checked out (${remainingQty} remaining)`);
+        }
         
         // Refresh inventory data
         fetchInventory();

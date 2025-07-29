@@ -185,14 +185,14 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         
         if (itemData) {
             try {
-                // 检查物品是否已经归档
+                // Check if item is already archived
                 if (itemData.is_archived) {
                     notification.error('Item has already been checked out');
                     setIsScannerOpen(false);
                     return;
                 }
 
-                // 使用物品条形码出库API
+                // Use barcode checkout API
                 const checkoutData = {
                     barcode: barcode,
                     checkout_date: new Date().toISOString(),
@@ -209,10 +209,18 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                 });
 
                 if (response.ok) {
-                    await response.json();
-                    notification.success(`Successfully checked out: ${itemData.name}`);
+                    const result = await response.json();
+                    const itemName = result.item?.name || itemData.name;
+                    const remainingQty = result.quantity_remaining || 0;
+                    const isArchived = result.is_archived || false;
                     
-                    // 刷新库存数据
+                    if (isArchived) {
+                        notification.success(`✅ ${itemName} - Last unit checked out (Item fully consumed)`);
+                    } else {
+                        notification.success(`✅ ${itemName} - 1 unit checked out (${remainingQty} remaining)`);
+                    }
+                    
+                    // Refresh inventory data
                     fetchInventory();
                 } else {
                     const errorData = await response.json();

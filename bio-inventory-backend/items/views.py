@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters # Import django_filters
 from django.db.models import Q, Count, Sum, F
+from django.db import transaction
 from datetime import date, timedelta
 from .models import Vendor, Location, ItemType, Item
 from .serializers import VendorSerializer, LocationSerializer, ItemTypeSerializer, ItemSerializer
@@ -150,25 +151,35 @@ class ItemViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def checkout(self, request, pk=None):
         """
-        Custom action to checkout an item by marking it as archived.
+        Custom action to checkout an item by reducing quantity and archiving if empty.
         """
         item = self.get_object()
         
         if item.is_archived:
             return Response({'error': 'Item is already checked out.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if item.quantity <= 0:
+            return Response({'error': 'Item quantity is already zero.'}, status=status.HTTP_400_BAD_REQUEST)
 
         barcode = request.data.get('barcode')
         notes = request.data.get('notes', f'Checked out via barcode scan: {barcode}')
 
-        # Mark item as archived (checked out)
-        item.is_archived = True
+        # Reduce quantity by 1
+        item.quantity -= 1
         item.last_used_date = date.today()
+        
+        # If quantity reaches zero, mark as archived
+        if item.quantity == 0:
+            item.is_archived = True
+        
         item.save()
 
         return Response({
             'status': 'Item checked out successfully',
             'item_id': item.id,
             'barcode': item.barcode,
+            'quantity_remaining': float(item.quantity),
+            'is_archived': item.is_archived,
             'checked_out_by': request.user.username,
             'checkout_date': date.today()
         })
@@ -176,8 +187,9 @@ class ItemViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def checkout_by_barcode(self, request):
         """
-        Checkout an item by barcode without knowing the item ID.
+        Checkout an item by barcode by reducing quantity and archiving if empty.
         This searches for an active (non-archived) item with the given barcode.
+        Uses database transaction to prevent race conditions.
         """
         barcode = request.data.get('barcode')
         notes = request.data.get('notes', f'Checked out via barcode scan: {barcode}')
@@ -185,24 +197,39 @@ class ItemViewSet(viewsets.ModelViewSet):
         if not barcode:
             return Response({'error': 'Barcode is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Find the item with this barcode that is not archived
         try:
-            item = Item.objects.get(barcode=barcode, is_archived=False)
-        except Item.DoesNotExist:
-            return Response({'error': 'No available item found with this barcode.'}, status=status.HTTP_404_NOT_FOUND)
-        except Item.MultipleObjectsReturned:
-            return Response({'error': 'Multiple items found with this barcode.'}, status=status.HTTP_400_BAD_REQUEST)
+            with transaction.atomic():
+                # Find and lock the item for update to prevent race conditions
+                try:
+                    item = Item.objects.select_for_update().get(barcode=barcode, is_archived=False)
+                except Item.DoesNotExist:
+                    return Response({'error': 'No available item found with this barcode.'}, status=status.HTTP_404_NOT_FOUND)
+                except Item.MultipleObjectsReturned:
+                    return Response({'error': 'Multiple items found with this barcode.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Mark item as archived (checked out)
-        item.is_archived = True
-        item.last_used_date = date.today()
-        item.save()
+                # Check if quantity is already zero
+                if item.quantity <= 0:
+                    return Response({'error': 'Item quantity is already zero.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Return the item details
-        serializer = self.get_serializer(item)
-        return Response({
-            'status': 'Item checked out successfully',
-            'item': serializer.data,
-            'checked_out_by': request.user.username,
-            'checkout_date': date.today()
-        })
+                # Reduce quantity by 1
+                item.quantity -= 1
+                item.last_used_date = date.today()
+                
+                # If quantity reaches zero, mark as archived
+                if item.quantity == 0:
+                    item.is_archived = True
+                
+                item.save()
+
+                # Return the item details
+                serializer = self.get_serializer(item)
+                return Response({
+                    'status': 'Item checked out successfully',
+                    'item': serializer.data,
+                    'quantity_remaining': float(item.quantity),
+                    'is_archived': item.is_archived,
+                    'checked_out_by': request.user.username,
+                    'checkout_date': date.today()
+                })
+        except Exception as e:
+            return Response({'error': f'Checkout failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
