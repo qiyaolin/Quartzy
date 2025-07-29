@@ -282,9 +282,9 @@ class ItemViewSet(viewsets.ModelViewSet):
             imported_count = 0
             errors = []
             
-            with transaction.atomic():
-                for idx, row in df.iterrows():
-                    try:
+            for idx, row in df.iterrows():
+                try:
+                    with transaction.atomic():
                         # Skip empty rows
                         if pd.isna(row.get('Item Name')) or str(row.get('Item Name')).strip() == '':
                             continue
@@ -360,7 +360,7 @@ class ItemViewSet(viewsets.ModelViewSet):
                             'expiration_date': expiration_date,
                             'low_stock_threshold': minimum_quantity,
                             'received_date': purchase_date,
-                            'barcode': str(row.get('Barcode', '')).strip() or None,
+                            'barcode': str(row.get('Barcode', '')).strip() if pd.notna(row.get('Barcode')) and str(row.get('Barcode', '')).strip() != 'nan' else None,
                             'owner': request.user
                         }
                         
@@ -370,9 +370,15 @@ class ItemViewSet(viewsets.ModelViewSet):
                         Item.objects.create(**item_data)
                         imported_count += 1
                         
-                    except Exception as e:
-                        errors.append(f'Row {idx + 1}: {str(e)}')
-                        continue
+                except Exception as e:
+                    error_msg = str(e)
+                    if 'duplicate key value violates unique constraint' in error_msg and 'barcode' in error_msg:
+                        item_name = str(row.get('Item Name', 'Unknown')).strip()
+                        barcode = str(row.get('Barcode', '')).strip()
+                        errors.append(f'Row {idx + 1} ({item_name}): Item with barcode "{barcode}" already exists - skipping')
+                    else:
+                        errors.append(f'Row {idx + 1}: {error_msg}')
+                    continue
             
             response_data = {
                 'imported_count': imported_count,

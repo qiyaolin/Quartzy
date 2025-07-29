@@ -14,6 +14,7 @@ import ConfirmDeleteModal from './modals/ConfirmDeleteModal.tsx';
 import RequestFormModal from './modals/RequestFormModal.tsx';
 import UserFormModal from './modals/UserFormModal.tsx';
 import ConfirmDeleteUserModal from './modals/ConfirmDeleteUserModal.tsx';
+import { exportToExcel } from './utils/excelExport.ts';
 
 import InventoryPage from './pages/InventoryPage.tsx';
 import RequestsPage from './pages/RequestsPage.tsx';
@@ -166,6 +167,186 @@ const DesktopApp = () => {
         } finally { setIsDeleteUserModalOpen(false); setDeletingUser(null); }
     };
 
+    // Export and Import handlers
+    const handleInventoryExport = async () => {
+        try {
+            const params = new URLSearchParams();
+            if (inventoryFilters.search) params.append('search', inventoryFilters.search);
+            Object.keys(inventoryFilters).forEach(key => {
+                if (key !== 'search' && inventoryFilters[key].length > 0) {
+                    if (key === 'expired' || key === 'low_stock') {
+                        if (inventoryFilters[key].includes('true')) {
+                            params.append(key, 'true');
+                        }
+                    } else {
+                        inventoryFilters[key].forEach(value => params.append(key, value));
+                    }
+                }
+            });
+
+            const response = await fetch(`${buildApiUrl(API_ENDPOINTS.ITEMS)}?${params.toString()}`, {
+                headers: { 'Authorization': `Token ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch inventory data');
+            const data = await response.json();
+
+            const formattedData = data.map(item => ({
+                'Item ID': item.id,
+                'Item Name': item.name,
+                'Specifications': item.specifications || '',
+                'Quantity': item.quantity,
+                'Unit': item.unit || '',
+                'Unit Price': item.unit_price ? `$${item.unit_price}` : '',
+                'Total Value': item.total_value ? `$${item.total_value}` : '',
+                'Vendor': item.vendor?.name || '',
+                'Catalog Number': item.catalog_number || '',
+                'Location': item.location || '',
+                'Item Type': item.item_type || '',
+                'Expiration Date': item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('en-US') : '',
+                'Minimum Stock': item.minimum_quantity || '',
+                'Purchase Date': item.purchase_date ? new Date(item.purchase_date).toLocaleDateString('en-US') : '',
+                'Status': item.quantity <= (item.minimum_quantity || 0) ? 'Low Stock' : 
+                         (item.expiration_date && new Date(item.expiration_date) < new Date()) ? 'Expired' : 'Normal',
+                'Notes': item.notes || '',
+                'Barcode': item.barcode || '',
+                'Last Updated': item.updated_at ? new Date(item.updated_at).toLocaleString('en-US') : ''
+            }));
+
+            const now = new Date();
+            const summary = {
+                'Export Time': now.toLocaleString('en-US'),
+                'Total Items': data.length,
+                'Total Value': `$${data.reduce((sum, item) => sum + (parseFloat(item.total_value) || 0), 0).toFixed(2)}`,
+                'Low Stock Items': data.filter(item => item.quantity <= (item.minimum_quantity || 0)).length,
+                'Expired Items': data.filter(item => item.expiration_date && new Date(item.expiration_date) < now).length,
+                'Expiring Soon Items': data.filter(item => {
+                    if (!item.expiration_date) return false;
+                    const expDate = new Date(item.expiration_date);
+                    const thirtyDaysFromNow = new Date();
+                    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+                    return expDate > now && expDate <= thirtyDaysFromNow;
+                }).length
+            };
+
+            exportToExcel({
+                fileName: 'inventory-export',
+                sheetName: 'Inventory Data',
+                title: 'Laboratory Inventory Management Export Report',
+                data: formattedData,
+                summary: summary
+            });
+
+            notification.success(`Successfully exported ${data.length} inventory items`);
+        } catch (error) {
+            console.error('Export error:', error);
+            notification.error('Failed to export inventory data');
+        }
+    };
+
+    const handleRequestsExport = async () => {
+        try {
+            const params = new URLSearchParams();
+            if (requestFilters.search) params.append('search', requestFilters.search);
+            if (requestFilters.status) params.append('status', requestFilters.status);
+            requestFilters.vendor?.forEach(id => params.append('vendor', id));
+            requestFilters.requested_by?.forEach(id => params.append('requested_by', id));
+
+            const response = await fetch(`${buildApiUrl('/api/requests/')}?${params.toString()}`, {
+                headers: { 'Authorization': `Token ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch requests data');
+            const data = await response.json();
+
+            const formattedData = data.map(request => ({
+                'Request ID': request.id,
+                'Item Name': request.item_name,
+                'Catalog Number': request.catalog_number || '',
+                'Quantity': request.quantity,
+                'Unit Size': request.unit_size || '',
+                'Unit Price': request.unit_price ? `$${request.unit_price}` : '',
+                'Total Cost': request.quantity && request.unit_price ? `$${(request.quantity * request.unit_price).toFixed(2)}` : '',
+                'Vendor': request.vendor?.name || '',
+                'Requested By': request.requested_by?.username || '',
+                'Status': request.status,
+                'Request Date': request.created_at ? new Date(request.created_at).toLocaleDateString('en-US') : '',
+                'URL': request.url || '',
+                'Barcode': request.barcode || '',
+                'Fund': request.fund_id || '',
+                'Notes': request.notes || ''
+            }));
+
+            const now = new Date();
+            const statusCounts = data.reduce((acc, request) => {
+                acc[request.status] = (acc[request.status] || 0) + 1;
+                return acc;
+            }, {});
+
+            const summary = {
+                'Export Time': now.toLocaleString('en-US'),
+                'Total Requests': data.length,
+                'Total Value': `$${data.reduce((sum, request) => {
+                    const cost = request.quantity && request.unit_price ? request.quantity * request.unit_price : 0;
+                    return sum + cost;
+                }, 0).toFixed(2)}`,
+                'New Requests': statusCounts['NEW'] || 0,
+                'Approved Requests': statusCounts['APPROVED'] || 0,
+                'Ordered Requests': statusCounts['ORDERED'] || 0,
+                'Received Requests': statusCounts['RECEIVED'] || 0,
+                'Rejected Requests': statusCounts['REJECTED'] || 0
+            };
+
+            exportToExcel({
+                fileName: 'requests-export',
+                sheetName: 'Requests Data',
+                title: 'Laboratory Requests Management Export Report',
+                data: formattedData,
+                summary: summary
+            });
+
+            notification.success(`Successfully exported ${data.length} requests`);
+        } catch (error) {
+            console.error('Export error:', error);
+            notification.error('Failed to export requests data');
+        }
+    };
+
+    const handleImportData = (dataType) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.xlsx,.xls,.csv';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('data_type', dataType);
+
+                const response = await fetch(buildApiUrl('/api/import/'), {
+                    method: 'POST',
+                    headers: { 'Authorization': `Token ${token}` },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Import failed');
+                }
+
+                const result = await response.json();
+                notification.success(`Successfully imported ${result.imported_count || 0} ${dataType} items`);
+                handleSave(); // Refresh the data
+            } catch (error) {
+                console.error('Import error:', error);
+                notification.error(`Failed to import ${dataType}: ${error.message}`);
+            }
+        };
+        input.click();
+    };
+
     const renderPage = () => {
         switch (activePage) {
             case 'inventory': 
@@ -237,7 +418,9 @@ const DesktopApp = () => {
                 onFilterChange: handleInventoryFilterChange,
                 filterOptions: filterOptions,
                 isMobile: false,
-                onClose: () => setIsSidebarOpen(false)
+                onClose: () => setIsSidebarOpen(false),
+                onExportData: handleInventoryExport,
+                onImportData: () => handleImportData('inventory')
             };
         } else if (activePage === 'requests') {
             SidebarComponent = RequestsSidebar;
@@ -247,7 +430,9 @@ const DesktopApp = () => {
                 onFilterChange: handleRequestFilterChange,
                 filterOptions: filterOptions,
                 isMobile: false,
-                onClose: () => setIsSidebarOpen(false)
+                onClose: () => setIsSidebarOpen(false),
+                onExportData: handleRequestsExport,
+                onImportData: () => handleImportData('requests')
             };
         } else if (activePage === 'users') {
             SidebarComponent = UserManagementSidebar;

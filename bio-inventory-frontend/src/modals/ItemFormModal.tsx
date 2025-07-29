@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Package, DollarSign, Calendar, MapPin, Tag, Beaker, Save, AlertCircle } from 'lucide-react';
+import { X, Package, DollarSign, Calendar, MapPin, Tag, Beaker, Save, AlertCircle, Hash, HelpCircle } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
+import { validateBarcodeFormat, getBarcodeExamples } from '../utils/barcodeUtils.ts';
 
 const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {
     const [formData, setFormData] = useState<any>({});
@@ -8,17 +9,20 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [customVendor, setCustomVendor] = useState('');
+    const [barcodeValidation, setBarcodeValidation] = useState<any>(null);
+    const [showBarcodeHelp, setShowBarcodeHelp] = useState(false);
     const isEditMode = initialData !== null;
 
     useEffect(() => {
-        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', fund_id: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '' };
+        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', fund_id: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '', barcode: '' };
         if (isEditMode) {
             setFormData({
                 name: initialData.name || '', item_type_id: initialData.item_type?.id || '', vendor_id: initialData.vendor?.id || '',
                 owner_id: initialData.owner?.id || '1', catalog_number: initialData.catalog_number || '', quantity: initialData.quantity || '1.00',
                 unit: initialData.unit || '', location_id: initialData.location?.id || '', price: initialData.price || '',
                 fund_id: initialData.fund_id || '', expiration_date: initialData.expiration_date || '', lot_number: initialData.lot_number || '', received_date: initialData.received_date || '',
-                expiration_alert_days: initialData.expiration_alert_days || '30', storage_temperature: initialData.storage_temperature || '', storage_conditions: initialData.storage_conditions || ''
+                expiration_alert_days: initialData.expiration_alert_days || '30', storage_temperature: initialData.storage_temperature || '', storage_conditions: initialData.storage_conditions || '',
+                barcode: initialData.barcode || ''
             });
         } else { setFormData(emptyForm); }
     }, [initialData, isEditMode]);
@@ -55,6 +59,12 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
         setFormData(prev => ({ ...prev, [name]: value })); 
         if (name === 'vendor_id' && value !== 'custom') {
             setCustomVendor('');
+        }
+        
+        // Validate barcode in real-time
+        if (name === 'barcode') {
+            const validation = validateBarcodeFormat(value);
+            setBarcodeValidation(validation);
         }
     };
 
@@ -132,7 +142,21 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
             }
             
             onSave(); onClose();
-        } catch (e) { setError(`Submission failed: ${e.message}`); } finally { setIsSubmitting(false); }
+        } catch (e) { 
+            // Parse error message to show user-friendly barcode errors
+            let errorMessage = `Submission failed: ${e.message}`;
+            try {
+                const errorData = JSON.parse(e.message);
+                if (errorData.barcode && Array.isArray(errorData.barcode)) {
+                    errorMessage = `Barcode Error: ${errorData.barcode[0]}`;
+                } else if (errorData.barcode) {
+                    errorMessage = `Barcode Error: ${errorData.barcode}`;
+                }
+            } catch {
+                // Keep original error message if parsing fails
+            }
+            setError(errorMessage); 
+        } finally { setIsSubmitting(false); }
     };
 
     if (!isOpen) return null;
@@ -246,6 +270,79 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                                     />
                                                 </div>
                                             )}
+                                        </div>
+                                        
+                                        <div>
+                                            <label htmlFor="barcode" className="block text-sm font-semibold text-gray-700 mb-2">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center space-x-1">
+                                                        <Hash className="w-4 h-4" />
+                                                        <span>Barcode (Optional)</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowBarcodeHelp(!showBarcodeHelp)}
+                                                        className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                                        title="Show barcode help"
+                                                    >
+                                                        <HelpCircle className="w-4 h-4 text-gray-400" />
+                                                    </button>
+                                                </div>
+                                            </label>
+                                            <input 
+                                                type="text" 
+                                                name="barcode" 
+                                                id="barcode" 
+                                                value={formData.barcode} 
+                                                onChange={handleChange} 
+                                                className={`input focus:ring-primary-500 focus:border-primary-500 ${
+                                                    barcodeValidation && !barcodeValidation.isValid ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''
+                                                }`}
+                                                placeholder="Leave empty for auto-generation (ITM-XXXXXXXX)" 
+                                            />
+                                            
+                                            {/* Barcode validation feedback */}
+                                            {barcodeValidation && (
+                                                <div className="mt-2 space-y-1">
+                                                    {barcodeValidation.warnings.length > 0 && (
+                                                        <div className="flex items-start space-x-1">
+                                                            <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                                                            <div className="text-xs text-red-600">
+                                                                {barcodeValidation.warnings.map((warning, idx) => (
+                                                                    <div key={idx}>{warning}</div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {barcodeValidation.suggestions.length > 0 && (
+                                                        <div className="text-xs text-blue-600">
+                                                            💡 {barcodeValidation.suggestions.join(' ')}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            
+                                            {/* Barcode help panel */}
+                                            {showBarcodeHelp && (
+                                                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200 animate-fade-in">
+                                                    <h4 className="text-sm font-semibold text-blue-900 mb-2">Barcode Guidelines</h4>
+                                                    <div className="text-xs text-blue-800 space-y-1">
+                                                        <p><strong>🤖 Automatic (Recommended):</strong> Leave empty for system-generated unique barcode</p>
+                                                        <p><strong>📝 Manual Entry:</strong> Use letters, numbers, hyphens (-) and underscores (_) only</p>
+                                                        <p><strong>📏 Length:</strong> 3-50 characters maximum</p>
+                                                        <p><strong>🎯 Examples:</strong></p>
+                                                        <ul className="list-disc list-inside ml-2 space-y-0.5">
+                                                            {getBarcodeExamples().map((example, idx) => (
+                                                                <li key={idx}>{example}</li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                If left empty, a unique barcode will be automatically generated. Custom barcodes must be unique.
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

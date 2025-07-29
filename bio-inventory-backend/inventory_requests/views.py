@@ -507,9 +507,9 @@ class RequestViewSet(viewsets.ModelViewSet):
             imported_count = 0
             errors = []
             
-            with transaction.atomic():
-                for idx, row in df.iterrows():
-                    try:
+            for idx, row in df.iterrows():
+                try:
+                    with transaction.atomic():
                         # Skip empty rows
                         if pd.isna(row.get('Item Name')) or str(row.get('Item Name')).strip() == '':
                             continue
@@ -574,9 +574,9 @@ class RequestViewSet(viewsets.ModelViewSet):
                         Request.objects.create(**request_data)
                         imported_count += 1
                         
-                    except Exception as e:
-                        errors.append(f'Row {idx + 1}: {str(e)}')
-                        continue
+                except Exception as e:
+                    errors.append(f'Row {idx + 1}: {str(e)}')
+                    continue
             
             response_data = {
                 'imported_count': imported_count,
