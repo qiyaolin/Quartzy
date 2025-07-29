@@ -55,6 +55,34 @@ class ItemSerializer(serializers.ModelSerializer):
             except Fund.DoesNotExist:
                 return f"Fund #{obj.fund_id} (Not Found)"
         return None
+    
+    def validate_barcode(self, value):
+        """
+        Validate barcode uniqueness and format
+        """
+        if not value:  # Empty barcode is allowed (will be auto-generated)
+            return value
+        
+        # Remove whitespace
+        value = value.strip()
+        
+        # Check if barcode already exists (exclude current instance in update case)
+        existing_query = Item.objects.filter(barcode=value)
+        if self.instance:  # Update case
+            existing_query = existing_query.exclude(pk=self.instance.pk)
+        
+        if existing_query.exists():
+            raise serializers.ValidationError(
+                f"Barcode '{value}' already exists. Each item must have a unique barcode."
+            )
+        
+        # Optional: Add format validation
+        if len(value) > 50:
+            raise serializers.ValidationError(
+                "Barcode cannot exceed 50 characters."
+            )
+        
+        return value
 
     class Meta:
         model = Item

@@ -6,6 +6,8 @@ from django_filters import rest_framework as filters # Import django_filters
 from django.db.models import Q, Count, Sum, F
 from django.db import transaction
 from datetime import date, timedelta
+import pandas as pd
+import io
 from .models import Vendor, Location, ItemType, Item
 from .serializers import VendorSerializer, LocationSerializer, ItemTypeSerializer, ItemSerializer
 from .filters import ItemFilter # Import our filter class
@@ -233,3 +235,157 @@ class ItemViewSet(viewsets.ModelViewSet):
                 })
         except Exception as e:
             return Response({'error': f'Checkout failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def import_data(self, request):
+        """
+        Import inventory data from Excel/CSV file
+        """
+        if 'file' not in request.FILES:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        file = request.FILES['file']
+        
+        try:
+            # Read file based on extension
+            if file.name.endswith('.xlsx') or file.name.endswith('.xls'):
+                df = pd.read_excel(io.BytesIO(file.read()))
+            elif file.name.endswith('.csv'):
+                df = pd.read_csv(io.BytesIO(file.read()))
+            else:
+                return Response({'error': 'Unsupported file format. Please use Excel (.xlsx/.xls) or CSV (.csv)'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Skip summary rows (assuming data starts after summary section)
+            # Look for the row containing "Item Name" header
+            header_row = None
+            for idx, row in df.iterrows():
+                if pd.notna(row.iloc[0]) and 'Item Name' in str(row.iloc[0]):
+                    header_row = idx
+                    break
+                # Also check if first column contains "Item Name"
+                for col in df.columns:
+                    if pd.notna(row[col]) and 'Item Name' in str(row[col]):
+                        header_row = idx
+                        break
+                if header_row is not None:
+                    break
+            
+            if header_row is not None:
+                # Use the found row as header
+                df.columns = df.iloc[header_row]
+                df = df.iloc[header_row + 1:].reset_index(drop=True)
+            
+            # Clean column names
+            df.columns = df.columns.astype(str).str.strip()
+            
+            imported_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for idx, row in df.iterrows():
+                    try:
+                        # Skip empty rows
+                        if pd.isna(row.get('Item Name')) or str(row.get('Item Name')).strip() == '':
+                            continue
+                        
+                        # Parse vendor
+                        vendor = None
+                        vendor_name = str(row.get('Vendor', '')).strip()
+                        if vendor_name and vendor_name != 'nan':
+                            vendor, _ = Vendor.objects.get_or_create(name=vendor_name)
+                        
+                        # Parse location
+                        location = None
+                        location_name = str(row.get('Location', '')).strip()
+                        if location_name and location_name != 'nan':
+                            location, _ = Location.objects.get_or_create(name=location_name)
+                        
+                        # Parse item type
+                        item_type = None
+                        item_type_name = str(row.get('Item Type', '')).strip()
+                        if item_type_name and item_type_name != 'nan':
+                            item_type, _ = ItemType.objects.get_or_create(name=item_type_name)
+                        
+                        # Parse dates
+                        expiration_date = None
+                        purchase_date = None
+                        
+                        if pd.notna(row.get('Expiration Date')):
+                            try:
+                                expiration_date = pd.to_datetime(row['Expiration Date']).date()
+                            except:
+                                pass
+                        
+                        if pd.notna(row.get('Purchase Date')):
+                            try:
+                                purchase_date = pd.to_datetime(row['Purchase Date']).date()
+                            except:
+                                pass
+                        
+                        # Parse numeric fields
+                        quantity = 0
+                        try:
+                            if pd.notna(row.get('Quantity')):
+                                quantity = float(row['Quantity'])
+                        except:
+                            quantity = 0
+                        
+                        unit_price = None
+                        try:
+                            if pd.notna(row.get('Unit Price')):
+                                price_str = str(row['Unit Price']).replace('$', '').strip()
+                                if price_str and price_str != 'nan':
+                                    unit_price = float(price_str)
+                        except:
+                            pass
+                        
+                        minimum_quantity = None
+                        try:
+                            if pd.notna(row.get('Minimum Stock')):
+                                minimum_quantity = float(row['Minimum Stock'])
+                        except:
+                            pass
+                        
+                        # Create item
+                        item_data = {
+                            'name': str(row.get('Item Name', '')).strip(),
+                            'quantity': quantity,
+                            'unit': str(row.get('Unit', '')).strip() or None,
+                            'price': unit_price,
+                            'vendor': vendor,
+                            'catalog_number': str(row.get('Catalog Number', '')).strip() or None,
+                            'location': location,
+                            'item_type': item_type,
+                            'expiration_date': expiration_date,
+                            'low_stock_threshold': minimum_quantity,
+                            'received_date': purchase_date,
+                            'barcode': str(row.get('Barcode', '')).strip() or None,
+                            'owner': request.user
+                        }
+                        
+                        # Remove None values
+                        item_data = {k: v for k, v in item_data.items() if v is not None}
+                        
+                        Item.objects.create(**item_data)
+                        imported_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f'Row {idx + 1}: {str(e)}')
+                        continue
+            
+            response_data = {
+                'imported_count': imported_count,
+                'total_rows': len(df),
+                'success': True
+            }
+            
+            if errors:
+                response_data['errors'] = errors[:10]  # Limit to first 10 errors
+                response_data['total_errors'] = len(errors)
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': f'Failed to process file: {str(e)}'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)

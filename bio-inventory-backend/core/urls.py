@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/', include('funding.urls')),
     path('api/', include('notifications.urls')),
     path('api/printing/', include('printing.urls')),
+    path('api/', include('data_import_export.urls')),
     # 紧急迁移端点
     path('admin/emergency-migrate-barcode/', emergency_migrate_barcode, name='emergency_migrate_barcode'),
     path('admin/check-barcode-status/', check_barcode_status, name='check_barcode_status'),

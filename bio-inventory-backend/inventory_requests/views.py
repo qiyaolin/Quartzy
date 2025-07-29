@@ -4,11 +4,15 @@ from rest_framework.response import Response
 from rest_framework.filters import SearchFilter # Import SearchFilter
 from django_filters import rest_framework as filters # Import django_filters
 from rest_framework.permissions import IsAdminUser # Import this
+from django.db import transaction
+import pandas as pd
+import io
 from .models import Request, RequestHistory
 from .serializers import RequestSerializer, RequestHistorySerializer
 from .filters import RequestFilter # Import our filter class
-from items.models import Item, Location
+from items.models import Item, Location, Vendor
 from notifications.email_service import EmailNotificationService
+from django.contrib.auth.models import User
 import logging
 
 logger = logging.getLogger(__name__)
@@ -456,3 +460,136 @@ class RequestViewSet(viewsets.ModelViewSet):
             response_data['errors'] = errors
         
         return Response(response_data)
+
+    @action(detail=False, methods=['post'])
+    def import_data(self, request):
+        """
+        Import requests data from Excel/CSV file
+        """
+        if 'file' not in request.FILES:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        file = request.FILES['file']
+        
+        try:
+            # Read file based on extension
+            if file.name.endswith('.xlsx') or file.name.endswith('.xls'):
+                df = pd.read_excel(io.BytesIO(file.read()))
+            elif file.name.endswith('.csv'):
+                df = pd.read_csv(io.BytesIO(file.read()))
+            else:
+                return Response({'error': 'Unsupported file format. Please use Excel (.xlsx/.xls) or CSV (.csv)'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Skip summary rows (assuming data starts after summary section)
+            # Look for the row containing "Item Name" header
+            header_row = None
+            for idx, row in df.iterrows():
+                if pd.notna(row.iloc[0]) and 'Item Name' in str(row.iloc[0]):
+                    header_row = idx
+                    break
+                # Also check if first column contains "Item Name"
+                for col in df.columns:
+                    if pd.notna(row[col]) and 'Item Name' in str(row[col]):
+                        header_row = idx
+                        break
+                if header_row is not None:
+                    break
+            
+            if header_row is not None:
+                # Use the found row as header
+                df.columns = df.iloc[header_row]
+                df = df.iloc[header_row + 1:].reset_index(drop=True)
+            
+            # Clean column names
+            df.columns = df.columns.astype(str).str.strip()
+            
+            imported_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for idx, row in df.iterrows():
+                    try:
+                        # Skip empty rows
+                        if pd.isna(row.get('Item Name')) or str(row.get('Item Name')).strip() == '':
+                            continue
+                        
+                        # Parse vendor
+                        vendor = None
+                        vendor_name = str(row.get('Vendor', '')).strip()
+                        if vendor_name and vendor_name != 'nan':
+                            vendor, _ = Vendor.objects.get_or_create(name=vendor_name)
+                        
+                        # Parse requested_by user
+                        requested_by = request.user  # Default to current user
+                        requested_by_name = str(row.get('Requested By', '')).strip()
+                        if requested_by_name and requested_by_name != 'nan':
+                            try:
+                                requested_by = User.objects.get(username=requested_by_name)
+                            except User.DoesNotExist:
+                                # If user doesn't exist, keep default
+                                pass
+                        
+                        # Parse numeric fields
+                        quantity = 1
+                        try:
+                            if pd.notna(row.get('Quantity')):
+                                quantity = float(row['Quantity'])
+                        except:
+                            quantity = 1
+                        
+                        unit_price = None
+                        try:
+                            if pd.notna(row.get('Unit Price')):
+                                price_str = str(row['Unit Price']).replace('$', '').strip()
+                                if price_str and price_str != 'nan':
+                                    unit_price = float(price_str)
+                        except:
+                            pass
+                        
+                        # Parse status
+                        status_value = str(row.get('Status', 'NEW')).strip().upper()
+                        if status_value not in ['NEW', 'APPROVED', 'ORDERED', 'RECEIVED', 'REJECTED']:
+                            status_value = 'NEW'
+                        
+                        # Create request
+                        request_data = {
+                            'item_name': str(row.get('Item Name', '')).strip(),
+                            'catalog_number': str(row.get('Catalog Number', '')).strip() or None,
+                            'quantity': quantity,
+                            'unit_size': str(row.get('Unit Size', '')).strip() or None,
+                            'unit_price': unit_price,
+                            'vendor': vendor,
+                            'requested_by': requested_by,
+                            'status': status_value,
+                            'url': str(row.get('URL', '')).strip() or None,
+                            'barcode': str(row.get('Barcode', '')).strip() or None,
+                            'fund_id': str(row.get('Fund', '')).strip() or None,
+                            'notes': str(row.get('Notes', '')).strip() or None,
+                        }
+                        
+                        # Remove None values
+                        request_data = {k: v for k, v in request_data.items() if v is not None}
+                        
+                        Request.objects.create(**request_data)
+                        imported_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f'Row {idx + 1}: {str(e)}')
+                        continue
+            
+            response_data = {
+                'imported_count': imported_count,
+                'total_rows': len(df),
+                'success': True
+            }
+            
+            if errors:
+                response_data['errors'] = errors[:10]  # Limit to first 10 errors
+                response_data['total_errors'] = len(errors)
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': f'Failed to process file: {str(e)}'}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
