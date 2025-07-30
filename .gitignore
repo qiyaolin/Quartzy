@@ -1,195 +1,102 @@
 # Python
-bio-inventory-backend/venv/
-bio-inventory-backend/__pycache__/
-bio-inventory-backend/**/*.pyc
-bio-inventory-backend/**/*.pyo
-bio-inventory-backend/**/*.pyd
-bio-inventory-backend/.Python
-bio-inventory-backend/env/
-bio-inventory-backend/build/
-bio-inventory-backend/develop-eggs/
-bio-inventory-backend/dist/
-bio-inventory-backend/downloads/
-bio-inventory-backend/eggs/
-bio-inventory-backend/.eggs/
-bio-inventory-backend/lib/
-bio-inventory-backend/lib64/
-bio-inventory-backend/parts/
-bio-inventory-backend/sdist/
-bio-inventory-backend/var/
-bio-inventory-backend/*.egg-info/
-bio-inventory-backend/.mypy_cache/
-bio-inventory-backend/.pytest_cache/
-bio-inventory-backend/.coverage
-bio-inventory-backend/.tox/
-bio-inventory-backend/.env
-bio-inventory-backend/.env.*
-
-# Node
-bio-inventory-frontend/node_modules/
-bio-inventory-frontend/.next/
-bio-inventory-frontend/.env
-bio-inventory-frontend/.env.*
-bio-inventory-frontend/dist/
-bio-inventory-frontend/build/
-bio-inventory-frontend/npm-debug.log*
-bio-inventory-frontend/yarn-debug.log*
-bio-inventory-frontend/yarn-error.log*
-bio-inventory-frontend/.parcel-cache/
-
-# DYMO Print Server Node.js
-dymo-print-server-nodejs/node_modules/
-dymo-print-server-nodejs/src/__pycache__/
-dymo-print-server-nodejs/src/*.pyc
-dymo-print-server-nodejs/src/*.pyo
-dymo-print-server-nodejs/src/*.pyd
-dymo-print-server-nodejs/src/print_agent.log
-dymo-print-server-nodejs/src/print_agent_config.json
-dymo-print-server-nodejs/quick_test.py
-
-# Root level Python cache and logs
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Django
 *.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
 
-# Configuration files
-*_config.json
-temp_*.json
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
 
-# Test files
-test_*.html
-test_*.js
-test_*.py
+# React
+build/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# IDE and development tools
+# IDE
 .vscode/
 .idea/
-.codebuddy/
-.claude/
 *.swp
 *.swo
+*~
 
-# System files
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Environment files
+# Logs
+*.log
+logs/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+node_modules/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
 .env
-.env.*
-local_settings.py
 
-# Database files
-*.db
-*.sqlite3
-*.sqlite3-journal
+# Production build files
+build/
+dist/
 
-# Coverage and testing
-.coverage
-.pytest_cache/
-htmlcov/
-
-# Deployment
-.gcloudignore
-*.yaml
-*.yml
-
-# Others
-*.bak
+# Temporary files
 *.tmp
-
-# ===== 新增的测试文件和调试文档 =====
-
-# 根目录测试文件
-test_login.html
-test_url_params.html
-test-mobile-notifications.js
-test-mobile-whitscreen.js
-debug-production.js
-
-# 后端测试文件
-bio-inventory-backend/comprehensive_test.py
-bio-inventory-backend/health_check.py
-bio-inventory-backend/quick_deployment_check.py
-bio-inventory-backend/final_barcode_verification.py
-bio-inventory-backend/verify_current_status.py
-bio-inventory-backend/check_migration_status.py
-bio-inventory-backend/final_verification.py
-bio-inventory-backend/test_emergency_migration.py
-bio-inventory-backend/verify_barcode_production.py
-bio-inventory-backend/test_barcode_with_auth.py
-bio-inventory-backend/simple_barcode_test.py
-bio-inventory-backend/test_barcode_field.py
-bio-inventory-backend/check_production_schema.py
-bio-inventory-backend/check_item_schema.py
-bio-inventory-backend/test_deployment.py
-bio-inventory-backend/test_email_specific.py
-bio-inventory-backend/test_email.py
-
-# 后端调试和修复脚本
-bio-inventory-backend/force_add_barcode_migration.py
-bio-inventory-backend/fresh_deployment.py
-bio-inventory-backend/execute_missing_migration.py
-bio-inventory-backend/emergency_barcode_fix.py
-bio-inventory-backend/force_migrate_production.py
-bio-inventory-backend/deploy_barcode_migration.py
-bio-inventory-backend/force_fix_migration.py
-bio-inventory-backend/fix_migration.py
-
-# 打印服务器测试文件（移除quick_test.py的排除）
-# dymo-print-server-nodejs/quick_test.py
-
-# Markdown文件过滤规则
-# 排除大部分.md文件，但保留重要的项目文档
-*.md
-
-# 保留的重要.md文件（使用负向模式重新包含）
-!README.md
-!*/README.md
-!CONTRIBUTING.md
-!LICENSE.md
-!CHANGELOG.md
-!SECURITY.md
-!API.md
-!INSTALL.md
-!USAGE.md
-
-# 保留项目特定的重要文档
-!CENTRALIZED_PRINTING_SETUP.md
-!bio-inventory-frontend/MOBILE_UI_GUIDE.md
-!dymo-print-server-nodejs/DEPLOYMENT_GUIDE.md
-
-# dymo-print-server-nodejs 特殊规则
-# 该目录中除了node_modules外，其他文件都是必要的
-!dymo-print-server-nodejs/quick_test.py
-!dymo-print-server-nodejs/start_print_agent.bat
-!dymo-print-server-nodejs/src/print_agent_config.json
-
-# 截图和图片文件
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.svg
-
-# 日志文件（更具体）
-print_server.log
-print_agent.log
-print_server_native.log
-
-# 临时和配置文件
-temp_test_config.json
-requirements_print_server.txt
-create_superuser_instructions.txt
-
-# 脚本文件
-entrypoint*.sh
-# start_print_agent.bat  # dymo-print-server-nodejs中的启动脚本是必要的
-
-# 开发工具和IDE
-.codebuddy/
-.claude/
-.idea/
-.vscode/ 
+*.temp
