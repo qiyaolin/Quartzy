@@ -164,12 +164,16 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# 只在静态文件目录存在时才添加到 STATICFILES_DIRS
-static_dir = BASE_DIR / 'static'
-if static_dir.exists():
-    STATICFILES_DIRS = [static_dir]
-else:
-    STATICFILES_DIRS = []
+# Static files directories
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+
+# Static files finders
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
 
 # Media files
 MEDIA_URL = '/media/'

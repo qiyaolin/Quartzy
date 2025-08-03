@@ -18,7 +18,8 @@ from django.contrib import admin
 from django.urls import path, include
 from users.views import CustomAuthToken # Import our new view
 from .health import health_check, readiness_check
-from .emergency_migrate_view import emergency_migrate_barcode, check_barcode_status
+# Temporarily comment out emergency migrate views to fix import error
+# from .emergency_migrate_view import emergency_migrate_barcode, check_barcode_status
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,7 +33,7 @@ urlpatterns = [
     path('api/', include('notifications.urls')),
     path('api/printing/', include('printing.urls')),
     path('api/schedule/', include('schedule.urls')),
-    # 紧急迁移端点
-    path('admin/emergency-migrate-barcode/', emergency_migrate_barcode, name='emergency_migrate_barcode'),
-    path('admin/check-barcode-status/', check_barcode_status, name='check_barcode_status'),
+    # Temporarily comment out emergency migrate endpoints
+    # path('admin/emergency-migrate-barcode/', emergency_migrate_barcode, name='emergency_migrate_barcode'),
+    # path('admin/check-barcode-status/', check_barcode_status, name='check_barcode_status'),
 ]
