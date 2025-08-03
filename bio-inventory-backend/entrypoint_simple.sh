@@ -14,6 +14,10 @@ echo "DEBUG: ${DEBUG:-未设置}"
 echo "📝 创建打印应用迁移文件..."
 python manage.py makemigrations printing --noinput || echo "打印迁移创建跳过或失败"
 
+# 创建schedule应用迁移文件（如果需要）
+echo "📅 创建schedule应用迁移文件..."
+python manage.py makemigrations schedule --noinput || echo "schedule迁移创建跳过或失败"
+
 # 运行数据库迁移（安全模式）
 echo "🔄 运行数据库迁移..."
 python manage.py migrate --noinput --fake-initial || echo "迁移跳过或失败"
@@ -21,6 +25,10 @@ python manage.py migrate --noinput --fake-initial || echo "迁移跳过或失败
 # 确保打印应用迁移被应用
 echo "🖨️ 应用打印功能迁移..."
 python manage.py migrate printing --noinput || echo "打印迁移跳过或失败"
+
+# 确保schedule应用迁移被应用
+echo "📅 应用schedule功能迁移..."
+python manage.py migrate schedule --noinput || echo "schedule迁移跳过或失败"
 
 # 创建超级用户（如果不存在）
 echo "👤 创建管理员用户..."
@@ -83,6 +91,15 @@ try:
 except Exception as e:
     print(f'⚠️ 打印服务器设置跳过: {e}')
 " || echo "打印服务器设置跳过"
+
+# 验证Python模块是否可用
+echo "🔍 验证Python依赖..."
+python -c "import django; print(f'✅ Django版本: {django.get_version()}')" || echo "❌ Django未安装"
+python -c "import rest_framework; print('✅ DRF可用')" || echo "❌ DRF未安装"
+
+# 收集静态文件
+echo "📦 收集静态文件..."
+python manage.py collectstatic --noinput || echo "静态文件收集跳过"
 
 echo "🌐 启动 Gunicorn 服务器..."
 exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 core.wsgi:application

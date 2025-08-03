@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'funding',
     'notifications',
     'printing',
+    'schedule',
 ]
 
 MIDDLEWARE = [
