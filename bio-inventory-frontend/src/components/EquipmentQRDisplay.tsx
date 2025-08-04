@@ -1,31 +1,17 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { QrCode, Download, Printer, MapPin, Clock, User, X } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
-import { buildApiUrl } from '../config/api.ts';
+import { equipmentApi, Equipment } from '../services/scheduleApi.ts';
 
 interface EquipmentQRDisplayProps {
-    equipmentId: number;
+    equipment: Equipment;
     isOpen: boolean;
     onClose: () => void;
 }
 
-interface Equipment {
-    id: number;
-    name: string;
-    location: string;
-    qr_code: string;
-    is_in_use: boolean;
-    current_user?: {
-        username: string;
-        first_name?: string;
-        last_name?: string;
-    };
-    current_checkin_time?: string;
-    current_usage_duration?: string;
-}
 
 const EquipmentQRDisplay: React.FC<EquipmentQRDisplayProps> = ({ 
-    equipmentId, 
+    equipment, 
     isOpen, 
     onClose 
 }) => {
@@ -35,51 +21,27 @@ const EquipmentQRDisplay: React.FC<EquipmentQRDisplayProps> = ({
     }
     const { token } = authContext;
 
-    const [equipment, setEquipment] = useState<Equipment | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [qrData, setQrData] = useState<any>(null);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string>('');
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
     useEffect(() => {
-        if (isOpen && equipmentId) {
+        if (isOpen && equipment.id) {
             fetchEquipmentQR();
         }
-    }, [isOpen, equipmentId]);
+    }, [isOpen, equipment.id]);
 
     const fetchEquipmentQR = async () => {
         try {
             setLoading(true);
             setError('');
 
-            // Fetch equipment QR code information
-            const response = await fetch(buildApiUrl(`schedule/equipment/${equipmentId}/qr_code/`), {
-                headers: {
-                    'Authorization': `Token ${token}`
-                }
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to fetch QR code');
-            }
-
-            const qrData = await response.json();
+            const data = await equipmentApi.getEquipmentQR(token, equipment.id);
+            setQrData(data);
             
-            // Also fetch full equipment details
-            const equipmentResponse = await fetch(buildApiUrl(`schedule/equipment/${equipmentId}/`), {
-                headers: {
-                    'Authorization': `Token ${token}`
-                }
-            });
-
-            if (equipmentResponse.ok) {
-                const equipmentData = await equipmentResponse.json();
-                setEquipment(equipmentData);
-            }
-
             // Generate QR code using a simple text-based approach
-            // In a real implementation, you might want to use a QR code library
-            generateQRCode(qrData.qr_code);
+            generateQRCode(data.qr_code);
 
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load QR code');
@@ -161,10 +123,10 @@ const EquipmentQRDisplay: React.FC<EquipmentQRDisplayProps> = ({
                         <div class="equipment-name">${equipment.name}</div>
                         <div class="equipment-details">
                             Location: ${equipment.location || 'Not specified'}<br>
-                            QR Code: ${equipment.qr_code}
+                            QR Code: ${qrData?.qr_code || 'Not available'}
                         </div>
                         <img src="${qrCodeDataUrl}" alt="Equipment QR Code" class="qr-code" />
-                        <div class="qr-text">${equipment.qr_code}</div>
+                        <div class="qr-text">${qrData?.qr_code || 'Not available'}</div>
                     </div>
                     <div class="instructions">
                         <h3>Instructions:</h3>
@@ -232,10 +194,12 @@ const EquipmentQRDisplay: React.FC<EquipmentQRDisplayProps> = ({
                                         </div>
                                     )}
                                     
-                                    <div className="flex items-center gap-2">
-                                        <QrCode className="w-4 h-4" />
-                                        <span className="font-mono">{equipment.qr_code}</span>
-                                    </div>
+                                    {qrData?.qr_code && (
+                                        <div className="flex items-center gap-2">
+                                            <QrCode className="w-4 h-4" />
+                                            <span className="font-mono">{qrData.qr_code}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Current Usage Status */}
@@ -246,7 +210,7 @@ const EquipmentQRDisplay: React.FC<EquipmentQRDisplayProps> = ({
                                             <span className="font-medium">Currently in use</span>
                                         </div>
                                         <div className="text-sm text-yellow-700">
-                                            <p>User: {equipment.current_user.first_name} {equipment.current_user.last_name} ({equipment.current_user.username})</p>
+                                            <p>User: {equipment.current_user.username}</p>
                                             {equipment.current_usage_duration && (
                                                 <div className="flex items-center gap-1 mt-1">
                                                     <Clock className="w-3 h-3" />
@@ -269,9 +233,11 @@ const EquipmentQRDisplay: React.FC<EquipmentQRDisplayProps> = ({
                                         />
                                     )}
                                 </div>
-                                <p className="text-sm text-gray-500 mt-2 font-mono">
-                                    {equipment.qr_code}
-                                </p>
+                                {qrData?.qr_code && (
+                                    <p className="text-sm text-gray-500 mt-2 font-mono">
+                                        {qrData.qr_code}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Action Buttons */}

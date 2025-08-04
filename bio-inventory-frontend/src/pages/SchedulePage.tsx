@@ -1,8 +1,19 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
-import { Calendar, Clock, Users, MapPin, Plus, Edit3, Trash2, Search } from 'lucide-react';
+import { 
+    Calendar, Clock, Users, MapPin, Plus, Edit3, Trash2, Search, 
+    Settings, QrCode, CheckCircle, AlertCircle, User, Monitor,
+    CalendarDays, BookOpen, Repeat, Filter, Eye, EyeOff
+} from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
-import { scheduleApi, Schedule, ScheduleParams, ScheduleFormData, scheduleHelpers } from '../services/scheduleApi.ts';
+import { 
+    scheduleApi, equipmentApi, Schedule, Equipment, ScheduleParams, 
+    ScheduleFormData, scheduleHelpers 
+} from '../services/scheduleApi.ts';
 import ScheduleFormModal from '../modals/ScheduleFormModal.tsx';
+import EquipmentQRScanner from '../components/EquipmentQRScanner.tsx';
+import EquipmentQRDisplay from '../components/EquipmentQRDisplay.tsx';
+
+type TabType = 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
 
 const SchedulePage: React.FC = () => {
     const authContext = useContext(AuthContext);
@@ -11,16 +22,29 @@ const SchedulePage: React.FC = () => {
     }
     const { token } = authContext;
 
+    // Core state
+    const [activeTab, setActiveTab] = useState<TabType>('calendar');
     const [schedules, setSchedules] = useState<Schedule[]>([]);
+    const [equipment, setEquipment] = useState<Equipment[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    
+    // Calendar state
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
+    const [showMyScheduleOnly, setShowMyScheduleOnly] = useState(false);
+    
+    // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+    const [qrScanMode, setQrScanMode] = useState<'checkin' | 'checkout'>('checkin');
+    const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+    const [showQRDisplay, setShowQRDisplay] = useState(false);
 
+    // Fetch functions
     const fetchSchedules = useCallback(async () => {
         try {
             setLoading(true);
@@ -39,20 +63,72 @@ const SchedulePage: React.FC = () => {
         }
     }, [token, selectedDate, viewMode]);
 
-    // Fetch schedules
+    const fetchEquipment = useCallback(async () => {
+        try {
+            const data = await equipmentApi.getEquipment(token);
+            setEquipment(data);
+        } catch (err) {
+            console.error('Error fetching equipment:', err);
+        }
+    }, [token]);
+
+    const fetchAllData = useCallback(async () => {
+        setLoading(true);
+        await Promise.all([
+            fetchSchedules(),
+            fetchEquipment()
+        ]);
+        setLoading(false);
+    }, [fetchSchedules, fetchEquipment]);
+
+    // Fetch data on mount and tab change
     useEffect(() => {
         if (token) {
-            fetchSchedules();
+            fetchAllData();
         }
-    }, [token, fetchSchedules]);
+    }, [token, fetchAllData]);
 
-    // Modal handlers
+    useEffect(() => {
+        if (token && activeTab === 'calendar') {
+            fetchSchedules();
+        } else if (token && activeTab === 'equipment') {
+            fetchEquipment();
+        }
+    }, [token, activeTab, fetchSchedules, fetchEquipment]);
+
+    // Modal and action handlers
     const handleOpenModal = () => {
         setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
+    };
+
+    const handleOpenQRScanner = (mode: 'checkin' | 'checkout') => {
+        setQrScanMode(mode);
+        setIsQRScannerOpen(true);
+    };
+
+    const handleCloseQRScanner = () => {
+        setIsQRScannerOpen(false);
+        setSelectedEquipment(null);
+    };
+
+    const handleQRScanSuccess = (result: any) => {
+        console.log('QR Scan Success:', result);
+        // Refresh equipment data after successful scan
+        fetchEquipment();
+    };
+
+    const handleShowQRCode = (equipmentItem: Equipment) => {
+        setSelectedEquipment(equipmentItem);
+        setShowQRDisplay(true);
+    };
+
+    const handleCloseQRDisplay = () => {
+        setShowQRDisplay(false);
+        setSelectedEquipment(null);
     };
 
     const handleSubmitSchedule = async (scheduleData: ScheduleFormData) => {
@@ -91,12 +167,17 @@ const SchedulePage: React.FC = () => {
         }
     };
 
-    // Filter schedules
+    // Filter data
     const filteredSchedules = schedules.filter(schedule => {
         const matchesSearch = schedule.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              schedule.description?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesStatus = filterStatus === 'all' || schedule.status === filterStatus;
         return matchesSearch && matchesStatus;
+    });
+
+    const filteredEquipment = equipment.filter(eq => {
+        return eq.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+               eq.location?.toLowerCase().includes(searchTerm.toLowerCase());
     });
 
     // Format time
@@ -114,157 +195,658 @@ const SchedulePage: React.FC = () => {
         );
     }
 
+    const tabs = [
+        { id: 'calendar', label: 'Calendar View', icon: Calendar },
+        { id: 'equipment', label: 'Equipment', icon: Monitor },
+        { id: 'meetings', label: 'Group Meetings', icon: Users },
+        { id: 'tasks', label: 'Recurring Tasks', icon: Repeat },
+        { id: 'my-schedule', label: 'My Schedule', icon: User }
+    ] as const;
+
+    const getTabActions = () => {
+        switch (activeTab) {
+            case 'calendar':
+                return (
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setShowMyScheduleOnly(!showMyScheduleOnly)}
+                            className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                showMyScheduleOnly 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            {showMyScheduleOnly ? <Eye className="w-4 h-4 mr-1" /> : <EyeOff className="w-4 h-4 mr-1" />}
+                            {showMyScheduleOnly ? 'Show All' : 'My Schedule'}
+                        </button>
+                        <button 
+                            onClick={handleOpenModal}
+                            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            New Event
+                        </button>
+                    </div>
+                );
+            case 'equipment':
+                return (
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => handleOpenQRScanner('checkin')}
+                            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            <QrCode className="w-4 h-4 mr-2" />
+                            Check In
+                        </button>
+                        <button 
+                            onClick={() => handleOpenQRScanner('checkout')}
+                            className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                        >
+                            <QrCode className="w-4 h-4 mr-2" />
+                            Check Out
+                        </button>
+                    </div>
+                );
+            case 'meetings':
+                return (
+                    <button 
+                        onClick={handleOpenModal}
+                        className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Meeting
+                    </button>
+                );
+            case 'tasks':
+                return (
+                    <button 
+                        onClick={handleOpenModal}
+                        className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Task
+                    </button>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Schedule Management</h1>
-                    <p className="text-gray-600">Manage meetings, equipment bookings, and tasks</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Laboratory Schedule Management</h1>
+                    <p className="text-gray-600">Manage meetings, equipment bookings, recurring tasks, and personal schedules</p>
                 </div>
-                <button 
-                    onClick={handleOpenModal}
-                    className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                >
-                    <Plus className="w-4 h-4 mr-2" />
-                    New Event
-                </button>
+                {getTabActions()}
             </div>
 
-            {/* Controls */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                    {/* Date Picker */}
-                    <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gray-500" />
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-                        />
-                    </div>
-
-                    {/* View Mode */}
-                    <div className="flex rounded-md border border-gray-300 overflow-hidden">
-                        {(['day', 'week', 'month'] as const).map((mode) => (
-                            <button
-                                key={mode}
-                                onClick={() => setViewMode(mode)}
-                                className={`px-3 py-2 text-sm font-medium capitalize ${
-                                    viewMode === mode
-                                        ? 'bg-primary-600 text-white'
-                                        : 'bg-white text-gray-700 hover:bg-gray-50'
-                                }`}
-                            >
-                                {mode}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Search */}
-                    <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search events..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        />
-                    </div>
-
-                    {/* Status Filter */}
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    >
-                        <option value="all">All Status</option>
-                        <option value="scheduled">Scheduled</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                    </select>
-                </div>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-600">{error}</p>
-                </div>
-            )}
-
-            {/* Schedule List */}
+            {/* Tab Navigation */}
             <div className="bg-white rounded-lg border border-gray-200">
-                {filteredSchedules.length === 0 ? (
-                    <div className="p-8 text-center">
-                        <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
-                        <p className="text-gray-600">
-                            {searchTerm || filterStatus !== 'all' 
-                                ? 'Try adjusting your search or filter criteria'
-                                : 'Create your first event to get started'
-                            }
-                        </p>
+                <div className="border-b border-gray-200">
+                    <nav className="flex space-x-8 px-6" aria-label="Tabs">
+                        {tabs.map((tab) => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as TabType)}
+                                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+                                        isActive
+                                            ? 'border-primary-500 text-primary-600'
+                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <Icon className="w-4 h-4" />
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </div>
+            </div>
+
+            {/* Tab Content */}
+            <div className="space-y-4">
+                {/* Controls - shown for relevant tabs */}
+                {(activeTab === 'calendar' || activeTab === 'my-schedule' || activeTab === 'equipment') && (
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                            {/* Date Picker - for calendar views */}
+                            {(activeTab === 'calendar' || activeTab === 'my-schedule') && (
+                                <>
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-gray-500" />
+                                        <input
+                                            type="date"
+                                            value={selectedDate}
+                                            onChange={(e) => setSelectedDate(e.target.value)}
+                                            className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                        />
+                                    </div>
+
+                                    {/* View Mode */}
+                                    <div className="flex rounded-md border border-gray-300 overflow-hidden">
+                                        {(['day', 'week', 'month'] as const).map((mode) => (
+                                            <button
+                                                key={mode}
+                                                onClick={() => setViewMode(mode)}
+                                                className={`px-3 py-2 text-sm font-medium capitalize ${
+                                                    viewMode === mode
+                                                        ? 'bg-primary-600 text-white'
+                                                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {mode}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Search */}
+                            <div className="flex-1 relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder={activeTab === 'equipment' ? 'Search equipment...' : 'Search events...'}
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                />
+                            </div>
+
+                            {/* Status Filter - for calendar views */}
+                            {(activeTab === 'calendar' || activeTab === 'my-schedule') && (
+                                <select
+                                    value={filterStatus}
+                                    onChange={(e) => setFilterStatus(e.target.value)}
+                                    className="border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                >
+                                    <option value="all">All Status</option>
+                                    <option value="scheduled">Scheduled</option>
+                                    <option value="in_progress">In Progress</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            )}
+                        </div>
                     </div>
-                ) : (
-                    <div className="divide-y divide-gray-200">
-                        {filteredSchedules.map((schedule) => (
-                            <div key={schedule.id} className="p-4 hover:bg-gray-50 transition-colors">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <h3 className="font-medium text-gray-900">
-                                                {schedule.title}
-                                            </h3>
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${scheduleHelpers.getStatusColor(schedule.status)}`}>
-                                                {schedule.status?.replace('_', ' ')}
-                                            </span>
-                                        </div>
-                                        
-                                        {schedule.description && (
-                                            <p className="text-gray-600 text-sm mb-3">
-                                                {schedule.description}
-                                            </p>
+                )}
+
+                {/* Error Message */}
+                {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p className="text-red-600">{error}</p>
+                    </div>
+                )}
+
+                {/* Tab Content Views */}
+                {activeTab === 'calendar' && (
+                    <CalendarView 
+                        schedules={filteredSchedules}
+                        loading={loading}
+                        searchTerm={searchTerm}
+                        filterStatus={filterStatus}
+                        formatTime={formatTime}
+                    />
+                )}
+
+                {activeTab === 'equipment' && (
+                    <EquipmentView 
+                        equipment={filteredEquipment}
+                        loading={loading}
+                        onShowQRCode={handleShowQRCode}
+                        onQRScan={handleOpenQRScanner}
+                    />
+                )}
+
+                {activeTab === 'meetings' && (
+                    <MeetingsView 
+                        schedules={filteredSchedules.filter(s => s.title?.toLowerCase().includes('meeting'))}
+                        loading={loading}
+                    />
+                )}
+
+                {activeTab === 'tasks' && (
+                    <TasksView 
+                        schedules={filteredSchedules.filter(s => s.title?.toLowerCase().includes('task'))}
+                        loading={loading}
+                    />
+                )}
+
+                {activeTab === 'my-schedule' && (
+                    <MyScheduleView 
+                        schedules={filteredSchedules}
+                        loading={loading}
+                        formatTime={formatTime}
+                    />
+                )}
+            </div>
+
+            {/* Modals */}
+            <ScheduleFormModal
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                onSubmit={handleSubmitSchedule}
+                isSubmitting={isSubmitting}
+            />
+
+            <EquipmentQRScanner
+                isOpen={isQRScannerOpen}
+                onClose={handleCloseQRScanner}
+                onSuccess={handleQRScanSuccess}
+                mode={qrScanMode}
+            />
+
+            {selectedEquipment && (
+                <EquipmentQRDisplay
+                    isOpen={showQRDisplay}
+                    onClose={handleCloseQRDisplay}
+                    equipment={selectedEquipment}
+                />
+            )}
+        </div>
+    );
+};
+
+// Calendar View Component
+const CalendarView: React.FC<{
+    schedules: Schedule[];
+    loading: boolean;
+    searchTerm: string;
+    filterStatus: string;
+    formatTime: (time: string | undefined) => string;
+}> = ({ schedules, loading, searchTerm, filterStatus, formatTime }) => {
+    if (loading) {
+        return <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>;
+    }
+
+    return (
+        <div className="bg-white rounded-lg border border-gray-200">
+            {schedules.length === 0 ? (
+                <div className="p-8 text-center">
+                    <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No events found</h3>
+                    <p className="text-gray-600">
+                        {searchTerm || filterStatus !== 'all' 
+                            ? 'Try adjusting your search or filter criteria'
+                            : 'Create your first event to get started'
+                        }
+                    </p>
+                </div>
+            ) : (
+                <div className="divide-y divide-gray-200">
+                    {schedules.map((schedule) => (
+                        <div key={schedule.id} className="p-4 hover:bg-gray-50 transition-colors">
+                            <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <h3 className="font-medium text-gray-900">
+                                            {schedule.title}
+                                        </h3>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${scheduleHelpers.getStatusColor(schedule.status)}`}>
+                                            {schedule.status?.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                    
+                                    {schedule.description && (
+                                        <p className="text-gray-600 text-sm mb-3">
+                                            {schedule.description}
+                                        </p>
+                                    )}
+                                    
+                                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
+                                        {schedule.start_time && (
+                                            <div className="flex items-center gap-1">
+                                                <Clock className="w-4 h-4" />
+                                                <span>
+                                                    {formatTime(schedule.start_time)}
+                                                    {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                                                </span>
+                                            </div>
                                         )}
                                         
-                                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                                            {schedule.start_time && (
+                                        {schedule.location && (
+                                            <div className="flex items-center gap-1">
+                                                <MapPin className="w-4 h-4" />
+                                                <span>{schedule.location}</span>
+                                            </div>
+                                        )}
+                                        
+                                        {schedule.attendees_count && (
+                                            <div className="flex items-center gap-1">
+                                                <Users className="w-4 h-4" />
+                                                <span>{schedule.attendees_count} attendees</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-2 ml-4">
+                                    <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                                        <Edit3 className="w-4 h-4" />
+                                    </button>
+                                    <button className="p-2 text-gray-400 hover:text-red-600 transition-colors">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Equipment View Component
+const EquipmentView: React.FC<{
+    equipment: Equipment[];
+    loading: boolean;
+    onShowQRCode: (equipment: Equipment) => void;
+    onQRScan: (mode: 'checkin' | 'checkout') => void;
+}> = ({ equipment, loading, onShowQRCode, onQRScan }) => {
+    if (loading) {
+        return <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>;
+    }
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {equipment.length === 0 ? (
+                <div className="col-span-full p-8 text-center bg-white rounded-lg border border-gray-200">
+                    <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No equipment found</h3>
+                    <p className="text-gray-600">No equipment available or matches your search criteria</p>
+                </div>
+            ) : (
+                equipment.map((eq) => (
+                    <div key={eq.id} className="bg-white rounded-lg border border-gray-200 p-6">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="flex-1">
+                                <h3 className="text-lg font-medium text-gray-900 mb-1">{eq.name}</h3>
+                                <p className="text-sm text-gray-500 mb-2">{eq.location}</p>
+                                {eq.description && (
+                                    <p className="text-sm text-gray-600 mb-3">{eq.description}</p>
+                                )}
+                            </div>
+                            <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                eq.is_in_use 
+                                    ? 'bg-red-100 text-red-800' 
+                                    : 'bg-green-100 text-green-800'
+                            }`}>
+                                {eq.is_in_use ? 'In Use' : 'Available'}
+                            </div>
+                        </div>
+
+                        {eq.is_in_use && eq.current_user && (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                                <div className="flex items-center gap-2 text-yellow-800 text-sm">
+                                    <User className="w-4 h-4" />
+                                    <span>Currently used by {eq.current_user.username}</span>
+                                </div>
+                                {eq.current_usage_duration && (
+                                    <p className="text-xs text-yellow-700 mt-1">
+                                        Duration: {eq.current_usage_duration}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                                <div className="flex items-center text-sm text-gray-500">
+                                    <CheckCircle className="w-4 h-4 mr-1" />
+                                    <span>Bookable: {eq.is_bookable ? 'Yes' : 'No'}</span>
+                                </div>
+                                {eq.requires_qr_checkin && (
+                                    <div className="flex items-center text-sm text-gray-500">
+                                        <QrCode className="w-4 h-4 mr-1" />
+                                        <span>QR Required</span>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex gap-2 mt-4">
+                                {eq.requires_qr_checkin && (
+                                    <button
+                                        onClick={() => onShowQRCode(eq)}
+                                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                    >
+                                        <QrCode className="w-4 h-4 mr-2" />
+                                        Show QR
+                                    </button>
+                                )}
+                                
+                                {eq.is_bookable && (
+                                    <button className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
+                                        <Calendar className="w-4 h-4 mr-2" />
+                                        Book
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ))
+            )}
+        </div>
+    );
+};
+
+// Group Meetings View Component
+const MeetingsView: React.FC<{
+    schedules: Schedule[];
+    loading: boolean;
+}> = ({ schedules, loading }) => {
+    if (loading) {
+        return <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>;
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Meeting Schedule Overview */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Group Meeting Schedule</h3>
+                
+                {/* Presenter Rotation Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-center gap-2 text-blue-800 mb-2">
+                        <Users className="w-5 h-5" />
+                        <span className="font-medium">Presenter Rotation</span>
+                    </div>
+                    <p className="text-sm text-blue-700">Weekly meetings alternate between Research Updates and Journal Club sessions with automatic presenter assignment.</p>
+                </div>
+
+                {/* Next Meetings */}
+                <div className="space-y-3">
+                    <h4 className="font-medium text-gray-900">Upcoming Meetings</h4>
+                    {schedules.length === 0 ? (
+                        <div className="text-center py-8">
+                            <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">No meetings scheduled</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {schedules.slice(0, 5).map((meeting) => (
+                                <div key={meeting.id} className="border border-gray-200 rounded-lg p-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <h5 className="font-medium text-gray-900">{meeting.title}</h5>
+                                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                                                 <div className="flex items-center gap-1">
                                                     <Clock className="w-4 h-4" />
-                                                    <span>
-                                                        {formatTime(schedule.start_time)}
-                                                        {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
-                                                    </span>
+                                                    <span>{meeting.date} at {meeting.start_time}</span>
                                                 </div>
-                                            )}
-                                            
+                                                {meeting.location && (
+                                                    <div className="flex items-center gap-1">
+                                                        <MapPin className="w-4 h-4" />
+                                                        <span>{meeting.location}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            meeting.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                                            meeting.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                                            meeting.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                            'bg-gray-100 text-gray-800'
+                                        }`}>
+                                            {meeting.status?.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Recurring Tasks View Component
+const TasksView: React.FC<{
+    schedules: Schedule[];
+    loading: boolean;
+}> = ({ schedules, loading }) => {
+    if (loading) {
+        return <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>;
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Task Management Overview */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Recurring Tasks</h3>
+                
+                {/* Task Info */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-center gap-2 text-green-800 mb-2">
+                        <Repeat className="w-5 h-5" />
+                        <span className="font-medium">Automated Task Management</span>
+                    </div>
+                    <p className="text-sm text-green-700">Monthly lab maintenance tasks are automatically assigned to team members in rotation.</p>
+                </div>
+
+                {/* Task List */}
+                <div className="space-y-3">
+                    <h4 className="font-medium text-gray-900">Current Tasks</h4>
+                    {schedules.length === 0 ? (
+                        <div className="text-center py-8">
+                            <Repeat className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500">No recurring tasks configured</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {schedules.map((task) => (
+                                <div key={task.id} className="border border-gray-200 rounded-lg p-4">
+                                    <div className="flex items-start justify-between mb-3">
+                                        <h5 className="font-medium text-gray-900">{task.title}</h5>
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            task.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                            task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                                            task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                            'bg-gray-100 text-gray-800'
+                                        }`}>
+                                            {task.status?.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                    
+                                    {task.description && (
+                                        <p className="text-sm text-gray-600 mb-3">{task.description}</p>
+                                    )}
+                                    
+                                    <div className="flex items-center justify-between text-sm text-gray-500">
+                                        <div className="flex items-center gap-1">
+                                            <Clock className="w-4 h-4" />
+                                            <span>Due: {task.date}</span>
+                                        </div>
+                                        {task.attendees_count && (
+                                            <div className="flex items-center gap-1">
+                                                <Users className="w-4 h-4" />
+                                                <span>{task.attendees_count} assigned</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {task.status === 'pending' && (
+                                        <button className="mt-3 w-full inline-flex items-center justify-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700">
+                                            <CheckCircle className="w-4 h-4 mr-2" />
+                                            Mark Complete
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// My Schedule View Component
+const MyScheduleView: React.FC<{
+    schedules: Schedule[];
+    loading: boolean;
+    formatTime: (time: string | undefined) => string;
+}> = ({ schedules, loading, formatTime }) => {
+    if (loading) {
+        return <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+        </div>;
+    }
+
+    const todaySchedules = schedules.filter(s => s.date === new Date().toISOString().split('T')[0]);
+    const upcomingSchedules = schedules.filter(s => s.date > new Date().toISOString().split('T')[0]).slice(0, 5);
+
+    return (
+        <div className="space-y-6">
+            {/* Today's Schedule */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Today's Schedule</h3>
+                {todaySchedules.length === 0 ? (
+                    <div className="text-center py-6">
+                        <Calendar className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500">No events scheduled for today</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {todaySchedules.map((schedule) => (
+                            <div key={schedule.id} className="border border-gray-200 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                        <h5 className="font-medium text-gray-900">{schedule.title}</h5>
+                                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                            <div className="flex items-center gap-1">
+                                                <Clock className="w-4 h-4" />
+                                                <span>
+                                                    {formatTime(schedule.start_time)}
+                                                    {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                                                </span>
+                                            </div>
                                             {schedule.location && (
                                                 <div className="flex items-center gap-1">
                                                     <MapPin className="w-4 h-4" />
                                                     <span>{schedule.location}</span>
                                                 </div>
                                             )}
-                                            
-                                            {schedule.attendees_count && (
-                                                <div className="flex items-center gap-1">
-                                                    <Users className="w-4 h-4" />
-                                                    <span>{schedule.attendees_count} attendees</span>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
-                                    
-                                    <div className="flex items-center gap-2 ml-4">
-                                        <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
-                                            <Edit3 className="w-4 h-4" />
-                                        </button>
-                                        <button className="p-2 text-gray-400 hover:text-red-600 transition-colors">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${scheduleHelpers.getStatusColor(schedule.status)}`}>
+                                        {schedule.status?.replace('_', ' ')}
+                                    </span>
                                 </div>
                             </div>
                         ))}
@@ -272,13 +854,44 @@ const SchedulePage: React.FC = () => {
                 )}
             </div>
 
-            {/* Schedule Form Modal */}
-            <ScheduleFormModal
-                isOpen={isModalOpen}
-                onClose={handleCloseModal}
-                onSubmit={handleSubmitSchedule}
-                isSubmitting={isSubmitting}
-            />
+            {/* Upcoming Events */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Upcoming Events</h3>
+                {upcomingSchedules.length === 0 ? (
+                    <div className="text-center py-6">
+                        <CalendarDays className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500">No upcoming events</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        {upcomingSchedules.map((schedule) => (
+                            <div key={schedule.id} className="border border-gray-200 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                        <h5 className="font-medium text-gray-900">{schedule.title}</h5>
+                                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                                            <div className="flex items-center gap-1">
+                                                <Calendar className="w-4 h-4" />
+                                                <span>{schedule.date}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Clock className="w-4 h-4" />
+                                                <span>
+                                                    {formatTime(schedule.start_time)}
+                                                    {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${scheduleHelpers.getStatusColor(schedule.status)}`}>
+                                        {schedule.status?.replace('_', ' ')}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
