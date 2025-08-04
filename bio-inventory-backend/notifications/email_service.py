@@ -229,3 +229,42 @@ class EmailNotificationService:
             template_name='item_received',
             context=context
         )
+
+    @staticmethod
+    def send_booking_confirmation(booking):
+        """Send booking confirmation email to user"""
+        if not booking.user or not booking.user.email:
+            logger.warning(f"Booking {booking.id} has no user or user has no email")
+            return False
+        
+        context = {
+            'booking': booking,
+            'recipient': booking.user,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=[booking.user],
+            subject=f"Booking Confirmed: {booking.equipment.name}",
+            template_name='booking_confirmation',
+            context=context
+        )
+
+    @staticmethod
+    def send_booking_reminder(booking, minutes_until=15):
+        """Send booking reminder email to user"""
+        if not booking.user or not booking.user.email:
+            logger.warning(f"Booking {booking.id} has no user or user has no email")
+            return False
+        
+        context = {
+            'booking': booking,
+            'recipient': booking.user,
+            'minutes_until': minutes_until,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=[booking.user],
+            subject=f"Reminder: {booking.equipment.name} booking in {minutes_until} minutes",
+            template_name='booking_reminder',
+            context=context
+        )

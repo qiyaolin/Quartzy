@@ -1,4 +1,5 @@
-# Generated migration for QR code check-in/out support
+# Fixed migration for QR code check-in/out support
+# Only adds missing fields to Equipment model
 
 from django.db import migrations, models
 import uuid
@@ -14,9 +15,10 @@ def add_qr_codes_to_existing_equipment(apps, schema_editor):
     Equipment = apps.get_model('schedule', 'Equipment')
     
     # Add QR codes to equipment that requires QR check-in
-    for equipment in Equipment.objects.filter(requires_qr_checkin=True, qr_code__isnull=True):
-        equipment.qr_code = generate_unique_qr_code()
-        equipment.save()
+    for equipment in Equipment.objects.filter(requires_qr_checkin=True):
+        if not equipment.qr_code:
+            equipment.qr_code = generate_unique_qr_code()
+            equipment.save()
 
 
 def reverse_qr_codes(apps, schema_editor):
@@ -78,29 +80,9 @@ class Migration(migrations.Migration):
             ),
         ),
         
-        # Add early finish notification field to Booking
-        migrations.AddField(
-            model_name='booking',
-            name='actual_end_time',
-            field=models.DateTimeField(
-                null=True,
-                blank=True,
-                help_text="Actual time when equipment usage ended"
-            ),
-        ),
-        
-        migrations.AddField(
-            model_name='booking',
-            name='early_finish_notified',
-            field=models.BooleanField(
-                default=False,
-                help_text="Whether early finish notification was sent"
-            ),
-        ),
-        
-        # Run data migration to add QR codes to existing equipment
+        # Run data migration to generate QR codes
         migrations.RunPython(
             add_qr_codes_to_existing_equipment,
-            reverse_qr_codes
+            reverse_qr_codes,
         ),
     ]
