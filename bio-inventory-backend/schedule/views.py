@@ -4,11 +4,16 @@ from rest_framework.response import Response
 from django.db.models import Q
 from datetime import datetime, date
 from django.utils.dateparse import parse_date
-from .models import Event, Equipment, Booking, GroupMeeting, MeetingPresenterRotation, RecurringTask, TaskInstance
+from django.utils import timezone
+from .models import (
+    Event, Equipment, Booking, GroupMeeting, MeetingPresenterRotation, 
+    RecurringTask, TaskInstance, EquipmentUsageLog, WaitingQueueEntry
+)
 from .serializers import (
     EventSerializer, EquipmentSerializer, BookingSerializer, 
     GroupMeetingSerializer, MeetingPresenterRotationSerializer, 
-    RecurringTaskSerializer, TaskInstanceSerializer, CalendarEventSerializer
+    RecurringTaskSerializer, TaskInstanceSerializer, CalendarEventSerializer,
+    EquipmentUsageLogSerializer, WaitingQueueEntrySerializer, QRCodeScanSerializer
 )
 
 
@@ -149,6 +154,214 @@ class EquipmentViewSet(viewsets.ModelViewSet):
         return Response({
             'equipment': EquipmentSerializer(equipment).data,
             'bookings': booking_data,
+        })
+    
+    @action(detail=False, methods=['post'])
+    def qr_checkin(self, request):
+        """Check in to equipment using QR code"""
+        serializer = QRCodeScanSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        qr_code = serializer.validated_data['qr_code']
+        scan_method = serializer.validated_data.get('scan_method', 'mobile_camera')
+        notes = serializer.validated_data.get('notes', '')
+        
+        try:
+            equipment = Equipment.objects.get(qr_code=qr_code, requires_qr_checkin=True)
+        except Equipment.DoesNotExist:
+            return Response(
+                {'error': 'Equipment not found or QR check-in not enabled'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if equipment is already in use
+        if equipment.is_in_use:
+            return Response({
+                'error': f'Equipment is currently in use by {equipment.current_user.username}',
+                'current_user': equipment.current_user.username,
+                'check_in_time': equipment.current_checkin_time,
+                'duration': str(equipment.current_usage_duration)
+            }, status=status.HTTP_409_CONFLICT)
+        
+        # Check in user
+        try:
+            equipment.check_in_user(request.user)
+            
+            # Update associated booking status if exists
+            current_booking = Booking.objects.filter(
+                equipment=equipment,
+                user=request.user,
+                event__start_time__lte=timezone.now(),
+                event__end_time__gte=timezone.now(),
+                status='confirmed'
+            ).first()
+            
+            if current_booking:
+                current_booking.status = 'in_progress'
+                current_booking.save()
+            
+            return Response({
+                'message': 'Successfully checked in',
+                'equipment': EquipmentSerializer(equipment).data,
+                'check_in_time': equipment.current_checkin_time,
+                'booking': BookingSerializer(current_booking).data if current_booking else None
+            })
+            
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def qr_checkout(self, request):
+        """Check out from equipment using QR code"""
+        serializer = QRCodeScanSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        qr_code = serializer.validated_data['qr_code']
+        notes = serializer.validated_data.get('notes', '')
+        
+        try:
+            equipment = Equipment.objects.get(qr_code=qr_code, requires_qr_checkin=True)
+        except Equipment.DoesNotExist:
+            return Response(
+                {'error': 'Equipment not found or QR check-in not enabled'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if equipment is in use by current user
+        if not equipment.is_in_use:
+            return Response(
+                {'error': 'Equipment is not currently in use'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if equipment.current_user != request.user:
+            return Response({
+                'error': f'Equipment is being used by {equipment.current_user.username}',
+                'current_user': equipment.current_user.username
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Check out user
+        try:
+            usage_log = equipment.check_out_user(request.user)
+            
+            # Update associated booking
+            current_booking = Booking.objects.filter(
+                equipment=equipment,
+                user=request.user,
+                status='in_progress'
+            ).first()
+            
+            if current_booking:
+                current_booking.status = 'completed'
+                current_booking.actual_end_time = timezone.now()
+                current_booking.save()
+                
+                # Check for early finish notification
+                current_booking.check_for_early_finish()
+            
+            return Response({
+                'message': 'Successfully checked out',
+                'equipment': EquipmentSerializer(equipment).data,
+                'usage_log': EquipmentUsageLogSerializer(usage_log).data,
+                'usage_duration': str(usage_log.usage_duration) if usage_log else None,
+                'booking': BookingSerializer(current_booking).data if current_booking else None
+            })
+            
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def qr_code(self, request, pk=None):
+        """Get QR code for equipment"""
+        equipment = self.get_object()
+        
+        if not equipment.requires_qr_checkin:
+            return Response(
+                {'error': 'QR check-in not enabled for this equipment'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Generate QR code if not exists
+        if not equipment.qr_code:
+            equipment.save()  # This will auto-generate QR code
+        
+        return Response({
+            'equipment_name': equipment.name,
+            'qr_code': equipment.qr_code,
+            'location': equipment.location,
+            'is_in_use': equipment.is_in_use,
+            'current_user': equipment.current_user.username if equipment.current_user else None,
+            'qr_code_url': f"data:text/plain;base64,{equipment.qr_code}"
+        })
+    
+    @action(detail=True, methods=['get'])
+    def usage_logs(self, request, pk=None):
+        """Get usage logs for equipment"""
+        equipment = self.get_object()
+        
+        # Get query parameters
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        user_id = request.query_params.get('user_id')
+        
+        logs = EquipmentUsageLog.objects.filter(equipment=equipment)
+        
+        if start_date:
+            try:
+                start_date = parse_date(start_date)
+                logs = logs.filter(check_in_time__date__gte=start_date)
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                end_date = parse_date(end_date)
+                logs = logs.filter(check_in_time__date__lte=end_date)
+            except ValueError:
+                pass
+        
+        if user_id:
+            logs = logs.filter(user_id=user_id)
+        
+        logs = logs.order_by('-check_in_time')[:50]  # Limit to 50 recent logs
+        
+        serializer = EquipmentUsageLogSerializer(logs, many=True)
+        return Response({
+            'equipment': EquipmentSerializer(equipment).data,
+            'usage_logs': serializer.data,
+            'total_logs': logs.count()
+        })
+    
+    @action(detail=True, methods=['get'])
+    def current_status(self, request, pk=None):
+        """Get real-time status of equipment"""
+        equipment = self.get_object()
+        
+        # Get current booking if any
+        current_booking = None
+        if equipment.is_in_use:
+            current_booking = Booking.objects.filter(
+                equipment=equipment,
+                user=equipment.current_user,
+                status='in_progress'
+            ).first()
+        
+        # Get upcoming bookings for today
+        today = timezone.now().date()
+        upcoming_bookings = Booking.objects.filter(
+            equipment=equipment,
+            event__start_time__date=today,
+            event__start_time__gt=timezone.now(),
+            status='confirmed'
+        ).order_by('event__start_time')[:5]
+        
+        return Response({
+            'equipment': EquipmentSerializer(equipment).data,
+            'current_booking': BookingSerializer(current_booking).data if current_booking else None,
+            'upcoming_bookings': BookingSerializer(upcoming_bookings, many=True).data,
+            'usage_duration': str(equipment.current_usage_duration) if equipment.current_usage_duration else None
         })
 
 
@@ -302,3 +515,236 @@ class TaskInstanceViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(task)
         return Response(serializer.data)
+
+
+class EquipmentUsageLogViewSet(viewsets.ModelViewSet):
+    """Equipment usage log management API"""
+    queryset = EquipmentUsageLog.objects.all()
+    serializer_class = EquipmentUsageLogSerializer
+    
+    def get_queryset(self):
+        queryset = EquipmentUsageLog.objects.select_related('equipment', 'user', 'booking')
+        
+        # Filter by equipment
+        equipment_id = self.request.query_params.get('equipment_id')
+        if equipment_id:
+            queryset = queryset.filter(equipment_id=equipment_id)
+        
+        # Filter by user
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        # Filter by active status
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        if start_date:
+            try:
+                start_date = parse_date(start_date)
+                queryset = queryset.filter(check_in_time__date__gte=start_date)
+            except ValueError:
+                pass
+        
+        end_date = self.request.query_params.get('end_date')
+        if end_date:
+            try:
+                end_date = parse_date(end_date)
+                queryset = queryset.filter(check_in_time__date__lte=end_date)
+            except ValueError:
+                pass
+        
+        return queryset.order_by('-check_in_time')
+    
+    @action(detail=False, methods=['get'])
+    def active_sessions(self, request):
+        """Get all currently active usage sessions"""
+        active_logs = EquipmentUsageLog.objects.filter(
+            is_active=True
+        ).select_related('equipment', 'user', 'booking')
+        
+        serializer = self.get_serializer(active_logs, many=True)
+        return Response({
+            'active_sessions': serializer.data,
+            'count': active_logs.count()
+        })
+    
+    @action(detail=False, methods=['get'])
+    def usage_statistics(self, request):
+        """Get usage statistics for equipment"""
+        from django.db.models import Count, Avg, Sum
+        from datetime import timedelta
+        
+        # Get date range
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
+        queryset = EquipmentUsageLog.objects.filter(is_active=False)
+        
+        if start_date:
+            try:
+                start_date = parse_date(start_date)
+                queryset = queryset.filter(check_in_time__date__gte=start_date)
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                end_date = parse_date(end_date)
+                queryset = queryset.filter(check_in_time__date__lte=end_date)
+            except ValueError:
+                pass
+        
+        # Usage statistics by equipment
+        equipment_stats = queryset.values('equipment__name').annotate(
+            total_sessions=Count('id'),
+            total_duration=Sum('usage_duration'),
+            avg_duration=Avg('usage_duration')
+        ).order_by('-total_sessions')
+        
+        # Usage statistics by user
+        user_stats = queryset.values('user__username').annotate(
+            total_sessions=Count('id'),
+            total_duration=Sum('usage_duration'),
+            avg_duration=Avg('usage_duration')
+        ).order_by('-total_sessions')
+        
+        return Response({
+            'equipment_statistics': list(equipment_stats),
+            'user_statistics': list(user_stats),
+            'total_sessions': queryset.count(),
+            'date_range': {
+                'start_date': start_date,
+                'end_date': end_date
+            }
+        })
+
+
+class WaitingQueueEntryViewSet(viewsets.ModelViewSet):
+    """Waiting queue management API"""
+    queryset = WaitingQueueEntry.objects.all()
+    serializer_class = WaitingQueueEntrySerializer
+    
+    def get_queryset(self):
+        queryset = WaitingQueueEntry.objects.select_related(
+            'equipment', 'user', 'time_slot'
+        )
+        
+        # Filter by equipment
+        equipment_id = self.request.query_params.get('equipment_id')
+        if equipment_id:
+            queryset = queryset.filter(equipment_id=equipment_id)
+        
+        # Filter by user
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        # Filter by status
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        # Exclude expired entries by default
+        include_expired = self.request.query_params.get('include_expired', 'false')
+        if include_expired.lower() != 'true':
+            queryset = queryset.filter(expires_at__gt=timezone.now())
+        
+        return queryset.order_by('equipment', 'position')
+    
+    def perform_create(self, serializer):
+        """Set position when creating new queue entry"""
+        equipment = serializer.validated_data['equipment']
+        time_slot = serializer.validated_data['time_slot']
+        
+        # Get next position in queue for this equipment and time slot
+        from django.db.models import Max
+        max_position = WaitingQueueEntry.objects.filter(
+            equipment=equipment,
+            time_slot=time_slot,
+            status='waiting'
+        ).aggregate(max_pos=Max('position'))['max_pos'] or 0
+        
+        from datetime import timedelta
+        serializer.save(
+            position=max_position + 1,
+            expires_at=timezone.now() + timedelta(hours=24)
+        )
+    
+    @action(detail=True, methods=['post'])
+    def notify(self, request, pk=None):
+        """Send notification to user in queue"""
+        queue_entry = self.get_object()
+        
+        if queue_entry.status != 'waiting':
+            return Response(
+                {'error': 'Can only notify waiting queue entries'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        success = queue_entry.notify_user()
+        
+        if success:
+            return Response({
+                'message': 'Notification sent successfully',
+                'queue_entry': WaitingQueueEntrySerializer(queue_entry).data
+            })
+        else:
+            return Response(
+                {'error': 'Failed to send notification'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'])
+    def convert_to_booking(self, request, pk=None):
+        """Convert queue entry to actual booking"""
+        queue_entry = self.get_object()
+        
+        if queue_entry.status != 'notified':
+            return Response(
+                {'error': 'Can only convert notified queue entries'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            booking = queue_entry.convert_to_booking()
+            return Response({
+                'message': 'Successfully converted to booking',
+                'booking': BookingSerializer(booking).data,
+                'queue_entry': WaitingQueueEntrySerializer(queue_entry).data
+            })
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to convert to booking: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def cleanup_expired(self, request):
+        """Clean up expired queue entries"""
+        expired_entries = WaitingQueueEntry.objects.filter(
+            expires_at__lt=timezone.now(),
+            status='waiting'
+        )
+        
+        count = expired_entries.count()
+        expired_entries.update(status='expired')
+        
+        return Response({
+            'message': f'Cleaned up {count} expired queue entries',
+            'expired_count': count
+        })
+    
+    @action(detail=False, methods=['get'])
+    def my_queue(self, request):
+        """Get current user's queue entries"""
+        queue_entries = self.get_queryset().filter(user=request.user)
+        serializer = self.get_serializer(queue_entries, many=True)
+        
+        return Response({
+            'queue_entries': serializer.data,
+            'count': queue_entries.count()
+        })

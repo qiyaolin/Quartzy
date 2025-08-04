@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Equipment Now Available - Waiting Queue</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #fd7e14; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .booking-details { background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #fd7e14; color: white; text-decoration: none; border-radius: 5px; }
+        .urgent { background-color: #f8d7da; color: #721c24; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Equipment Now Available!</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear {{ queue_entry.user.first_name|default:queue_entry.user.username }},</p>
+            
+            <div class="urgent">
+                <strong>Time Sensitive:</strong> The equipment you were waiting for is now available for booking!
+            </div>
+            
+            <div class="booking-details">
+                <h3>Available Equipment</h3>
+                <p><strong>Equipment:</strong> {{ equipment.name }}</p>
+                <p><strong>Location:</strong> {{ equipment.location }}</p>
+                <p><strong>Requested Time:</strong> {{ queue_entry.requested_start_time|date:"F d, Y" }} from {{ queue_entry.requested_start_time|time:"g:i A" }} to {{ queue_entry.requested_end_time|time:"g:i A" }}</p>
+                <p><strong>Your Position:</strong> #{{ queue_entry.position }} in queue</p>
+            </div>
+            
+            <div class="booking-details">
+                <h3>Next Steps</h3>
+                <p>You have <strong>2 hours</strong> to confirm this booking. If you don't respond within this time, the opportunity will be offered to the next person in the queue.</p>
+                
+                <p>To confirm your booking:</p>
+                <ol>
+                    <li>Click the "Confirm Booking" button below</li>
+                    <li>Or log into the system and confirm manually</li>
+                    <li>This will convert your queue position into a confirmed booking</li>
+                </ol>
+            </div>
+            
+            {% if equipment.requires_qr_checkin %}
+            <div class="booking-details">
+                <h3>QR Code Check-in Information</h3>
+                <p>Once your booking is confirmed, remember that this equipment requires QR code check-in/out:</p>
+                <p><strong>Equipment QR Code:</strong> {{ equipment.qr_code }}</p>
+            </div>
+            {% endif %}
+            
+            <p style="text-align: center;">
+                <a href="{{ base_url }}/schedule/queue/{{ queue_entry.id }}/confirm" class="button">Confirm Booking</a>
+            </p>
+            
+            <p style="text-align: center; margin-top: 15px;">
+                <a href="{{ base_url }}/schedule" style="color: #fd7e14;">View All Bookings</a>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>{{ site_name }} - Equipment Booking System</p>
+            <p>Hayer Lab - McGill University</p>
+            <p>This notification expires at {{ queue_entry.expires_at|date:"F d, Y" }} at {{ queue_entry.expires_at|time:"g:i A" }}</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -202,6 +202,202 @@ export const scheduleApi = {
   }
 };
 
+// Equipment Types and API
+export interface Equipment {
+  id: number;
+  name: string;
+  description?: string;
+  is_bookable: boolean;
+  requires_qr_checkin: boolean;
+  location: string;
+  qr_code?: string;
+  current_user?: {
+    username: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  current_checkin_time?: string;
+  is_in_use: boolean;
+  current_usage_duration?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EquipmentUsageLog {
+  id: number;
+  equipment: Equipment;
+  user: {
+    username: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  booking?: any;
+  check_in_time: string;
+  check_out_time?: string;
+  usage_duration?: string;
+  current_duration?: string;
+  qr_scan_method: 'mobile_camera' | 'desktop_webcam' | 'manual_entry';
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QRScanRequest {
+  qr_code: string;
+  scan_method?: 'mobile_camera' | 'desktop_webcam' | 'manual_entry';
+  notes?: string;
+}
+
+// Equipment API Service
+export const equipmentApi = {
+  // Get all equipment
+  getEquipment: async (token: string, params: any = {}): Promise<Equipment[]> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, value as string);
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/equipment/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/equipment/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.info('Equipment API endpoint not implemented yet, returning empty data');
+        return [];
+      }
+      throw new Error(`Failed to fetch equipment: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results || data;
+  },
+
+  // Get equipment by ID
+  getEquipmentById: async (token: string, id: number): Promise<Equipment> => {
+    const response = await fetch(buildApiUrl(`schedule/equipment/${id}/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch equipment: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // QR Code check-in
+  qrCheckin: async (token: string, qrData: QRScanRequest): Promise<any> => {
+    const response = await fetch(buildApiUrl('schedule/equipment/qr_checkin/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(qrData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to check in: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // QR Code check-out
+  qrCheckout: async (token: string, qrData: QRScanRequest): Promise<any> => {
+    const response = await fetch(buildApiUrl('schedule/equipment/qr_checkout/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(qrData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to check out: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Get equipment QR code
+  getEquipmentQR: async (token: string, equipmentId: number): Promise<any> => {
+    const response = await fetch(buildApiUrl(`schedule/equipment/${equipmentId}/qr_code/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to get QR code: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Get equipment usage logs
+  getUsageLogs: async (token: string, equipmentId: number, params: any = {}): Promise<EquipmentUsageLog[]> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, value as string);
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl(`schedule/equipment/${equipmentId}/usage_logs/`)}?${queryParams.toString()}`
+      : buildApiUrl(`schedule/equipment/${equipmentId}/usage_logs/`);
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch usage logs: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.usage_logs || [];
+  },
+
+  // Get equipment current status
+  getCurrentStatus: async (token: string, equipmentId: number): Promise<any> => {
+    const response = await fetch(buildApiUrl(`schedule/equipment/${equipmentId}/current_status/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch current status: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Get equipment availability
+  getAvailability: async (token: string, equipmentId: number, startDate: string, endDate: string): Promise<any> => {
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate
+    });
+    
+    const response = await fetch(buildApiUrl(`schedule/equipment/${equipmentId}/availability/?${params.toString()}`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch availability: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+};
+
 // Helper functions
 export const scheduleHelpers = {
   // Format schedule time for display

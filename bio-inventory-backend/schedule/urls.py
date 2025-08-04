@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     EventViewSet, EquipmentViewSet, BookingViewSet, 
     GroupMeetingViewSet, MeetingPresenterRotationViewSet, 
-    RecurringTaskViewSet, TaskInstanceViewSet
+    RecurringTaskViewSet, TaskInstanceViewSet,
+    EquipmentUsageLogViewSet, WaitingQueueEntryViewSet
 )
 
 # 创建路由器并注册视图集
@@ -15,6 +16,8 @@ router.register(r'group-meetings', GroupMeetingViewSet)
 router.register(r'presenter-rotations', MeetingPresenterRotationViewSet)
 router.register(r'recurring-tasks', RecurringTaskViewSet)
 router.register(r'task-instances', TaskInstanceViewSet)
+router.register(r'usage-logs', EquipmentUsageLogViewSet)
+router.register(r'waiting-queue', WaitingQueueEntryViewSet)
 
 # API URLs由路由器自动确定
 urlpatterns = [
