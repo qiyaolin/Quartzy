@@ -11,7 +11,8 @@ import {
     ChevronDown,
     Menu,
     X,
-    Zap
+    Zap,
+    Calendar
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import NotificationCenter from './NotificationCenter.tsx';
@@ -39,6 +40,7 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
         { key: 'requests', label: 'Requests', icon: FileText, adminOnly: false },
         { key: 'inventory', label: 'Inventory', icon: Package, adminOnly: false },
         { key: 'reports', label: 'Dashboard', icon: History, adminOnly: false },
+        { key: 'schedule', label: 'Schedule', icon: Calendar, adminOnly: false },
         { key: 'funding', label: 'Funding', icon: DollarSign, adminOnly: true },
         { key: 'users', label: 'Users', icon: Users, adminOnly: true },
     ];
@@ -281,6 +283,7 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
                                             {item.key === 'requests' && 'Manage lab requests'}
                                             {item.key === 'inventory' && 'Browse lab inventory'}
                                             {item.key === 'reports' && 'View analytics'}
+                                            {item.key === 'schedule' && 'Schedule management'}
                                             {item.key === 'funding' && 'Financial management'}
                                             {item.key === 'users' && 'User administration'}
                                         </div>

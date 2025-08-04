@@ -77,6 +77,9 @@ export const API_ENDPOINTS = {
   
   // Dashboard Statistics - Added missing endpoint
   DASHBOARD_STATS: '/api/dashboard/stats/',
+  
+  // Schedule Management
+  SCHEDULES: '/api/schedules/',
 };
 
 console.log(`API Configuration: Using API Base URL = ${API_BASE_URL}`);

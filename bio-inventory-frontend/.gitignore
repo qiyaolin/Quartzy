@@ -32,6 +32,10 @@ Thumbs.db
 # Firebase
 .firebase/
 .firebaserc.local
+firebase-debug.log*
+firebase-debug.*.log
+ui-debug.log
+firebase.log
 
 # Environment variables
 .env

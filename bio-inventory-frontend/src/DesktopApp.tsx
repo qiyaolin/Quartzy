@@ -20,6 +20,7 @@ import RequestsPage from './pages/RequestsPage.tsx';
 import ReportsPage from './pages/ReportsPage.tsx';
 import UserManagementPage from './pages/UserManagementPage.tsx';
 import FundingPage from './pages/FundingPage.tsx';
+import SchedulePage from './pages/SchedulePage.tsx';
 
 const DesktopApp = () => {
     const { token } = useContext(AuthContext);
@@ -74,6 +75,8 @@ const DesktopApp = () => {
                 setActivePage('reports');
             } else if (currentPath === '/funding') {
                 setActivePage('funding');
+            } else if (currentPath === '/schedule') {
+                setActivePage('schedule');
             } else if (currentPath === '/users') {
                 setActivePage('users');
             }
@@ -145,6 +148,7 @@ const DesktopApp = () => {
         else if (page === 'requests') newPath = '/requests';
         else if (page === 'reports') newPath = '/reports';
         else if (page === 'funding') newPath = '/funding';
+        else if (page === 'schedule') newPath = '/schedule';
         else if (page === 'users') newPath = '/users';
         
         window.history.pushState(null, '', newPath);
@@ -197,6 +201,7 @@ const DesktopApp = () => {
                     />
                 );
             case 'funding': return <FundingPage />;
+            case 'schedule': return <SchedulePage />;
             case 'users': 
                 return (
                     <UserManagementPage 

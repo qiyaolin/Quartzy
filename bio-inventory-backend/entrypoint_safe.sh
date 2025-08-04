@@ -32,7 +32,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 django.setup()
 from django.contrib.auth.models import User
 username = 'admin'
-password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+password = os.environ.get('ADMIN_PASSWORD', '111111')
 try:
     if not User.objects.filter(username=username).exists():
         User.objects.create_superuser(username, 'admin@example.com', password)

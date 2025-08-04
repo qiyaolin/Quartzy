@@ -5,9 +5,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import mobile fixes */
-@import './styles/mobile-fixes.css';
-@import './styles/speed-dial-animations.css';
+/* Mobile fixes and animations are included inline */
 
 @layer base {
   html {
