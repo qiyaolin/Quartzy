@@ -15,7 +15,7 @@ interface GroupMeeting {
     end_time?: string;
     location?: string;
     status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
-    meeting_type: 'research_update' | 'journal_club' | 'general';
+    meeting_type: 'lab_meeting' | 'journal_club' | 'general';
     topic: string;
     presenter_id?: number;
     presenter?: Presenter;
@@ -364,7 +364,7 @@ const MeetingEditModal: React.FC<MeetingEditModalProps> = ({
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                         disabled={isSubmitting}
                                     >
-                                        <option value="research_update">Research Update</option>
+                                        <option value="lab_meeting">Lab Meeting</option>
                                         <option value="journal_club">Journal Club</option>
                                         <option value="general">General Meeting</option>
                                     </select>

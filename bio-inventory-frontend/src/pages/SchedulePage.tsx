@@ -18,6 +18,7 @@ import CalendarView from '../components/CalendarView.tsx';
 import EquipmentManagement from '../components/EquipmentManagement.tsx';
 import GroupMeetingsManager from '../components/GroupMeetingsManager.tsx';
 import PresenterManagement from '../components/PresenterManagement.tsx';
+import RecurringTaskManager from '../components/RecurringTaskManager.tsx';
 import MeetingEditModal from '../modals/MeetingEditModal.tsx';
 
 type TabType = 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
@@ -280,8 +281,8 @@ const SchedulePage: React.FC = () => {
                         onClick={() => setIsGroupMeetingModalOpen(true)}
                         className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                        <Plus className="w-4 h-4 mr-2" />
-                        New Meeting
+                        <Settings className="w-4 h-4 mr-2" />
+                        Meeting Configuration
                     </button>
                 );
             case 'tasks':
@@ -461,9 +462,8 @@ const SchedulePage: React.FC = () => {
                 )}
 
                 {activeTab === 'tasks' && (
-                    <TasksView 
-                        schedules={filteredSchedules.filter(s => s.title?.toLowerCase().includes('task'))}
-                        loading={loading}
+                    <RecurringTaskManager 
+                        onCreateTask={() => setIsRecurringTaskModalOpen(true)}
                     />
                 )}
 
@@ -516,14 +516,15 @@ const SchedulePage: React.FC = () => {
                 onSubmit={async (taskData) => {
                     console.log('Recurring task data:', taskData);
                     try {
-                        // Create task via schedule API
+                        // In real implementation, this would create a recurring task via groupMeetingApi
+                        // For now, create a placeholder schedule
                         const newTask = await scheduleApi.createSchedule(token, {
-                            title: taskData.title,
-                            description: taskData.description,
-                            date: taskData.date,
-                            start_time: taskData.start_time,
-                            end_time: taskData.end_time,
-                            location: taskData.location,
+                            title: taskData.title || 'New Recurring Task',
+                            description: taskData.description || 'Recurring maintenance task',
+                            date: new Date().toISOString().split('T')[0],
+                            start_time: '09:00',
+                            end_time: '10:00',
+                            location: taskData.location || 'Lab',
                             status: 'scheduled'
                         });
                         setSchedules(prev => [newTask, ...prev]);

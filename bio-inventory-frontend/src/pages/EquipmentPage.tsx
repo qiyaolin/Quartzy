@@ -10,8 +10,8 @@ import {
 } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { equipmentApi, Equipment } from '../services/scheduleApi.ts';
-import EquipmentCard from '../components/EquipmentCard.tsx';
-import EquipmentQRScanner from '../components/EquipmentQRScanner.tsx';
+import EquipmentCard from '../components/EquipmentCard';
+import EquipmentQRScanner from '../components/EquipmentQRScanner';
 
 const EquipmentPage: React.FC = () => {
     const authContext = useContext(AuthContext);

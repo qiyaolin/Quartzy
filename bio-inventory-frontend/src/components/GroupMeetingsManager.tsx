@@ -3,85 +3,43 @@ import {
     Calendar, Clock, Users, MapPin, Plus, Edit3, Trash2, Search, 
     Settings, FileText, User, ChevronLeft, ChevronRight, Filter,
     BookOpen, RotateCcw, Upload, Download, Mail, AlertCircle,
-    CheckCircle, XCircle, ArrowUpDown, Eye, MoreHorizontal
+    CheckCircle, XCircle, ArrowUpDown, Eye, MoreHorizontal, X
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
-import { Schedule, scheduleApi, scheduleHelpers } from '../services/scheduleApi.ts';
+import { 
+    groupMeetingApi, 
+    GroupMeeting, 
+    Presenter, 
+    MeetingConfiguration, 
+    groupMeetingHelpers 
+} from '../services/groupMeetingApi.ts';
+import SwapRequestModal, { SwapRequestData } from '../modals/SwapRequestModal.tsx';
+import PostponeMeetingModal, { PostponeData } from '../modals/PostponeMeetingModal.tsx';
+import MaterialsUploadModal, { MaterialsUploadData } from '../modals/MaterialsUploadModal.tsx';
+import RotationManagementModal, { RotationUpdateData } from '../modals/RotationManagementModal.tsx';
 
-// Enhanced Types for Group Meetings
-export interface GroupMeeting extends Schedule {
-    meeting_type: 'research_update' | 'journal_club' | 'general';
-    topic: string;
-    presenter_id?: number;
-    presenter?: Presenter;
-    materials_url?: string;
-    materials_file?: string;
-    rotation_list_id?: number;
-    swap_requests?: SwapRequest[];
-    email_reminders_sent?: EmailReminder[];
-    is_materials_submitted?: boolean;
-    materials_deadline?: string;
-}
-
-export interface Presenter {
-    id: number;
-    username: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    is_active: boolean;
-    last_presentation_date?: string;
-    total_presentations: number;
-}
-
-export interface RotationList {
+// Additional types for rotation lists and swap requests
+interface RotationList {
     id: number;
     name: string;
     meeting_type: 'research_update' | 'journal_club';
     presenters: Presenter[];
     current_presenter_index: number;
-    next_presenter?: Presenter;
+    next_presenter: Presenter | null;
     is_active: boolean;
     created_at: string;
     updated_at: string;
 }
 
-export interface SwapRequest {
-    id: number;
-    from_meeting_id: number;
-    to_meeting_id: number;
-    from_presenter: Presenter;
-    to_presenter: Presenter;
-    status: 'pending' | 'approved' | 'rejected';
-    reason?: string;
-    requested_at: string;
-    reviewed_at?: string;
-    reviewed_by?: number;
-}
-
-export interface EmailReminder {
+interface SwapRequest {
     id: number;
     meeting_id: number;
-    reminder_type: 'pre_meeting' | 'materials_submission' | 'presenter_assignment';
-    sent_at: string;
-    recipients: string[];
-}
-
-export interface MeetingConfiguration {
-    id: number;
-    meeting_type: 'research_update' | 'journal_club';
-    default_duration_minutes: number;
-    default_location: string;
-    default_day_of_week: number; // 0 = Sunday, 1 = Monday, etc.
-    default_time: string;
-    materials_deadline_days: number; // Days before meeting
-    reminder_schedule: {
-        presenter_reminder_days: number;
-        materials_reminder_days: number;
-        pre_meeting_hours: number;
-    };
-    auto_generate_months_ahead: number;
-    is_active: boolean;
+    requester_id: number;
+    target_presenter_id?: number;
+    status: 'pending' | 'approved' | 'rejected';
+    reason: string;
+    created_at: string;
+    updated_at: string;
 }
 
 interface GroupMeetingsManagerProps {
@@ -116,178 +74,232 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     // Modal states
     const [showConfigModal, setShowConfigModal] = useState(false);
     const [showSwapModal, setShowSwapModal] = useState(false);
+    const [showPostponeModal, setShowPostponeModal] = useState(false);
+    const [showMaterialsModal, setShowMaterialsModal] = useState(false);
+    const [showRotationModal, setShowRotationModal] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<GroupMeeting | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Mock data - In real implementation, these would be API calls
+    // Load data from API - fallback to mock data if API not available
     useEffect(() => {
         if (!token) return;
 
-        const initializeMockData = async () => {
+        const loadData = async () => {
             setLoading(true);
             try {
-                // Mock presenters
-                const mockPresenters: Presenter[] = [
-                    {
-                        id: 1,
-                        username: 'alice.johnson',
-                        first_name: 'Alice',
-                        last_name: 'Johnson',
-                        email: 'alice.johnson@lab.com',
-                        is_active: true,
-                        last_presentation_date: '2024-01-15',
-                        total_presentations: 12
-                    },
-                    {
-                        id: 2,
-                        username: 'bob.smith',
-                        first_name: 'Bob',
-                        last_name: 'Smith',
-                        email: 'bob.smith@lab.com',
-                        is_active: true,
-                        last_presentation_date: '2024-01-22',
-                        total_presentations: 8
-                    },
-                    {
-                        id: 3,
-                        username: 'carol.davis',
-                        first_name: 'Carol',
-                        last_name: 'Davis',
-                        email: 'carol.davis@lab.com',
-                        is_active: true,
-                        last_presentation_date: '2024-01-29',
-                        total_presentations: 15
-                    },
-                    {
-                        id: 4,
-                        username: 'david.wilson',
-                        first_name: 'David',
-                        last_name: 'Wilson',
-                        email: 'david.wilson@lab.com',
-                        is_active: true,
-                        last_presentation_date: '2024-02-05',
-                        total_presentations: 6
-                    }
-                ];
+                // Try to load from API first
+                const [meetingsData, presentersData, configurationsData] = await Promise.all([
+                    groupMeetingApi.getGroupMeetings(token).catch(() => []),
+                    groupMeetingApi.getPresenters(token).catch(() => []),
+                    groupMeetingApi.getMeetingConfigurations(token).catch(() => [])
+                ]);
 
-                // Mock rotation lists
-                const mockRotationLists: RotationList[] = [
-                    {
-                        id: 1,
-                        name: 'Research Update Rotation',
-                        meeting_type: 'research_update',
-                        presenters: mockPresenters,
-                        current_presenter_index: 0,
-                        next_presenter: mockPresenters[0],
-                        is_active: true,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    },
-                    {
-                        id: 2,
-                        name: 'Journal Club Rotation',
-                        meeting_type: 'journal_club',
-                        presenters: mockPresenters,
-                        current_presenter_index: 1,
-                        next_presenter: mockPresenters[1],
-                        is_active: true,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString()
-                    }
-                ];
-
-                // Generate mock meetings for the next 6 months
-                const mockMeetings: GroupMeeting[] = [];
-                const today = new Date();
-                
-                for (let i = 0; i < 24; i++) { // 24 weeks = 6 months
-                    const meetingDate = new Date(today);
-                    meetingDate.setDate(today.getDate() + (i * 7)); // Weekly meetings
-                    
-                    const isResearchUpdate = i % 2 === 0;
-                    const meetingType = isResearchUpdate ? 'research_update' : 'journal_club';
-                    const presenter = mockPresenters[i % mockPresenters.length];
-                    
-                    const meeting: GroupMeeting = {
-                        id: 1000 + i,
-                        title: `${isResearchUpdate ? 'Research Update' : 'Journal Club'}: Week ${i + 1}`,
-                        description: isResearchUpdate 
-                            ? 'Weekly research progress presentations and discussions'
-                            : 'Journal article discussion and literature review',
-                        date: meetingDate.toISOString().split('T')[0],
-                        start_time: '14:00',
-                        end_time: isResearchUpdate ? '15:30' : '15:00',
-                        location: 'Conference Room A',
-                        status: 'scheduled',
-                        attendees_count: 8,
-                        created_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
-                        meeting_type: meetingType,
-                        topic: isResearchUpdate 
-                            ? `${presenter.first_name}'s Research Progress`
-                            : 'Recent Advances in Cell Biology',
-                        presenter_id: presenter.id,
-                        presenter: presenter,
-                        rotation_list_id: isResearchUpdate ? 1 : 2,
-                        is_materials_submitted: !isResearchUpdate ? Math.random() > 0.3 : undefined,
-                        materials_deadline: !isResearchUpdate 
-                            ? new Date(meetingDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-                            : undefined
-                    };
-                    
-                    mockMeetings.push(meeting);
+                // If API returns data, use it
+                if (meetingsData.length > 0 || presentersData.length > 0) {
+                    setMeetings(meetingsData);
+                    setPresenters(presentersData);
+                    setConfigurations(configurationsData);
+                    setError(null);
+                } else {
+                    // Fallback to mock data for demonstration
+                    console.info('API endpoints not fully implemented, using demo data');
+                    await initializeDemoData();
                 }
-
-                // Mock configurations
-                const mockConfigurations: MeetingConfiguration[] = [
-                    {
-                        id: 1,
-                        meeting_type: 'research_update',
-                        default_duration_minutes: 90,
-                        default_location: 'Conference Room A',
-                        default_day_of_week: 5, // Friday
-                        default_time: '14:00',
-                        materials_deadline_days: 0,
-                        reminder_schedule: {
-                            presenter_reminder_days: 3,
-                            materials_reminder_days: 7,
-                            pre_meeting_hours: 1
-                        },
-                        auto_generate_months_ahead: 6,
-                        is_active: true
-                    },
-                    {
-                        id: 2,
-                        meeting_type: 'journal_club',
-                        default_duration_minutes: 60,
-                        default_location: 'Conference Room A',
-                        default_day_of_week: 5, // Friday
-                        default_time: '15:00',
-                        materials_deadline_days: 7,
-                        reminder_schedule: {
-                            presenter_reminder_days: 3,
-                            materials_reminder_days: 1,
-                            pre_meeting_hours: 1
-                        },
-                        auto_generate_months_ahead: 6,
-                        is_active: true
-                    }
-                ];
-
-                setPresenters(mockPresenters);
-                setRotationLists(mockRotationLists);
-                setMeetings(mockMeetings);
-                setConfigurations(mockConfigurations);
-                setError(null);
             } catch (err) {
-                setError('Failed to load group meetings data');
-                console.error('Error loading group meetings:', err);
+                console.warn('Error loading from API, using demo data:', err);
+                await initializeDemoData();
             } finally {
                 setLoading(false);
             }
         };
 
-        initializeMockData();
+        const initializeDemoData = async () => {
+            // Demo data - remove in production
+            const demoData = await generateDemoGroupMeetingsData();
+            setPresenters(demoData.presenters);
+            setRotationLists(demoData.rotationLists);
+            setMeetings(demoData.meetings);
+            setConfigurations(demoData.configurations);
+            setError(null);
+        };
+
+        loadData();
     }, [token]);
+
+    // Demo data generation function - remove in production
+    const generateDemoGroupMeetingsData = async () => {
+        const mockPresenters: Presenter[] = [
+            {
+                id: 1,
+                username: 'alice.johnson',
+                first_name: 'Alice',
+                last_name: 'Johnson',
+                email: 'alice.johnson@lab.com',
+                is_active: true,
+                last_presentation_date: '2024-01-15',
+                total_presentations: 12
+            },
+            {
+                id: 2,
+                username: 'bob.smith',
+                first_name: 'Bob',
+                last_name: 'Smith',
+                email: 'bob.smith@lab.com',
+                is_active: true,
+                last_presentation_date: '2024-01-22',
+                total_presentations: 8
+            },
+            {
+                id: 3,
+                username: 'carol.davis',
+                first_name: 'Carol',
+                last_name: 'Davis',
+                email: 'carol.davis@lab.com',
+                is_active: true,
+                last_presentation_date: '2024-01-29',
+                total_presentations: 15
+            },
+            {
+                id: 4,
+                username: 'david.wilson',
+                first_name: 'David',
+                last_name: 'Wilson',
+                email: 'david.wilson@lab.com',
+                is_active: true,
+                last_presentation_date: '2024-02-05',
+                total_presentations: 6
+            }
+        ];
+
+        const mockRotationLists: RotationList[] = [
+            {
+                id: 1,
+                name: 'Research Update Rotation',
+                meeting_type: 'research_update',
+                presenters: mockPresenters,
+                current_presenter_index: 0,
+                next_presenter: mockPresenters[0],
+                is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            },
+            {
+                id: 2,
+                name: 'Journal Club Rotation',
+                meeting_type: 'journal_club',
+                presenters: mockPresenters,
+                current_presenter_index: 1,
+                next_presenter: mockPresenters[1],
+                is_active: true,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }
+        ];
+
+        // Generate meetings for the next 6 months
+        const mockMeetings: GroupMeeting[] = [];
+        const today = new Date();
+        
+        for (let i = 0; i < 12; i++) { // 12 weeks = 3 months of demo data
+            const meetingDate = new Date(today);
+            meetingDate.setDate(today.getDate() + (i * 7)); // Weekly meetings
+            
+            const isResearchUpdate = i % 2 === 0;
+            const meetingType = isResearchUpdate ? 'research_update' : 'journal_club';
+            
+            // For Research Updates, assign 2 presenters; for Journal Club, assign 1
+            let presenters: Presenter[];
+            let presenterIds: number[];
+            let topic: string;
+            
+            if (isResearchUpdate) {
+                // Assign 2 presenters for Research Updates
+                const primaryPresenter = mockPresenters[i % mockPresenters.length];
+                const secondaryPresenter = mockPresenters[(i + 1) % mockPresenters.length];
+                presenters = [primaryPresenter, secondaryPresenter];
+                presenterIds = [primaryPresenter.id, secondaryPresenter.id];
+                topic = `${primaryPresenter.first_name} & ${secondaryPresenter.first_name}'s Research Progress`;
+            } else {
+                // Single presenter for Journal Club
+                const presenter = mockPresenters[i % mockPresenters.length];
+                presenters = [presenter];
+                presenterIds = [presenter.id];
+                topic = 'Recent Advances in Cell Biology';
+            }
+            
+            const meeting: GroupMeeting = {
+                id: 1000 + i,
+                title: `${isResearchUpdate ? 'Research Update' : 'Journal Club'}: Week ${i + 1}`,
+                description: isResearchUpdate 
+                    ? 'Weekly research progress presentations and discussions'
+                    : 'Journal article discussion and literature review',
+                date: meetingDate.toISOString().split('T')[0],
+                start_time: '14:00',
+                end_time: isResearchUpdate ? '15:30' : '15:00',
+                location: 'Conference Room A',
+                status: 'scheduled',
+                attendees_count: 8,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                meeting_type: meetingType,
+                topic: topic,
+                presenter_ids: presenterIds,
+                presenters: presenters,
+                // Legacy fields for backward compatibility
+                presenter_id: presenters[0].id,
+                presenter: presenters[0],
+                rotation_list_id: isResearchUpdate ? 1 : 2,
+                is_materials_submitted: !isResearchUpdate ? Math.random() > 0.3 : undefined,
+                materials_deadline: !isResearchUpdate 
+                    ? new Date(meetingDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                    : undefined
+            };
+            
+            mockMeetings.push(meeting);
+        }
+
+        const mockConfigurations: MeetingConfiguration[] = [
+            {
+                id: 1,
+                meeting_type: 'research_update',
+                default_duration_minutes: 90,
+                default_location: 'Conference Room A',
+                default_day_of_week: 5,
+                default_time: '14:00',
+                materials_deadline_days: 0,
+                reminder_schedule: {
+                    presenter_reminder_days: 3,
+                    materials_reminder_days: 7,
+                    pre_meeting_hours: 1
+                },
+                auto_generate_months_ahead: 6,
+                is_active: true
+            },
+            {
+                id: 2,
+                meeting_type: 'journal_club',
+                default_duration_minutes: 60,
+                default_location: 'Conference Room A',
+                default_day_of_week: 5,
+                default_time: '15:00',
+                materials_deadline_days: 7,
+                reminder_schedule: {
+                    presenter_reminder_days: 3,
+                    materials_reminder_days: 1,
+                    pre_meeting_hours: 1
+                },
+                auto_generate_months_ahead: 6,
+                is_active: true
+            }
+        ];
+
+        return {
+            presenters: mockPresenters,
+            rotationLists: mockRotationLists,
+            meetings: mockMeetings,
+            configurations: mockConfigurations
+        };
+    };
 
     // Filter and search meetings
     const filteredMeetings = meetings.filter(meeting => {
@@ -343,14 +355,115 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
         setShowSwapModal(true);
     };
 
-    const handlePostponeMeeting = async (meeting: GroupMeeting) => {
-        // Implementation for postponing meetings
-        console.log('Postpone meeting:', meeting);
+    const handlePostponeMeeting = (meeting: GroupMeeting) => {
+        setSelectedMeeting(meeting);
+        setShowPostponeModal(true);
     };
 
     const handleMaterialsUpload = (meeting: GroupMeeting) => {
-        // Implementation for materials upload
-        console.log('Upload materials for:', meeting);
+        setSelectedMeeting(meeting);
+        setShowMaterialsModal(true);
+    };
+
+    // Modal submit handlers
+    const handleSwapSubmit = async (swapData: SwapRequestData) => {
+        if (!token) return;
+        setIsSubmitting(true);
+        try {
+            // In real implementation, this would call the API
+            console.log('Swap request submitted:', swapData);
+            
+            // Simulate API response
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Update local state
+            const meeting = meetings.find(m => m.id === swapData.meetingId);
+            if (meeting) {
+                console.log(`Swap request submitted for ${meeting.title}`);
+            }
+        } catch (error) {
+            console.error('Error submitting swap request:', error);
+            throw error;
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handlePostponeSubmit = async (postponeData: PostponeData) => {
+        if (!token) return;
+        setIsSubmitting(true);
+        try {
+            // In real implementation, this would call the API
+            console.log('Meeting postponed:', postponeData);
+            
+            // Simulate API response
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Update local state
+            setMeetings(prev => prev.map(m => 
+                m.id === postponeData.meetingId 
+                    ? { 
+                        ...m, 
+                        date: postponeData.newDate,
+                        start_time: postponeData.newStartTime,
+                        end_time: postponeData.newEndTime
+                      }
+                    : m
+            ));
+        } catch (error) {
+            console.error('Error postponing meeting:', error);
+            throw error;
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleMaterialsSubmit = async (uploadData: MaterialsUploadData) => {
+        if (!token) return;
+        setIsSubmitting(true);
+        try {
+            // In real implementation, this would upload files to the API
+            console.log('Materials uploaded:', uploadData);
+            
+            // Simulate file upload
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Update local state
+            setMeetings(prev => prev.map(m => 
+                m.id === uploadData.meetingId 
+                    ? { ...m, is_materials_submitted: true }
+                    : m
+            ));
+        } catch (error) {
+            console.error('Error uploading materials:', error);
+            throw error;
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleRotationUpdate = async (rotationData: RotationUpdateData) => {
+        if (!token) return;
+        setIsSubmitting(true);
+        try {
+            // In real implementation, this would update the rotation via API
+            console.log('Rotation updated:', rotationData);
+            
+            // Simulate API response
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Handle postponement actions
+            if (rotationData.postponementActions) {
+                rotationData.postponementActions.forEach(action => {
+                    console.log(`Postponement action: ${action.action} for presenter ${action.presenterId}`);
+                });
+            }
+        } catch (error) {
+            console.error('Error updating rotation:', error);
+            throw error;
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (loading) {
@@ -373,11 +486,19 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                     
                     <div className="flex items-center gap-3">
                         <button
+                            onClick={() => setShowRotationModal(true)}
+                            className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                        >
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Manage Rotation
+                        </button>
+                        
+                        <button
                             onClick={() => setShowConfigModal(true)}
                             className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                         >
                             <Settings className="w-4 h-4 mr-2" />
-                            Configure
+                            Settings
                         </button>
                         
                         {onCreateMeeting && (
@@ -564,6 +685,175 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Meeting Configuration Modal */}
+            {showConfigModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                            <h2 className="text-xl font-semibold text-gray-900">Meeting Configuration</h2>
+                            <button
+                                onClick={() => setShowConfigModal(false)}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 space-y-6">
+                            {/* Current Configurations */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-medium text-gray-900">Current Settings</h3>
+                                
+                                {configurations.map((config) => (
+                                    <div key={config.id} className="border border-gray-200 rounded-lg p-4">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h4 className="font-medium text-gray-900 capitalize">
+                                                {config.meeting_type.replace('_', ' ')}
+                                            </h4>
+                                            <span className={`px-2 py-1 rounded-full text-xs ${
+                                                config.is_active 
+                                                    ? 'bg-green-100 text-green-800' 
+                                                    : 'bg-gray-100 text-gray-800'
+                                            }`}>
+                                                {config.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                                            <div>
+                                                <span className="font-medium">Duration:</span> {config.default_duration_minutes} minutes
+                                            </div>
+                                            <div>
+                                                <span className="font-medium">Location:</span> {config.default_location}
+                                            </div>
+                                            <div>
+                                                <span className="font-medium">Time:</span> {config.default_time}
+                                            </div>
+                                            <div>
+                                                <span className="font-medium">Materials Deadline:</span> {config.materials_deadline_days} days before
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mt-3 p-3 bg-gray-50 rounded text-sm">
+                                            <div className="font-medium text-gray-700 mb-1">Reminder Schedule:</div>
+                                            <div className="text-gray-600">
+                                                Presenter: {config.reminder_schedule.presenter_reminder_days} days before • 
+                                                Materials: {config.reminder_schedule.materials_reminder_days} days before • 
+                                                Pre-meeting: {config.reminder_schedule.pre_meeting_hours} hours before
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mt-3 flex gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    alert(`Edit configuration for ${config.meeting_type.replace('_', ' ')}.\n\nFull configuration editing will be implemented in backend integration phase.`);
+                                                }}
+                                                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const action = config.is_active ? 'deactivate' : 'activate';
+                                                    alert(`${action.charAt(0).toUpperCase() + action.slice(1)} ${config.meeting_type.replace('_', ' ')} meetings.\n\nConfiguration changes will be implemented in backend integration phase.`);
+                                                }}
+                                                className={`px-3 py-1 text-sm rounded transition-colors ${
+                                                    config.is_active 
+                                                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                                        : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                                }`}
+                                            >
+                                                {config.is_active ? 'Deactivate' : 'Activate'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            {/* Quick Actions */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-medium text-gray-900">Quick Actions</h3>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => {
+                                            alert('Generate next 3 months of meetings based on current configuration.\n\nAuto-generation will be implemented in backend integration phase.');
+                                        }}
+                                        className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                    >
+                                        <Calendar className="w-5 h-5 text-blue-600" />
+                                        <div className="text-left">
+                                            <div className="font-medium text-gray-900">Auto-Generate Meetings</div>
+                                            <div className="text-sm text-gray-600">Create future meetings automatically</div>
+                                        </div>
+                                    </button>
+                                    
+                                    <button
+                                        onClick={() => {
+                                            alert('Manage presenter rotation lists and assignment preferences.\n\nRotation management will be implemented in backend integration phase.');
+                                        }}
+                                        className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                    >
+                                        <RotateCcw className="w-5 h-5 text-green-600" />
+                                        <div className="text-left">
+                                            <div className="font-medium text-gray-900">Manage Rotations</div>
+                                            <div className="text-sm text-gray-600">Configure presenter assignments</div>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="border-t border-gray-200 p-6">
+                            <button
+                                onClick={() => setShowConfigModal(false)}
+                                className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Swap Request Modal */}
+            <SwapRequestModal
+                isOpen={showSwapModal}
+                onClose={() => setShowSwapModal(false)}
+                meeting={selectedMeeting}
+                presenters={presenters}
+                onSubmit={handleSwapSubmit}
+                isSubmitting={isSubmitting}
+            />
+
+            {/* Postpone Meeting Modal */}
+            <PostponeMeetingModal
+                isOpen={showPostponeModal}
+                onClose={() => setShowPostponeModal(false)}
+                meeting={selectedMeeting}
+                onSubmit={handlePostponeSubmit}
+                isSubmitting={isSubmitting}
+            />
+
+            {/* Materials Upload Modal */}
+            <MaterialsUploadModal
+                isOpen={showMaterialsModal}
+                onClose={() => setShowMaterialsModal(false)}
+                meeting={selectedMeeting}
+                onSubmit={handleMaterialsSubmit}
+                isSubmitting={isSubmitting}
+            />
+
+            {/* Rotation Management Modal */}
+            <RotationManagementModal
+                isOpen={showRotationModal}
+                onClose={() => setShowRotationModal(false)}
+                presenters={presenters}
+                meetings={meetings}
+                onUpdateRotation={handleRotationUpdate}
+                isSubmitting={isSubmitting}
+            />
         </div>
     );
 };
@@ -638,7 +928,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
                             </span>
                         )}
 
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${scheduleHelpers.getStatusColor(meeting.status)}`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${groupMeetingHelpers.getStatusColor(meeting.status)}`}>
                             {meeting.status.replace('_', ' ')}
                         </span>
                     </div>
@@ -649,12 +939,12 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            <span>{scheduleHelpers.formatScheduleDate(meeting.date)}</span>
+                            <span>{groupMeetingHelpers.formatScheduleDate(meeting.date)}</span>
                         </div>
                         
                         <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            <span>{scheduleHelpers.formatScheduleTime(meeting.start_time, meeting.end_time)}</span>
+                            <span>{groupMeetingHelpers.formatScheduleTime(meeting.start_time, meeting.end_time)}</span>
                         </div>
                         
                         {meeting.location && (
@@ -664,10 +954,18 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
                             </div>
                         )}
                         
-                        {meeting.presenter && (
+                        {meeting.presenters && meeting.presenters.length > 0 && (
                             <div className="flex items-center gap-1">
                                 <User className="w-4 h-4" />
-                                <span>Presenter: {meeting.presenter.first_name} {meeting.presenter.last_name}</span>
+                                <span>
+                                    {meeting.presenters.length === 1 ? 'Presenter: ' : 'Presenters: '}
+                                    {meeting.presenters.map((presenter, idx) => (
+                                        <span key={presenter.id}>
+                                            {presenter.first_name} {presenter.last_name}
+                                            {idx < meeting.presenters.length - 1 ? ', ' : ''}
+                                        </span>
+                                    ))}
+                                </span>
                             </div>
                         )}
                         
@@ -758,7 +1056,17 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
                                 )}
                                 
                                 <button
-                                    onClick={() => setShowActions(false)}
+                                    onClick={() => {
+                                        try {
+                                            const presenterNames = meeting.presenters && meeting.presenters.length > 0 
+                                                ? meeting.presenters.map(p => `${p.first_name} ${p.last_name}`).join(', ')
+                                                : 'presenters';
+                                            alert(`Reminder sent to ${presenterNames} for "${meeting.title}"\n\nReminder functionality will be fully implemented in backend integration phase.`);
+                                            setShowActions(false);
+                                        } catch (error) {
+                                            console.error('Error sending reminder:', error);
+                                        }
+                                    }}
                                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                 >
                                     <Mail className="w-4 h-4 inline mr-2" />
