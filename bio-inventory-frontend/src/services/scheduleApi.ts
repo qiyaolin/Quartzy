@@ -199,6 +199,117 @@ export const scheduleApi = {
     }
     
     return response.json();
+  },
+
+  // Initialize default schedules (meetings and tasks)
+  initializeDefaultSchedules: async (token: string): Promise<Schedule[]> => {
+    try {
+      const response = await fetch(buildApiUrl(`${API_ENDPOINTS.SCHEDULES}initialize_defaults/`), {
+        method: 'POST',
+        headers: { 'Authorization': `Token ${token}` }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to initialize default schedules: ${response.statusText}`);
+      }
+      
+      return response.json();
+    } catch (error) {
+      // If API is not available, create mock default schedules
+      console.info('Initialize API not available, creating mock schedules');
+      
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      const nextMonth = new Date(today);
+      nextMonth.setMonth(today.getMonth() + 1);
+      
+      const defaultSchedules: Schedule[] = [
+        // Group Meetings
+        {
+          id: Date.now() + 1,
+          title: 'Weekly Lab Meeting - Research Updates',
+          description: 'Weekly team meeting to discuss research progress, findings, and upcoming presentations. Each member presents their current work and research developments.',
+          date: nextWeek.toISOString().split('T')[0],
+          start_time: '14:00',
+          end_time: '15:30',
+          location: 'Conference Room A',
+          status: 'scheduled',
+          attendees_count: 8,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 2,
+          title: 'Journal Club Session',
+          description: 'Bi-weekly journal discussion where team members present and discuss recent publications relevant to our research areas.',
+          date: new Date(nextWeek.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          start_time: '15:00',
+          end_time: '16:00',
+          location: 'Main Lab',
+          status: 'scheduled',
+          attendees_count: 6,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 3,
+          title: 'Monthly Safety Training',
+          description: 'Mandatory monthly laboratory safety training covering protocols, emergency procedures, and equipment safety guidelines.',
+          date: nextMonth.toISOString().split('T')[0],
+          start_time: '10:00',
+          end_time: '11:30',
+          location: 'Training Room',
+          status: 'scheduled',
+          attendees_count: 12,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        
+        // Recurring Tasks
+        {
+          id: Date.now() + 4,
+          title: 'Equipment Calibration Check',
+          description: 'Monthly calibration verification for all sensitive measurement equipment including microscopes, scales, and analytical instruments.',
+          date: new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          start_time: '09:00',
+          end_time: '12:00',
+          location: 'Equipment Room',
+          status: 'scheduled',
+          attendees_count: 2,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 5,
+          title: 'Inventory Audit and Restocking',
+          description: 'Weekly inventory review, expiration date checks, and restocking of consumables and reagents.',
+          date: new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          start_time: '13:00',
+          end_time: '15:00',
+          location: 'Storage Area',
+          status: 'scheduled',
+          attendees_count: 3,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 6,
+          title: 'Waste Disposal and Lab Cleanup',
+          description: 'Bi-weekly hazardous waste collection, general lab cleanup, and maintenance of common areas.',
+          date: new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          start_time: '16:00',
+          end_time: '17:30',
+          location: 'Entire Lab',
+          status: 'scheduled',
+          attendees_count: 4,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+      
+      return defaultSchedules;
+    }
   }
 };
 
@@ -289,6 +400,56 @@ export const equipmentApi = {
     }
     
     return response.json();
+  },
+
+  // Create new equipment
+  createEquipment: async (token: string, equipmentData: Omit<Equipment, 'id' | 'created_at' | 'updated_at' | 'is_in_use' | 'current_user' | 'current_checkin_time' | 'current_usage_duration'>): Promise<Equipment> => {
+    const response = await fetch(buildApiUrl('schedule/equipment/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(equipmentData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to create equipment: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Update equipment
+  updateEquipment: async (token: string, id: number, equipmentData: Partial<Equipment>): Promise<Equipment> => {
+    const response = await fetch(buildApiUrl(`schedule/equipment/${id}/`), {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(equipmentData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to update equipment: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Delete equipment
+  deleteEquipment: async (token: string, id: number): Promise<void> => {
+    const response = await fetch(buildApiUrl(`schedule/equipment/${id}/`), {
+      method: 'DELETE',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to delete equipment: ${response.statusText}`);
+    }
   },
 
   // QR Code check-in
@@ -395,6 +556,109 @@ export const equipmentApi = {
     }
     
     return response.json();
+  },
+
+  // Initialize default equipment
+  initializeDefaultEquipment: async (token: string): Promise<Equipment[]> => {
+    try {
+      const response = await fetch(buildApiUrl('schedule/equipment/initialize_defaults/'), {
+        method: 'POST',
+        headers: { 'Authorization': `Token ${token}` }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to initialize default equipment: ${response.statusText}`);
+      }
+      
+      return response.json();
+    } catch (error) {
+      // If API is not available, create mock default equipment
+      console.info('Initialize equipment API not available, creating mock equipment');
+      
+      const defaultEquipment: Equipment[] = [
+        {
+          id: Date.now() + 101,
+          name: 'Microscope - Zeiss Axio Observer',
+          description: 'Advanced inverted microscope for live cell imaging and fluorescence microscopy. Equipped with multiple objectives and LED illumination system.',
+          location: 'Imaging Room A',
+          is_bookable: true,
+          requires_qr_checkin: true,
+          qr_code: 'EQ-MICROSCOPE-001',
+          is_in_use: false,
+          current_user: undefined,
+          current_checkin_time: undefined,
+          current_usage_duration: undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 102,
+          name: 'Analytical Balance - Mettler Toledo',
+          description: 'High precision analytical balance with 0.1mg readability for accurate weighing of samples and reagents.',
+          location: 'Preparation Room',
+          is_bookable: true,
+          requires_qr_checkin: true,
+          qr_code: 'EQ-BALANCE-002',
+          is_in_use: false,
+          current_user: undefined,
+          current_checkin_time: undefined,
+          current_usage_duration: undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 103,
+          name: 'PCR Thermal Cycler',
+          description: 'DNA amplification system for PCR reactions. 96-well capacity with gradient functionality for temperature optimization.',
+          location: 'Molecular Biology Lab',
+          is_bookable: true,
+          requires_qr_checkin: false,
+          qr_code: undefined,
+          is_in_use: true,
+          current_user: {
+            username: 'researcher1',
+            first_name: 'Sarah',
+            last_name: 'Johnson'
+          },
+          current_checkin_time: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          current_usage_duration: '2 hours 15 minutes',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 104,
+          name: 'Centrifuge - Eppendorf 5424R',
+          description: 'Refrigerated microcentrifuge for sample preparation and separation. Variable speed control with cooling capability.',
+          location: 'General Lab Area',
+          is_bookable: false,
+          requires_qr_checkin: false,
+          qr_code: undefined,
+          is_in_use: false,
+          current_user: undefined,
+          current_checkin_time: undefined,
+          current_usage_duration: undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        {
+          id: Date.now() + 105,
+          name: 'Flow Cytometer - BD FACSCanto II',
+          description: 'Multi-color flow cytometry system for cell analysis and sorting. Equipped with blue, red, and violet lasers.',
+          location: 'Flow Cytometry Core',
+          is_bookable: true,
+          requires_qr_checkin: true,
+          qr_code: 'EQ-FLOWCYT-005',
+          is_in_use: false,
+          current_user: undefined,
+          current_checkin_time: undefined,
+          current_usage_duration: undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ];
+      
+      return defaultEquipment;
+    }
   }
 };
 

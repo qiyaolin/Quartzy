@@ -10,8 +10,12 @@ import {
     ScheduleFormData, scheduleHelpers 
 } from '../services/scheduleApi.ts';
 import ScheduleFormModal from '../modals/ScheduleFormModal.tsx';
+import GroupMeetingFormModal from '../modals/GroupMeetingFormModal.tsx';
+import RecurringTaskFormModal from '../modals/RecurringTaskFormModal.tsx';
 import EquipmentQRScanner from '../components/EquipmentQRScanner.tsx';
 import EquipmentQRDisplay from '../components/EquipmentQRDisplay.tsx';
+import CalendarView from '../components/CalendarView.tsx';
+import EquipmentManagement from '../components/EquipmentManagement.tsx';
 
 type TabType = 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
 
@@ -38,6 +42,8 @@ const SchedulePage: React.FC = () => {
     
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isGroupMeetingModalOpen, setIsGroupMeetingModalOpen] = useState(false);
+    const [isRecurringTaskModalOpen, setIsRecurringTaskModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [qrScanMode, setQrScanMode] = useState<'checkin' | 'checkout'>('checkin');
@@ -72,6 +78,40 @@ const SchedulePage: React.FC = () => {
         }
     }, [token]);
 
+    const initializeData = useCallback(async () => {
+        setLoading(true);
+        try {
+            // Check if we have any schedules, if not initialize defaults
+            const existingSchedules = await scheduleApi.getSchedules(token);
+            if (existingSchedules.length === 0) {
+                console.info('No existing schedules found, initializing defaults');
+                const defaultSchedules = await scheduleApi.initializeDefaultSchedules(token);
+                setSchedules(defaultSchedules);
+            } else {
+                setSchedules(existingSchedules);
+            }
+            
+            // Check if we have any equipment, if not initialize defaults  
+            const existingEquipment = await equipmentApi.getEquipment(token);
+            if (existingEquipment.length === 0) {
+                console.info('No existing equipment found, initializing defaults');
+                const defaultEquipment = await equipmentApi.initializeDefaultEquipment(token);
+                setEquipment(defaultEquipment);
+            } else {
+                setEquipment(existingEquipment);
+            }
+        } catch (error) {
+            console.error('Error initializing data:', error);
+            // Fallback to regular fetch
+            await Promise.all([
+                fetchSchedules(),
+                fetchEquipment()
+            ]);
+        } finally {
+            setLoading(false);
+        }
+    }, [token, fetchSchedules, fetchEquipment]);
+
     const fetchAllData = useCallback(async () => {
         setLoading(true);
         await Promise.all([
@@ -81,12 +121,12 @@ const SchedulePage: React.FC = () => {
         setLoading(false);
     }, [fetchSchedules, fetchEquipment]);
 
-    // Fetch data on mount and tab change
+    // Initialize data on mount
     useEffect(() => {
         if (token) {
-            fetchAllData();
+            initializeData();
         }
-    }, [token, fetchAllData]);
+    }, [token, initializeData]);
 
     useEffect(() => {
         if (token && activeTab === 'calendar') {
@@ -134,34 +174,16 @@ const SchedulePage: React.FC = () => {
     const handleSubmitSchedule = async (scheduleData: ScheduleFormData) => {
         setIsSubmitting(true);
         try {
-            // Try to create the schedule via API
+            // Create the schedule via API
             const newSchedule = await scheduleApi.createSchedule(token, scheduleData);
             // Add to local state
             setSchedules(prev => [newSchedule, ...prev]);
             // Refresh the schedule list
             await fetchSchedules();
         } catch (error) {
-            // If API is not available (404), just show a success message
-            // This allows the frontend to work even when backend is not ready
-            console.info('Schedule API not available, simulating success');
-            
-            // Create a mock schedule for display purposes
-            const mockSchedule: Schedule = {
-                id: Date.now(), // temporary ID
-                title: scheduleData.title,
-                description: scheduleData.description,
-                date: scheduleData.date,
-                start_time: scheduleData.start_time,
-                end_time: scheduleData.end_time,
-                location: scheduleData.location,
-                status: scheduleData.status || 'scheduled',
-                attendees_count: 0,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            };
-            
-            // Add to local state for demo purposes
-            setSchedules(prev => [mockSchedule, ...prev]);
+            console.error('Error creating schedule:', error);
+            // Re-throw error to show user feedback
+            throw error;
         } finally {
             setIsSubmitting(false);
         }
@@ -250,8 +272,8 @@ const SchedulePage: React.FC = () => {
             case 'meetings':
                 return (
                     <button 
-                        onClick={handleOpenModal}
-                        className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                        onClick={() => setIsGroupMeetingModalOpen(true)}
+                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         New Meeting
@@ -260,8 +282,8 @@ const SchedulePage: React.FC = () => {
             case 'tasks':
                 return (
                     <button 
-                        onClick={handleOpenModal}
-                        className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                        onClick={() => setIsRecurringTaskModalOpen(true)}
+                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         New Task
@@ -389,18 +411,37 @@ const SchedulePage: React.FC = () => {
                     <CalendarView 
                         schedules={filteredSchedules}
                         loading={loading}
-                        searchTerm={searchTerm}
-                        filterStatus={filterStatus}
-                        formatTime={formatTime}
+                        selectedDate={selectedDate}
+                        onDateChange={setSelectedDate}
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        onCreateEvent={(date?: string, time?: string) => {
+                            if (date) setSelectedDate(date);
+                            handleOpenModal();
+                        }}
+                        onEditEvent={(event) => {
+                            // Handle edit event
+                            console.log('Edit event:', event);
+                        }}
+                        onDeleteEvent={(eventId) => {
+                            // Handle delete event
+                            console.log('Delete event:', eventId);
+                        }}
                     />
                 )}
 
                 {activeTab === 'equipment' && (
-                    <EquipmentView 
-                        equipment={filteredEquipment}
-                        loading={loading}
+                    <EquipmentManagement 
                         onShowQRCode={handleShowQRCode}
                         onQRScan={handleOpenQRScanner}
+                        onBookEquipment={(equipment) => {
+                            console.log('Book equipment:', equipment);
+                            // Handle equipment booking
+                        }}
+                        onEditEquipment={(equipment) => {
+                            console.log('Edit equipment:', equipment);
+                            // Handle equipment editing
+                        }}
                     />
                 )}
 
@@ -435,6 +476,58 @@ const SchedulePage: React.FC = () => {
                 isSubmitting={isSubmitting}
             />
 
+            <GroupMeetingFormModal
+                isOpen={isGroupMeetingModalOpen}
+                onClose={() => setIsGroupMeetingModalOpen(false)}
+                onSubmit={async (meetingData) => {
+                    console.log('Group meeting data:', meetingData);
+                    try {
+                        // Create meeting via schedule API
+                        const newMeeting = await scheduleApi.createSchedule(token, {
+                            title: meetingData.title,
+                            description: meetingData.description,
+                            date: meetingData.date,
+                            start_time: meetingData.start_time,
+                            end_time: meetingData.end_time,
+                            location: meetingData.location,
+                            status: 'scheduled'
+                        });
+                        setSchedules(prev => [newMeeting, ...prev]);
+                        await fetchSchedules();
+                    } catch (error) {
+                        console.error('Error creating meeting:', error);
+                        throw error;
+                    }
+                }}
+                isSubmitting={isSubmitting}
+            />
+
+            <RecurringTaskFormModal
+                isOpen={isRecurringTaskModalOpen}
+                onClose={() => setIsRecurringTaskModalOpen(false)}
+                onSubmit={async (taskData) => {
+                    console.log('Recurring task data:', taskData);
+                    try {
+                        // Create task via schedule API
+                        const newTask = await scheduleApi.createSchedule(token, {
+                            title: taskData.title,
+                            description: taskData.description,
+                            date: taskData.date,
+                            start_time: taskData.start_time,
+                            end_time: taskData.end_time,
+                            location: taskData.location,
+                            status: 'scheduled'
+                        });
+                        setSchedules(prev => [newTask, ...prev]);
+                        await fetchSchedules();
+                    } catch (error) {
+                        console.error('Error creating task:', error);
+                        throw error;
+                    }
+                }}
+                isSubmitting={isSubmitting}
+            />
+
             <EquipmentQRScanner
                 isOpen={isQRScannerOpen}
                 onClose={handleCloseQRScanner}
@@ -453,8 +546,8 @@ const SchedulePage: React.FC = () => {
     );
 };
 
-// Calendar View Component
-const CalendarView: React.FC<{
+// Schedule List View Component
+const ScheduleListView: React.FC<{
     schedules: Schedule[];
     loading: boolean;
     searchTerm: string;
