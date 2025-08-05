@@ -33,6 +33,8 @@ urlpatterns = [
     path('api/', include('notifications.urls')),
     path('api/printing/', include('printing.urls')),
     path('api/schedule/', include('schedule.urls')),
+    # Frontend-compatible schedule API endpoints
+    path('', include('schedule.compatibility_urls')),
     # Temporarily comment out emergency migrate endpoints
     # path('admin/emergency-migrate-barcode/', emergency_migrate_barcode, name='emergency_migrate_barcode'),
     # path('admin/check-barcode-status/', check_barcode_status, name='check_barcode_status'),

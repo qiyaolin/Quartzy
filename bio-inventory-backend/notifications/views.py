@@ -126,36 +126,47 @@ class NotificationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Get notification summary for the current user"""
-        user_notifications = Notification.objects.for_user(request.user)
-        
-        # Exclude expired notifications
-        now = timezone.now()
-        active_notifications = user_notifications.filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
-        )
-        
-        summary = {
-            'total': active_notifications.count(),
-            'unread': active_notifications.unread().count(),
-            'by_type': {},
-            'by_priority': {}
-        }
-        
-        # Count by type
-        for choice in Notification.TYPE_CHOICES:
-            type_key = choice[0]
-            count = active_notifications.filter(notification_type=type_key).count()
-            if count > 0:
-                summary['by_type'][type_key] = count
-        
-        # Count by priority
-        for choice in Notification.PRIORITY_CHOICES:
-            priority_key = choice[0]
-            count = active_notifications.filter(priority=priority_key).count()
-            if count > 0:
-                summary['by_priority'][priority_key] = count
-        
-        return Response(summary)
+        try:
+            user_notifications = Notification.objects.for_user(request.user)
+            
+            # Exclude expired notifications
+            now = timezone.now()
+            active_notifications = user_notifications.filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+            )
+            
+            summary = {
+                'total': active_notifications.count(),
+                'unread': active_notifications.filter(is_read=False).count(),
+                'by_type': {},
+                'by_priority': {}
+            }
+            
+            # Count by type
+            for choice in Notification.TYPE_CHOICES:
+                type_key = choice[0]
+                count = active_notifications.filter(notification_type=type_key).count()
+                if count > 0:
+                    summary['by_type'][type_key] = count
+            
+            # Count by priority
+            for choice in Notification.PRIORITY_CHOICES:
+                priority_key = choice[0]
+                count = active_notifications.filter(priority=priority_key).count()
+                if count > 0:
+                    summary['by_priority'][priority_key] = count
+            
+            return Response(summary)
+            
+        except Exception as e:
+            # Return a safe default summary if there's an error
+            return Response({
+                'total': 0,
+                'unread': 0,
+                'by_type': {},
+                'by_priority': {},
+                'error': f'Error retrieving notification summary: {str(e)}'
+            })
 
 
 class NotificationPreferenceViewSet(viewsets.ModelViewSet):
