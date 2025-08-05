@@ -16,6 +16,9 @@ import EquipmentQRScanner from '../components/EquipmentQRScanner.tsx';
 import EquipmentQRDisplay from '../components/EquipmentQRDisplay.tsx';
 import CalendarView from '../components/CalendarView.tsx';
 import EquipmentManagement from '../components/EquipmentManagement.tsx';
+import GroupMeetingsManager from '../components/GroupMeetingsManager.tsx';
+import PresenterManagement from '../components/PresenterManagement.tsx';
+import MeetingEditModal from '../modals/MeetingEditModal.tsx';
 
 type TabType = 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
 
@@ -49,6 +52,8 @@ const SchedulePage: React.FC = () => {
     const [qrScanMode, setQrScanMode] = useState<'checkin' | 'checkout'>('checkin');
     const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
     const [showQRDisplay, setShowQRDisplay] = useState(false);
+    const [isMeetingEditModalOpen, setIsMeetingEditModalOpen] = useState(false);
+    const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
 
     // Fetch functions
     const fetchSchedules = useCallback(async () => {
@@ -446,9 +451,12 @@ const SchedulePage: React.FC = () => {
                 )}
 
                 {activeTab === 'meetings' && (
-                    <MeetingsView 
-                        schedules={filteredSchedules.filter(s => s.title?.toLowerCase().includes('meeting'))}
-                        loading={loading}
+                    <GroupMeetingsManager 
+                        onCreateMeeting={() => setIsGroupMeetingModalOpen(true)}
+                        onEditMeeting={(meeting) => {
+                            setSelectedMeeting(meeting);
+                            setIsMeetingEditModalOpen(true);
+                        }}
                     />
                 )}
 
@@ -542,6 +550,30 @@ const SchedulePage: React.FC = () => {
                     equipment={selectedEquipment}
                 />
             )}
+
+            <MeetingEditModal
+                isOpen={isMeetingEditModalOpen}
+                meeting={selectedMeeting}
+                onClose={() => {
+                    setIsMeetingEditModalOpen(false);
+                    setSelectedMeeting(null);
+                }}
+                onSave={async (meeting) => {
+                    console.log('Save meeting:', meeting);
+                    // In real implementation, call API to save meeting
+                    await fetchSchedules();
+                }}
+                onSwapRequest={async (swapRequest) => {
+                    console.log('Swap request:', swapRequest);
+                    // In real implementation, call API to submit swap request
+                }}
+                onPostpone={async (meetingId, newDate, reason) => {
+                    console.log('Postpone meeting:', meetingId, newDate, reason);
+                    // In real implementation, call API to postpone meeting
+                    await fetchSchedules();
+                }}
+                isSubmitting={isSubmitting}
+            />
         </div>
     );
 };
