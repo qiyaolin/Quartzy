@@ -4,7 +4,11 @@ from .views import (
     EventViewSet, EquipmentViewSet, BookingViewSet, 
     GroupMeetingViewSet, MeetingPresenterRotationViewSet, 
     RecurringTaskViewSet, TaskInstanceViewSet,
-    EquipmentUsageLogViewSet, WaitingQueueEntryViewSet
+    EquipmentUsageLogViewSet, WaitingQueueEntryViewSet,
+    # Intelligent Meeting Management Views
+    MeetingConfigurationViewSet, MeetingInstanceViewSet, PresenterViewSet,
+    RotationSystemViewSet, QueueEntryViewSet, SwapRequestViewSet,
+    PresentationHistoryViewSet, IntelligentMeetingDashboardViewSet
 )
 
 # 创建路由器并注册视图集

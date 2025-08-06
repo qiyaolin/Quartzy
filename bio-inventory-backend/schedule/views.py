@@ -7,13 +7,21 @@ from django.utils.dateparse import parse_date
 from django.utils import timezone
 from .models import (
     Event, Equipment, Booking, GroupMeeting, MeetingPresenterRotation, 
-    RecurringTask, TaskInstance, EquipmentUsageLog, WaitingQueueEntry
+    RecurringTask, TaskInstance, EquipmentUsageLog, WaitingQueueEntry,
+    # Intelligent Meeting Management Models
+    MeetingConfiguration, MeetingInstance, Presenter, RotationSystem,
+    QueueEntry, SwapRequest, PresentationHistory
 )
 from .serializers import (
     EventSerializer, EquipmentSerializer, BookingSerializer, 
     GroupMeetingSerializer, MeetingPresenterRotationSerializer, 
     RecurringTaskSerializer, TaskInstanceSerializer, CalendarEventSerializer,
-    EquipmentUsageLogSerializer, WaitingQueueEntrySerializer, QRCodeScanSerializer
+    EquipmentUsageLogSerializer, WaitingQueueEntrySerializer, QRCodeScanSerializer,
+    # Intelligent Meeting Management Serializers
+    MeetingConfigurationSerializer, MeetingInstanceSerializer, PresenterSerializer,
+    RotationSystemSerializer, QueueEntrySerializer, SwapRequestSerializer,
+    PresentationHistorySerializer, IntelligentMeetingDashboardSerializer,
+    JournalClubSubmissionSerializer, MeetingGenerationSerializer
 )
 
 
@@ -748,3 +756,562 @@ class WaitingQueueEntryViewSet(viewsets.ModelViewSet):
             'queue_entries': serializer.data,
             'count': queue_entries.count()
         })
+
+
+# ===============================================
+# Intelligent Meeting Management ViewSets
+# ===============================================
+
+class MeetingConfigurationViewSet(viewsets.ModelViewSet):
+    """Meeting configuration management API"""
+    queryset = MeetingConfiguration.objects.all()
+    serializer_class = MeetingConfigurationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Only one configuration should exist, but return queryset for API consistency
+        return MeetingConfiguration.objects.all()
+    
+    def perform_create(self, serializer):
+        """Set creator when creating configuration"""
+        serializer.save(created_by=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def current_config(self, request):
+        """Get current meeting configuration (there should only be one)"""
+        try:
+            config = MeetingConfiguration.objects.first()
+            if config:
+                serializer = self.get_serializer(config)
+                return Response(serializer.data)
+            else:
+                return Response(
+                    {'message': 'No meeting configuration found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False, methods=['post'])
+    def initialize_default(self, request):
+        """Initialize default meeting configuration"""
+        if MeetingConfiguration.objects.exists():
+            return Response(
+                {'error': 'Meeting configuration already exists'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        config = MeetingConfiguration.objects.create(
+            day_of_week=1,  # Monday
+            start_time='10:00',
+            location='Conference Room',
+            created_by=request.user
+        )
+        
+        serializer = self.get_serializer(config)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class MeetingInstanceViewSet(viewsets.ModelViewSet):
+    """Meeting instance management API"""
+    queryset = MeetingInstance.objects.all()
+    serializer_class = MeetingInstanceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = MeetingInstance.objects.select_related('event').prefetch_related('presenters')
+        
+        # Filter by meeting type
+        meeting_type = self.request.query_params.get('meeting_type')
+        if meeting_type:
+            queryset = queryset.filter(meeting_type=meeting_type)
+        
+        # Filter by status
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        # Filter by date range
+        start_date = self.request.query_params.get('start_date')
+        if start_date:
+            try:
+                start_date = parse_date(start_date)
+                queryset = queryset.filter(date__gte=start_date)
+            except ValueError:
+                pass
+        
+        end_date = self.request.query_params.get('end_date')
+        if end_date:
+            try:
+                end_date = parse_date(end_date)
+                queryset = queryset.filter(date__lte=end_date)
+            except ValueError:
+                pass
+        
+        return queryset.order_by('-date')
+    
+    @action(detail=False, methods=['get'])
+    def upcoming(self, request):
+        """Get upcoming meetings"""
+        today = timezone.now().date()
+        upcoming_meetings = self.get_queryset().filter(
+            date__gte=today,
+            status__in=['scheduled', 'confirmed']
+        ).order_by('date')[:10]
+        
+        serializer = self.get_serializer(upcoming_meetings, many=True)
+        return Response({
+            'upcoming_meetings': serializer.data,
+            'count': upcoming_meetings.count()
+        })
+    
+    @action(detail=False, methods=['post'])
+    def generate_meetings(self, request):
+        """Generate meetings for a date range"""
+        serializer = MeetingGenerationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Implementation would go here to generate meetings
+        # This is a complex operation that would involve the fair rotation algorithm
+        return Response(
+            {'message': 'Meeting generation not yet implemented'}, 
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Mark meeting as completed"""
+        meeting = self.get_object()
+        meeting.status = 'completed'
+        meeting.actual_duration = request.data.get('actual_duration')
+        meeting.notes = request.data.get('notes', meeting.notes)
+        meeting.save()
+        
+        # Mark all presenters as completed
+        meeting.presenters.update(status='completed')
+        
+        serializer = self.get_serializer(meeting)
+        return Response(serializer.data)
+
+
+class PresenterViewSet(viewsets.ModelViewSet):
+    """Presenter management API"""
+    queryset = Presenter.objects.all()
+    serializer_class = PresenterSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = Presenter.objects.select_related(
+            'meeting_instance', 'user', 'meeting_instance__event'
+        )
+        
+        # Filter by user
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        # Filter by meeting type
+        meeting_type = self.request.query_params.get('meeting_type')
+        if meeting_type:
+            queryset = queryset.filter(meeting_instance__meeting_type=meeting_type)
+        
+        # Filter by status
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        return queryset.order_by('-meeting_instance__date', 'order')
+    
+    @action(detail=False, methods=['get'])
+    def my_presentations(self, request):
+        """Get current user's presentations"""
+        presentations = self.get_queryset().filter(user=request.user)
+        
+        # Separate by status
+        upcoming = presentations.filter(
+            meeting_instance__date__gte=timezone.now().date(),
+            status__in=['assigned', 'confirmed']
+        ).order_by('meeting_instance__date')
+        
+        completed = presentations.filter(
+            status='completed'
+        ).order_by('-meeting_instance__date')[:10]
+        
+        return Response({
+            'upcoming_presentations': self.get_serializer(upcoming, many=True).data,
+            'completed_presentations': self.get_serializer(completed, many=True).data,
+            'upcoming_count': upcoming.count(),
+            'completed_count': completed.count()
+        })
+    
+    @action(detail=True, methods=['post'])
+    def submit_materials(self, request, pk=None):
+        """Submit presentation materials"""
+        presenter = self.get_object()
+        
+        if presenter.user != request.user:
+            return Response(
+                {'error': 'You can only submit materials for your own presentations'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = JournalClubSubmissionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update presenter with submitted materials
+        data = serializer.validated_data
+        presenter.paper_title = data.get('paper_title', presenter.paper_title)
+        presenter.paper_url = data.get('paper_url', presenter.paper_url)
+        if data.get('paper_file'):
+            presenter.paper_file = data['paper_file']
+        presenter.materials_submitted_at = timezone.now()
+        presenter.status = 'confirmed'
+        presenter.save()
+        
+        return Response({
+            'message': 'Materials submitted successfully',
+            'presenter': self.get_serializer(presenter).data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def confirm_presentation(self, request, pk=None):
+        """Confirm presentation"""
+        presenter = self.get_object()
+        
+        if presenter.user != request.user:
+            return Response(
+                {'error': 'You can only confirm your own presentations'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        presenter.status = 'confirmed'
+        presenter.save()
+        
+        return Response({
+            'message': 'Presentation confirmed',
+            'presenter': self.get_serializer(presenter).data
+        })
+
+
+class RotationSystemViewSet(viewsets.ModelViewSet):
+    """Rotation system management API"""
+    queryset = RotationSystem.objects.all()
+    serializer_class = RotationSystemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = RotationSystem.objects.prefetch_related('queue_entries')
+        
+        # Filter by active status
+        is_active = self.request.query_params.get('is_active')
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        return queryset
+    
+    @action(detail=True, methods=['get'])
+    def queue_status(self, request, pk=None):
+        """Get rotation queue status"""
+        rotation_system = self.get_object()
+        
+        queue_entries = QueueEntry.objects.filter(
+            rotation_system=rotation_system
+        ).select_related('user').order_by('-priority', 'last_presented_date')
+        
+        serializer = QueueEntrySerializer(queue_entries, many=True)
+        return Response({
+            'rotation_system': self.get_serializer(rotation_system).data,
+            'queue_entries': serializer.data,
+            'queue_size': queue_entries.count()
+        })
+    
+    @action(detail=True, methods=['post'])
+    def recalculate_priorities(self, request, pk=None):
+        """Recalculate all priority scores in the rotation system"""
+        rotation_system = self.get_object()
+        
+        queue_entries = QueueEntry.objects.filter(rotation_system=rotation_system)
+        for entry in queue_entries:
+            entry.calculate_priority()
+        
+        return Response({
+            'message': f'Recalculated priorities for {queue_entries.count()} entries',
+            'recalculated_count': queue_entries.count()
+        })
+
+
+class QueueEntryViewSet(viewsets.ModelViewSet):
+    """Queue entry management API"""
+    queryset = QueueEntry.objects.all()
+    serializer_class = QueueEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return QueueEntry.objects.select_related(
+            'rotation_system', 'user'
+        ).order_by('-priority', 'last_presented_date')
+    
+    @action(detail=True, methods=['post'])
+    def recalculate_priority(self, request, pk=None):
+        """Recalculate priority for this entry"""
+        entry = self.get_object()
+        old_priority = entry.priority
+        new_priority = entry.calculate_priority()
+        
+        return Response({
+            'message': 'Priority recalculated',
+            'old_priority': old_priority,
+            'new_priority': new_priority,
+            'entry': self.get_serializer(entry).data
+        })
+
+
+class SwapRequestViewSet(viewsets.ModelViewSet):
+    """Swap request management API"""
+    queryset = SwapRequest.objects.all()
+    serializer_class = SwapRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = SwapRequest.objects.select_related(
+            'requester', 'original_presentation', 'target_presentation', 'admin_approved_by'
+        )
+        
+        # Filter by status
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        # Filter by request type
+        request_type = self.request.query_params.get('request_type')
+        if request_type:
+            queryset = queryset.filter(request_type=request_type)
+        
+        # Filter by user (either as requester or target)
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(
+                Q(requester_id=user_id) | 
+                Q(target_presentation__user_id=user_id)
+            )
+        
+        return queryset.order_by('-created_at')
+    
+    def perform_create(self, serializer):
+        """Set requester when creating swap request"""
+        serializer.save(requester=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def my_requests(self, request):
+        """Get current user's swap requests"""
+        # Requests made by current user
+        my_requests = self.get_queryset().filter(requester=request.user)
+        
+        # Requests targeting current user's presentations
+        target_requests = self.get_queryset().filter(
+            target_presentation__user=request.user,
+            status='pending'
+        )
+        
+        return Response({
+            'my_requests': self.get_serializer(my_requests, many=True).data,
+            'target_requests': self.get_serializer(target_requests, many=True).data,
+            'my_requests_count': my_requests.count(),
+            'target_requests_count': target_requests.count()
+        })
+    
+    @action(detail=True, methods=['post'])
+    def approve_by_target(self, request, pk=None):
+        """Approve swap request by target user"""
+        swap_request = self.get_object()
+        
+        if (swap_request.request_type != 'swap' or 
+            not swap_request.target_presentation or 
+            swap_request.target_presentation.user != request.user):
+            return Response(
+                {'error': 'Invalid request or permission denied'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        swap_request.approve_by_target_user(request.user)
+        
+        return Response({
+            'message': 'Swap request approved by target user',
+            'swap_request': self.get_serializer(swap_request).data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def approve_by_admin(self, request, pk=None):
+        """Approve swap request by admin"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Admin permission required'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        swap_request = self.get_object()
+        swap_request.approve_by_admin(request.user)
+        
+        return Response({
+            'message': 'Swap request approved by admin',
+            'swap_request': self.get_serializer(swap_request).data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Reject swap request"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Admin permission required'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        swap_request = self.get_object()
+        reason = request.data.get('reason', 'Rejected by admin')
+        swap_request.reject(reason)
+        
+        return Response({
+            'message': 'Swap request rejected',
+            'swap_request': self.get_serializer(swap_request).data
+        })
+    
+    @action(detail=False, methods=['get'])
+    def pending_approvals(self, request):
+        """Get pending swap requests requiring approval"""
+        if not request.user.is_staff:
+            return Response(
+                {'error': 'Admin permission required'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        pending_requests = self.get_queryset().filter(
+            status='pending'
+        ).filter(
+            Q(admin_approved__isnull=True) | 
+            Q(target_user_approved__isnull=True)
+        )
+        
+        serializer = self.get_serializer(pending_requests, many=True)
+        return Response({
+            'pending_requests': serializer.data,
+            'count': pending_requests.count()
+        })
+
+
+class PresentationHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """Presentation history API (read-only)"""
+    queryset = PresentationHistory.objects.all()
+    serializer_class = PresentationHistorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return PresentationHistory.objects.select_related(
+            'presenter', 'presenter__user', 'presenter__meeting_instance'
+        ).order_by('-archived_at')
+    
+    @action(detail=False, methods=['get'])
+    def user_statistics(self, request):
+        """Get presentation statistics for all users"""
+        from django.db.models import Count, Sum, Avg
+        
+        stats = PresentationHistory.objects.values(
+            'presenter__user__username',
+            'presenter__user__first_name',
+            'presenter__user__last_name'
+        ).annotate(
+            total_presentations=Sum('presentation_count'),
+            total_duration=Sum('total_duration'),
+            avg_rating=Avg('average_rating')
+        ).order_by('-total_presentations')
+        
+        return Response({
+            'user_statistics': list(stats)
+        })
+
+
+# ===============================================
+# Enhanced Dashboard and Utility Views
+# ===============================================
+
+class IntelligentMeetingDashboardViewSet(viewsets.ViewSet):
+    """Intelligent meeting dashboard API"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def list(self, request):
+        """Get personalized dashboard data"""
+        user = request.user
+        today = timezone.now().date()
+        
+        # Next meeting
+        next_meeting = MeetingInstance.objects.filter(
+            date__gte=today,
+            status__in=['scheduled', 'confirmed']
+        ).order_by('date').first()
+        
+        # User's next presentation
+        my_next_presentation = Presenter.objects.filter(
+            user=user,
+            meeting_instance__date__gte=today,
+            status__in=['assigned', 'confirmed']
+        ).order_by('meeting_instance__date').first()
+        
+        # Pending swap requests involving user
+        pending_swaps = SwapRequest.objects.filter(
+            Q(requester=user) | Q(target_presentation__user=user),
+            status='pending'
+        )
+        
+        # Upcoming deadlines (Journal Club submissions)
+        upcoming_deadlines = []
+        jc_presentations = Presenter.objects.filter(
+            user=user,
+            meeting_instance__meeting_type='journal_club',
+            meeting_instance__date__gte=today,
+            status='assigned',
+            materials_submitted_at__isnull=True
+        )
+        
+        for presentation in jc_presentations:
+            config = MeetingConfiguration.objects.first()
+            if config:
+                from datetime import timedelta
+                deadline = presentation.meeting_instance.date - timedelta(
+                    days=config.jc_submission_deadline_days
+                )
+                if deadline >= today:
+                    upcoming_deadlines.append({
+                        'type': 'journal_club_submission',
+                        'presentation_id': presentation.id,
+                        'deadline': deadline,
+                        'meeting_date': presentation.meeting_instance.date,
+                        'days_remaining': (deadline - today).days
+                    })
+        
+        # Meeting statistics
+        meeting_stats = {
+            'total_meetings_this_month': MeetingInstance.objects.filter(
+                date__year=today.year,
+                date__month=today.month
+            ).count(),
+            'my_presentations_this_year': Presenter.objects.filter(
+                user=user,
+                meeting_instance__date__year=today.year
+            ).count(),
+            'pending_swap_requests': pending_swaps.count()
+        }
+        
+        dashboard_data = {
+            'next_meeting': MeetingInstanceSerializer(next_meeting).data if next_meeting else None,
+            'my_next_presentation': PresenterSerializer(my_next_presentation).data if my_next_presentation else None,
+            'pending_swap_requests': SwapRequestSerializer(pending_swaps, many=True).data,
+            'upcoming_deadlines': upcoming_deadlines,
+            'meeting_statistics': meeting_stats
+        }
+        
+        serializer = IntelligentMeetingDashboardSerializer(dashboard_data)
+        return Response(serializer.data)

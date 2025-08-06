@@ -590,7 +590,7 @@ class RecurringTask(models.Model):
 
 
 class TaskInstance(models.Model):
-    """具体的任务实例"""
+    """Specific task instance"""
     
     TASK_STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -605,30 +605,30 @@ class TaskInstance(models.Model):
         related_name='instances',
         null=True,
         blank=True,
-        help_text="关联的周期性任务"
+        help_text="Associated recurring task"
     )
     event = models.OneToOneField(
         Event,
         on_delete=models.CASCADE,
         related_name='task_instance',
-        help_text="关联的事件"
+        help_text="Associated event"
     )
     assigned_to = models.ManyToManyField(
         User,
         related_name='assigned_tasks',
-        help_text="分配给的用户"
+        help_text="Assigned users"
     )
     status = models.CharField(
         max_length=20,
         choices=TASK_STATUS_CHOICES,
         default='pending',
-        help_text="任务状态"
+        help_text="Task status"
     )
-    completion_notes = models.TextField(blank=True, null=True, help_text="完成备注")
-    completed_at = models.DateTimeField(null=True, blank=True, help_text="完成时间")
+    completion_notes = models.TextField(blank=True, null=True, help_text="Completion notes")
+    completed_at = models.DateTimeField(null=True, blank=True, help_text="Completion time")
     
     def mark_completed(self, notes=None):
-        """标记任务为完成"""
+        """Mark task as completed"""
         self.status = 'completed'
         self.completed_at = timezone.now()
         if notes:
@@ -641,3 +641,527 @@ class TaskInstance(models.Model):
     
     class Meta:
         ordering = ['event__start_time']
+
+
+# ===============================================
+# Intelligent Meeting Management Models
+# ===============================================
+
+class MeetingConfiguration(models.Model):
+    """Global meeting configuration - only one instance allowed"""
+    
+    WEEKDAY_CHOICES = [
+        (0, 'Sunday'), (1, 'Monday'), (2, 'Tuesday'), (3, 'Wednesday'),
+        (4, 'Thursday'), (5, 'Friday'), (6, 'Saturday')
+    ]
+    
+    POSTPONE_STRATEGY_CHOICES = [
+        ('skip', 'Skip this occurrence'),
+        ('cascade', 'Cascade all subsequent meetings')
+    ]
+    
+    # Schedule settings
+    day_of_week = models.IntegerField(
+        choices=WEEKDAY_CHOICES, 
+        default=1, 
+        help_text="Day of week for regular meetings (0=Sunday)"
+    )
+    start_time = models.TimeField(
+        default='10:00',
+        help_text="Regular meeting start time"
+    )
+    location = models.CharField(
+        max_length=255,
+        default='Conference Room',
+        help_text="Default meeting location"
+    )
+    
+    # Duration settings (in minutes)
+    research_update_duration = models.PositiveIntegerField(
+        default=120,
+        help_text="Research Update meeting duration in minutes"
+    )
+    journal_club_duration = models.PositiveIntegerField(
+        default=60,
+        help_text="Journal Club meeting duration in minutes"
+    )
+    
+    # Notification settings
+    jc_submission_deadline_days = models.PositiveIntegerField(
+        default=7,
+        help_text="Journal Club paper submission deadline (days before meeting)"
+    )
+    jc_final_deadline_days = models.PositiveIntegerField(
+        default=3,
+        help_text="Journal Club paper final deadline (days before meeting)"
+    )
+    
+    # Meeting management settings
+    require_admin_approval = models.BooleanField(
+        default=True,
+        help_text="Require admin approval for swap/postpone requests"
+    )
+    default_postpone_strategy = models.CharField(
+        max_length=20,
+        choices=POSTPONE_STRATEGY_CHOICES,
+        default='skip',
+        help_text="Default strategy when postponing meetings"
+    )
+    
+    # Active members list
+    active_members = models.ManyToManyField(
+        User,
+        related_name='meeting_configuration_members',
+        help_text="Current active lab members"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_meeting_configs',
+        help_text="Admin who created this configuration"
+    )
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one configuration exists
+        if not self.pk and MeetingConfiguration.objects.exists():
+            raise ValueError("Only one meeting configuration is allowed")
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"Meeting Config - {self.get_day_of_week_display()} at {self.start_time}"
+    
+    class Meta:
+        verbose_name = "Meeting Configuration"
+        verbose_name_plural = "Meeting Configurations"
+
+
+class MeetingInstance(models.Model):
+    """Individual meeting instance"""
+    
+    MEETING_TYPE_CHOICES = [
+        ('research_update', 'Research Update'),
+        ('journal_club', 'Journal Club'),
+        ('special', 'Special Meeting')
+    ]
+    
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('confirmed', 'Confirmed'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+        ('postponed', 'Postponed')
+    ]
+    
+    # Basic meeting info
+    date = models.DateField(help_text="Meeting date")
+    meeting_type = models.CharField(
+        max_length=20,
+        choices=MEETING_TYPE_CHOICES,
+        help_text="Type of meeting"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='scheduled',
+        help_text="Meeting status"
+    )
+    
+    # Associated event
+    event = models.OneToOneField(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='meeting_instance',
+        help_text="Associated calendar event"
+    )
+    
+    # Meeting details
+    actual_duration = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Actual meeting duration in minutes"
+    )
+    notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Meeting notes"
+    )
+    
+    # Tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.get_meeting_type_display()} - {self.date}"
+    
+    class Meta:
+        ordering = ['date']
+        unique_together = ['date', 'meeting_type']
+
+
+class Presenter(models.Model):
+    """Presenter information for a meeting"""
+    
+    STATUS_CHOICES = [
+        ('assigned', 'Assigned'),
+        ('confirmed', 'Confirmed'),
+        ('completed', 'Completed'),
+        ('swapped', 'Swapped'),
+        ('postponed', 'Postponed')
+    ]
+    
+    meeting_instance = models.ForeignKey(
+        MeetingInstance,
+        on_delete=models.CASCADE,
+        related_name='presenters',
+        help_text="Associated meeting"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='presentations',
+        help_text="Presenter user"
+    )
+    order = models.PositiveIntegerField(
+        default=1,
+        help_text="Presentation order (for multiple presenters)"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='assigned',
+        help_text="Presenter status"
+    )
+    
+    # Content
+    topic = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Presentation topic (for Research Updates)"
+    )
+    
+    # Materials
+    paper_title = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="Paper title for Journal Club"
+    )
+    paper_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="Paper URL"
+    )
+    paper_file = models.FileField(
+        upload_to='journal_club_papers/',
+        blank=True,
+        null=True,
+        help_text="Paper PDF file"
+    )
+    slides_file = models.FileField(
+        upload_to='meeting_slides/',
+        blank=True,
+        null=True,
+        help_text="Presentation slides"
+    )
+    materials_submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When materials were submitted"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.meeting_instance}"
+    
+    class Meta:
+        ordering = ['meeting_instance__date', 'order']
+        unique_together = ['meeting_instance', 'user']
+
+
+class RotationSystem(models.Model):
+    """Presenter rotation system"""
+    
+    name = models.CharField(
+        max_length=255,
+        default="Default Rotation",
+        help_text="Rotation system name"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether this rotation system is active"
+    )
+    
+    # Rotation rules
+    min_gap_between_presentations = models.PositiveIntegerField(
+        default=4,
+        help_text="Minimum weeks between presentations for the same person"
+    )
+    max_consecutive_presenters = models.PositiveIntegerField(
+        default=2,
+        help_text="Maximum consecutive presenters in one meeting"
+    )
+    fairness_weight = models.FloatField(
+        default=1.0,
+        help_text="Weight for fairness calculation"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        verbose_name = "Rotation System"
+
+
+class QueueEntry(models.Model):
+    """Individual queue entry for presenter rotation"""
+    
+    rotation_system = models.ForeignKey(
+        RotationSystem,
+        on_delete=models.CASCADE,
+        related_name='queue_entries',
+        help_text="Associated rotation system"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='rotation_queue_entries',
+        help_text="User in rotation queue"
+    )
+    
+    # Queue position and scheduling
+    next_scheduled_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Next scheduled presentation date"
+    )
+    last_presented_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date of last presentation"
+    )
+    postpone_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times presentation was postponed"
+    )
+    priority = models.FloatField(
+        default=50.0,
+        help_text="Priority score calculated by fairness algorithm"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def calculate_priority(self):
+        """Calculate priority based on fairness algorithm"""
+        # Implementation of fairness calculation
+        base_score = 100.0
+        
+        # Add points for time since last presentation
+        if self.last_presented_date:
+            days_since = (timezone.now().date() - self.last_presented_date).days
+            weeks_since = days_since / 7
+            base_score += weeks_since * 10
+        else:
+            base_score += 200  # Never presented before
+        
+        # Subtract points for postponements
+        base_score -= self.postpone_count * 20
+        
+        self.priority = max(0, base_score)
+        self.save()
+        
+        return self.priority
+    
+    def __str__(self):
+        return f"{self.user.username} - Priority: {self.priority}"
+    
+    class Meta:
+        ordering = ['-priority', 'last_presented_date']
+        unique_together = ['rotation_system', 'user']
+
+
+class SwapRequest(models.Model):
+    """Request for swapping or postponing presentations"""
+    
+    REQUEST_TYPE_CHOICES = [
+        ('swap', 'Swap with another presenter'),
+        ('postpone', 'Postpone presentation')
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled')
+    ]
+    
+    # Request details
+    request_type = models.CharField(
+        max_length=20,
+        choices=REQUEST_TYPE_CHOICES,
+        help_text="Type of request"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        help_text="Request status"
+    )
+    
+    # Requester and original presentation
+    requester = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='swap_requests',
+        help_text="User making the request"
+    )
+    original_presentation = models.ForeignKey(
+        Presenter,
+        on_delete=models.CASCADE,
+        related_name='original_swap_requests',
+        help_text="Original presentation to be swapped/postponed"
+    )
+    
+    # Swap details (for swap requests)
+    target_presentation = models.ForeignKey(
+        Presenter,
+        on_delete=models.CASCADE,
+        related_name='target_swap_requests',
+        null=True,
+        blank=True,
+        help_text="Target presentation to swap with"
+    )
+    
+    # Request details
+    reason = models.TextField(help_text="Reason for the request")
+    
+    # Approval tracking
+    target_user_approved = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Whether target user approved the swap"
+    )
+    target_user_approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When target user approved"
+    )
+    admin_approved = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Whether admin approved the request"
+    )
+    admin_approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When admin approved"
+    )
+    admin_approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_swap_requests',
+        help_text="Admin who approved the request"
+    )
+    
+    # Cascading effect (for postpone requests)
+    cascade_effect = models.CharField(
+        max_length=20,
+        choices=[('skip', 'Skip'), ('cascade', 'Cascade')],
+        null=True,
+        blank=True,
+        help_text="How postponement affects subsequent meetings"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def can_approve(self):
+        """Check if request can be approved"""
+        if self.request_type == 'swap':
+            return (self.target_user_approved == True and 
+                   self.admin_approved == True)
+        else:  # postpone
+            return self.admin_approved == True
+    
+    def approve_by_target_user(self, user):
+        """Approve by target user (for swap requests)"""
+        if (self.request_type == 'swap' and 
+            self.target_presentation and 
+            self.target_presentation.user == user):
+            self.target_user_approved = True
+            self.target_user_approved_at = timezone.now()
+            self.save()
+    
+    def approve_by_admin(self, admin_user):
+        """Approve by admin"""
+        self.admin_approved = True
+        self.admin_approved_at = timezone.now()
+        self.admin_approved_by = admin_user
+        
+        # If all approvals are in place, mark as approved
+        if self.can_approve():
+            self.status = 'approved'
+        
+        self.save()
+    
+    def reject(self, reason=None):
+        """Reject the request"""
+        self.status = 'rejected'
+        if reason:
+            self.reason += f"\n\nRejection reason: {reason}"
+        self.save()
+    
+    def __str__(self):
+        return f"{self.get_request_type_display()} - {self.requester.username} ({self.status})"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
+class PresentationHistory(models.Model):
+    """Historical record of presentations"""
+    
+    presenter = models.ForeignKey(
+        Presenter,
+        on_delete=models.CASCADE,
+        related_name='history_records',
+        help_text="Presenter record"
+    )
+    
+    # Analytics data
+    presentation_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Total number of presentations by this user"
+    )
+    total_duration = models.PositiveIntegerField(
+        default=0,
+        help_text="Total presentation time in minutes"
+    )
+    average_rating = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Average presentation rating"
+    )
+    
+    # Metadata
+    archived_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"History - {self.presenter.user.username}"
+    
+    class Meta:
+        ordering = ['-archived_at']
+        verbose_name = "Presentation History"
+        verbose_name_plural = "Presentation Histories"
