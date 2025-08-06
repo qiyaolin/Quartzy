@@ -80,226 +80,37 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     const [selectedMeeting, setSelectedMeeting] = useState<GroupMeeting | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Load data from API - fallback to mock data if API not available
-    useEffect(() => {
+    // Load data from API
+    const loadData = useCallback(async () => {
         if (!token) return;
+        
+        setLoading(true);
+        try {
+            const [meetingsData, presentersData, configurationsData] = await Promise.all([
+                groupMeetingApi.getMeetings(token),
+                groupMeetingApi.getActiveUsers(token),
+                groupMeetingApi.getConfigurations(token)
+            ]);
 
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                // Try to load from API first
-                const [meetingsData, presentersData, configurationsData] = await Promise.all([
-                    groupMeetingApi.getGroupMeetings(token).catch(() => []),
-                    groupMeetingApi.getPresenters(token).catch(() => []),
-                    groupMeetingApi.getMeetingConfigurations(token).catch(() => [])
-                ]);
-
-                // If API returns data, use it
-                if (meetingsData.length > 0 || presentersData.length > 0) {
-                    setMeetings(meetingsData);
-                    setPresenters(presentersData);
-                    setConfigurations(configurationsData);
-                    setError(null);
-                } else {
-                    // Fallback to mock data for demonstration
-                    console.info('API endpoints not fully implemented, using demo data');
-                    await initializeDemoData();
-                }
-            } catch (err) {
-                console.warn('Error loading from API, using demo data:', err);
-                await initializeDemoData();
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        const initializeDemoData = async () => {
-            // Demo data - remove in production
-            const demoData = await generateDemoGroupMeetingsData();
-            setPresenters(demoData.presenters);
-            setRotationLists(demoData.rotationLists);
-            setMeetings(demoData.meetings);
-            setConfigurations(demoData.configurations);
+                setMeetings(meetingsData || []);
+            setPresenters(presentersData || []);
+            setConfigurations(configurationsData || []);
             setError(null);
-        };
-
-        loadData();
+        } catch (err) {
+            console.error('Error loading Schedule data:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to load schedule data: ${errorMessage}. Please check your connection and try again.`);
+            setMeetings([]);
+            setPresenters([]);
+            setConfigurations([]);
+        } finally {
+            setLoading(false);
+        }
     }, [token]);
 
-    // Demo data generation function - remove in production
-    const generateDemoGroupMeetingsData = async () => {
-        const mockPresenters: Presenter[] = [
-            {
-                id: 1,
-                username: 'alice.johnson',
-                first_name: 'Alice',
-                last_name: 'Johnson',
-                email: 'alice.johnson@lab.com',
-                is_active: true,
-                last_presentation_date: '2024-01-15',
-                total_presentations: 12
-            },
-            {
-                id: 2,
-                username: 'bob.smith',
-                first_name: 'Bob',
-                last_name: 'Smith',
-                email: 'bob.smith@lab.com',
-                is_active: true,
-                last_presentation_date: '2024-01-22',
-                total_presentations: 8
-            },
-            {
-                id: 3,
-                username: 'carol.davis',
-                first_name: 'Carol',
-                last_name: 'Davis',
-                email: 'carol.davis@lab.com',
-                is_active: true,
-                last_presentation_date: '2024-01-29',
-                total_presentations: 15
-            },
-            {
-                id: 4,
-                username: 'david.wilson',
-                first_name: 'David',
-                last_name: 'Wilson',
-                email: 'david.wilson@lab.com',
-                is_active: true,
-                last_presentation_date: '2024-02-05',
-                total_presentations: 6
-            }
-        ];
-
-        const mockRotationLists: RotationList[] = [
-            {
-                id: 1,
-                name: 'Research Update Rotation',
-                meeting_type: 'research_update',
-                presenters: mockPresenters,
-                current_presenter_index: 0,
-                next_presenter: mockPresenters[0],
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            },
-            {
-                id: 2,
-                name: 'Journal Club Rotation',
-                meeting_type: 'journal_club',
-                presenters: mockPresenters,
-                current_presenter_index: 1,
-                next_presenter: mockPresenters[1],
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            }
-        ];
-
-        // Generate meetings for the next 6 months
-        const mockMeetings: GroupMeeting[] = [];
-        const today = new Date();
-        
-        for (let i = 0; i < 12; i++) { // 12 weeks = 3 months of demo data
-            const meetingDate = new Date(today);
-            meetingDate.setDate(today.getDate() + (i * 7)); // Weekly meetings
-            
-            const isResearchUpdate = i % 2 === 0;
-            const meetingType = isResearchUpdate ? 'research_update' : 'journal_club';
-            
-            // For Research Updates, assign 2 presenters; for Journal Club, assign 1
-            let presenters: Presenter[];
-            let presenterIds: number[];
-            let topic: string;
-            
-            if (isResearchUpdate) {
-                // Assign 2 presenters for Research Updates
-                const primaryPresenter = mockPresenters[i % mockPresenters.length];
-                const secondaryPresenter = mockPresenters[(i + 1) % mockPresenters.length];
-                presenters = [primaryPresenter, secondaryPresenter];
-                presenterIds = [primaryPresenter.id, secondaryPresenter.id];
-                topic = `${primaryPresenter.first_name} & ${secondaryPresenter.first_name}'s Research Progress`;
-            } else {
-                // Single presenter for Journal Club
-                const presenter = mockPresenters[i % mockPresenters.length];
-                presenters = [presenter];
-                presenterIds = [presenter.id];
-                topic = 'Recent Advances in Cell Biology';
-            }
-            
-            const meeting: GroupMeeting = {
-                id: 1000 + i,
-                title: `${isResearchUpdate ? 'Research Update' : 'Journal Club'}: Week ${i + 1}`,
-                description: isResearchUpdate 
-                    ? 'Weekly research progress presentations and discussions'
-                    : 'Journal article discussion and literature review',
-                date: meetingDate.toISOString().split('T')[0],
-                start_time: '14:00',
-                end_time: isResearchUpdate ? '15:30' : '15:00',
-                location: 'Conference Room A',
-                status: 'scheduled',
-                attendees_count: 8,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-                meeting_type: meetingType,
-                topic: topic,
-                presenter_ids: presenterIds,
-                presenters: presenters,
-                // Legacy fields for backward compatibility
-                presenter_id: presenters[0].id,
-                presenter: presenters[0],
-                rotation_list_id: isResearchUpdate ? 1 : 2,
-                is_materials_submitted: !isResearchUpdate ? Math.random() > 0.3 : undefined,
-                materials_deadline: !isResearchUpdate 
-                    ? new Date(meetingDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-                    : undefined
-            };
-            
-            mockMeetings.push(meeting);
-        }
-
-        const mockConfigurations: MeetingConfiguration[] = [
-            {
-                id: 1,
-                meeting_type: 'research_update',
-                default_duration_minutes: 90,
-                default_location: 'Conference Room A',
-                default_day_of_week: 5,
-                default_time: '14:00',
-                materials_deadline_days: 0,
-                reminder_schedule: {
-                    presenter_reminder_days: 3,
-                    materials_reminder_days: 7,
-                    pre_meeting_hours: 1
-                },
-                auto_generate_months_ahead: 6,
-                is_active: true
-            },
-            {
-                id: 2,
-                meeting_type: 'journal_club',
-                default_duration_minutes: 60,
-                default_location: 'Conference Room A',
-                default_day_of_week: 5,
-                default_time: '15:00',
-                materials_deadline_days: 7,
-                reminder_schedule: {
-                    presenter_reminder_days: 3,
-                    materials_reminder_days: 1,
-                    pre_meeting_hours: 1
-                },
-                auto_generate_months_ahead: 6,
-                is_active: true
-            }
-        ];
-
-        return {
-            presenters: mockPresenters,
-            rotationLists: mockRotationLists,
-            meetings: mockMeetings,
-            configurations: mockConfigurations
-        };
-    };
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     // Filter and search meetings
     const filteredMeetings = meetings.filter(meeting => {
@@ -307,8 +118,10 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
         const matchesSearch = !searchTerm || 
             meeting.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             meeting.topic.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            meeting.presenter?.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            meeting.presenter?.last_name.toLowerCase().includes(searchTerm.toLowerCase());
+            (meeting.presenters && meeting.presenters.some(p => 
+                p.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                p.last_name.toLowerCase().includes(searchTerm.toLowerCase())
+            ));
         
         // Date filtering based on view mode
         const meetingDate = new Date(meeting.date);
@@ -653,7 +466,22 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
             {/* Error Display */}
             {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-600">{error}</p>
+                    <div className="flex items-start justify-between">
+                        <div className="flex">
+                            <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 mr-3" />
+                            <div>
+                                <h3 className="text-sm font-medium text-red-800">Connection Error</h3>
+                                <p className="text-sm text-red-700 mt-1">{error}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={loadData}
+                            disabled={loading}
+                            className="ml-3 bg-red-100 text-red-800 hover:bg-red-200 px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                            {loading ? 'Retrying...' : 'Retry'}
+                        </button>
+                    </div>
                 </div>
             )}
 

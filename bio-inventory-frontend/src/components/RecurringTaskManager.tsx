@@ -31,30 +31,33 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Load data
-    useEffect(() => {
+    const loadData = useCallback(async () => {
         if (!token) return;
+        
+        setLoading(true);
+        try {
+            const [tasksData, usersData] = await Promise.all([
+                groupMeetingApi.getRecurringTasks(token),
+                groupMeetingApi.getActiveUsers(token)
+            ]);
 
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                const [tasksData, usersData] = await Promise.all([
-                    groupMeetingApi.getRecurringTasks(token),
-                    groupMeetingApi.getActiveUsers(token)
-                ]);
-
-                setTasks(tasksData);
-                setUsers(usersData.filter(u => u.username !== 'admin' && u.username !== 'print_server'));
-                setError(null);
-            } catch (err) {
-                setError('Failed to load recurring tasks data');
-                console.error('Error loading recurring tasks:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        loadData();
+            setTasks(tasksData || []);
+            setUsers((usersData || []).filter(u => u.username !== 'admin' && u.username !== 'print_server'));
+            setError(null);
+        } catch (err) {
+            console.error('Error loading recurring tasks:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+            setError(`Failed to load recurring tasks: ${errorMessage}. Please check your connection and try again.`);
+            setTasks([]);
+            setUsers([]);
+        } finally {
+            setLoading(false);
+        }
     }, [token]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const handleAssignTask = async (task: RecurringTask) => {
         if (!token) return;
@@ -296,7 +299,22 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
             {/* Error Display */}
             {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-600">{error}</p>
+                    <div className="flex items-start justify-between">
+                        <div className="flex">
+                            <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 mr-3" />
+                            <div>
+                                <h3 className="text-sm font-medium text-red-800">Connection Error</h3>
+                                <p className="text-sm text-red-700 mt-1">{error}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={loadData}
+                            disabled={loading}
+                            className="ml-3 bg-red-100 text-red-800 hover:bg-red-200 px-3 py-1 rounded text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                            {loading ? 'Retrying...' : 'Retry'}
+                        </button>
+                    </div>
                 </div>
             )}
 

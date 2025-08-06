@@ -122,10 +122,6 @@ export const groupMeetingApi = {
         });
         
         if (!response.ok) {
-            if (response.status === 404) {
-                console.info('Group meetings API not implemented yet, returning mock data');
-                return generateMockMeetings();
-            }
             throw new Error(`Failed to fetch meetings: ${response.statusText}`);
         }
         
@@ -194,10 +190,6 @@ export const groupMeetingApi = {
         });
         
         if (!response.ok) {
-            if (response.status === 404) {
-                console.info('Meeting configurations API not implemented yet, returning mock data');
-                return generateMockConfigurations();
-            }
             throw new Error(`Failed to fetch configurations: ${response.statusText}`);
         }
         
@@ -247,10 +239,6 @@ export const groupMeetingApi = {
         });
         
         if (!response.ok) {
-            if (response.status === 404) {
-                console.info('Recurring tasks API not implemented yet, returning mock data');
-                return generateMockRecurringTasks();
-            }
             throw new Error(`Failed to fetch recurring tasks: ${response.statusText}`);
         }
         
@@ -301,10 +289,6 @@ export const groupMeetingApi = {
         });
         
         if (!response.ok) {
-            if (response.status === 404) {
-                console.info('Users API not implemented yet, returning mock data');
-                return generateMockUsers();
-            }
             throw new Error(`Failed to fetch users: ${response.statusText}`);
         }
         
@@ -327,10 +311,6 @@ export const groupMeetingApi = {
         });
         
         if (!response.ok) {
-            if (response.status === 404) {
-                console.info('Presenter selection API not implemented yet, using client-side logic');
-                return selectPresentersClientSide(meetingType, meetingDate);
-            }
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.detail || `Failed to select presenters: ${response.statusText}`);
         }
@@ -340,181 +320,6 @@ export const groupMeetingApi = {
     }
 };
 
-// Mock Data Generators for Development
-function generateMockUsers(): User[] {
-    return [
-        { id: 1, username: 'alice.johnson', first_name: 'Alice', last_name: 'Johnson', email: 'alice@lab.com', is_active: true, role: 'researcher' },
-        { id: 2, username: 'bob.smith', first_name: 'Bob', last_name: 'Smith', email: 'bob@lab.com', is_active: true, role: 'researcher' },
-        { id: 3, username: 'carol.davis', first_name: 'Carol', last_name: 'Davis', email: 'carol@lab.com', is_active: true, role: 'researcher' },
-        { id: 4, username: 'david.wilson', first_name: 'David', last_name: 'Wilson', email: 'david@lab.com', is_active: true, role: 'researcher' },
-        { id: 5, username: 'eve.brown', first_name: 'Eve', last_name: 'Brown', email: 'eve@lab.com', is_active: true, role: 'researcher' },
-        { id: 6, username: 'frank.miller', first_name: 'Frank', last_name: 'Miller', email: 'frank@lab.com', is_active: true, role: 'researcher' }
-    ];
-}
-
-function generateMockConfigurations(): MeetingConfiguration[] {
-    return [
-        {
-            id: 1,
-            meeting_type: 'lab_meeting',
-            title_template: 'Lab Meeting - Week {week}',
-            default_duration_minutes: 90,
-            default_location: 'Conference Room A',
-            default_day_of_week: 5, // Friday
-            default_time: '14:00',
-            presenter_count: 2,
-            auto_generate_weeks_ahead: 12,
-            is_active: true,
-            reminder_schedule: {
-                presenter_reminder_days: 3,
-                pre_meeting_hours: 2
-            },
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        },
-        {
-            id: 2,
-            meeting_type: 'journal_club',
-            title_template: 'Journal Club - Week {week}',
-            default_duration_minutes: 60,
-            default_location: 'Conference Room A',
-            default_day_of_week: 5, // Friday
-            default_time: '15:30',
-            materials_deadline_days: 7,
-            presenter_count: 1,
-            auto_generate_weeks_ahead: 12,
-            is_active: true,
-            reminder_schedule: {
-                presenter_reminder_days: 3,
-                materials_reminder_days: 1,
-                pre_meeting_hours: 2
-            },
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        }
-    ];
-}
-
-function generateMockMeetings(): GroupMeeting[] {
-    const meetings: GroupMeeting[] = [];
-    const today = new Date();
-    const mockUsers = generateMockUsers();
-    
-    // Generate meetings for next 12 weeks alternating between lab meetings and journal clubs
-    for (let i = 0; i < 12; i++) {
-        const meetingDate = new Date(today);
-        meetingDate.setDate(today.getDate() + (i * 7)); // Weekly meetings
-        
-        const isLabMeeting = i % 2 === 0;
-        const meetingType = isLabMeeting ? 'lab_meeting' : 'journal_club';
-        
-        // Select presenters based on meeting type
-        const selectedPresenters = isLabMeeting 
-            ? [mockUsers[i % mockUsers.length], mockUsers[(i + 1) % mockUsers.length]]
-            : [mockUsers[i % mockUsers.length]];
-        
-        const meeting: GroupMeeting = {
-            id: 1000 + i,
-            title: `${isLabMeeting ? 'Lab Meeting' : 'Journal Club'} - Week ${i + 1}`,
-            description: isLabMeeting 
-                ? 'Weekly research progress presentations and discussions'
-                : 'Journal article discussion and literature review',
-            date: meetingDate.toISOString().split('T')[0],
-            start_time: isLabMeeting ? '14:00' : '15:30',
-            end_time: isLabMeeting ? '15:30' : '16:30',
-            location: 'Conference Room A',
-            status: 'scheduled',
-            meeting_type: meetingType,
-            topic: isLabMeeting 
-                ? `Research Progress Updates`
-                : 'Recent Advances in Cell Biology',
-            presenter_ids: selectedPresenters.map(p => p.id),
-            presenters: selectedPresenters.map(user => ({
-                id: user.id,
-                username: user.username,
-                first_name: user.first_name,
-                last_name: user.last_name,
-                email: user.email,
-                is_active: user.is_active,
-                total_presentations: Math.floor(Math.random() * 20),
-                last_presentation_date: i > 0 ? new Date(meetingDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : undefined
-            })),
-            is_materials_submitted: !isLabMeeting ? Math.random() > 0.3 : undefined,
-            materials_deadline: !isLabMeeting 
-                ? new Date(meetingDate.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-                : undefined,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        };
-        
-        meetings.push(meeting);
-    }
-    
-    return meetings;
-}
-
-function generateMockRecurringTasks(): RecurringTask[] {
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    nextMonth.setDate(1);
-    
-    const nextQuarter = new Date();
-    nextQuarter.setMonth(Math.floor(nextQuarter.getMonth() / 3) * 3 + 3);
-    nextQuarter.setDate(1);
-    
-    return [
-        {
-            id: 1,
-            title: 'Cell Culture Room Cleaning',
-            description: 'Monthly deep cleaning of cell culture facilities including benches, incubators, and storage areas',
-            task_type: 'cell_culture_room_cleaning',
-            frequency: 'monthly',
-            assignee_count: 2,
-            location: 'Cell Culture Room',
-            estimated_duration_hours: 4,
-            auto_assign: true,
-            next_due_date: nextMonth.toISOString().split('T')[0],
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        },
-        {
-            id: 2,
-            title: 'Cell Culture Incubator Cleaning',
-            description: 'Quarterly maintenance and deep cleaning of cell culture incubators',
-            task_type: 'cell_culture_incubator_cleaning',
-            frequency: 'quarterly',
-            assignee_count: 1,
-            location: 'Cell Culture Room - Incubators',
-            estimated_duration_hours: 2,
-            auto_assign: true,
-            next_due_date: nextQuarter.toISOString().split('T')[0],
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        }
-    ];
-}
-
-// Client-side presenter selection logic (fallback when API not available)
-async function selectPresentersClientSide(meetingType: 'lab_meeting' | 'journal_club', meetingDate: string): Promise<number[]> {
-    const users = generateMockUsers();
-    const eligibleUsers = users.filter(u => u.username !== 'admin' && u.username !== 'print_server' && u.is_active);
-    
-    const presenterCount = meetingType === 'lab_meeting' ? 2 : 1;
-    const selectedIds: number[] = [];
-    
-    // Simple rotation logic - in real implementation, this would check previous assignments
-    // and avoid consecutive weeks for same presenter
-    const startIndex = Math.floor(Math.random() * eligibleUsers.length);
-    
-    for (let i = 0; i < presenterCount; i++) {
-        const userIndex = (startIndex + i) % eligibleUsers.length;
-        selectedIds.push(eligibleUsers[userIndex].id);
-    }
-    
-    return selectedIds;
-}
 
 // Helper functions
 export const groupMeetingHelpers = {
