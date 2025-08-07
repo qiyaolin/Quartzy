@@ -20,8 +20,10 @@ import GroupMeetingsManager from '../components/GroupMeetingsManager.tsx';
 import PresenterManagement from '../components/PresenterManagement.tsx';
 import RecurringTaskManager from '../components/RecurringTaskManager.tsx';
 import MeetingEditModal from '../modals/MeetingEditModal.tsx';
+import UnifiedScheduleDashboard from '../components/UnifiedScheduleDashboard.tsx';
+import QuickActions from '../components/QuickActions.tsx';
 
-type TabType = 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
+type TabType = 'dashboard' | 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
 
 const SchedulePage: React.FC = () => {
     const authContext = useContext(AuthContext);
@@ -31,7 +33,8 @@ const SchedulePage: React.FC = () => {
     const { token } = authContext;
 
     // Core state
-    const [activeTab, setActiveTab] = useState<TabType>('calendar');
+    const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+    const [availableEquipment, setAvailableEquipment] = useState<Equipment[]>([]);
     const [schedules, setSchedules] = useState<Schedule[]>([]);
     const [equipment, setEquipment] = useState<Equipment[]>([]);
     const [loading, setLoading] = useState(true);
@@ -79,6 +82,8 @@ const SchedulePage: React.FC = () => {
         try {
             const data = await equipmentApi.getEquipment(token);
             setEquipment(data);
+            // Filter available equipment for quick actions
+            setAvailableEquipment(data.filter(eq => eq.is_bookable && !eq.is_in_use));
         } catch (err) {
             console.error('Error fetching equipment:', err);
         }
@@ -135,12 +140,14 @@ const SchedulePage: React.FC = () => {
     }, [token, initializeData]);
 
     useEffect(() => {
-        if (token && activeTab === 'calendar') {
+        if (token && activeTab === 'dashboard') {
+            fetchAllData();
+        } else if (token && activeTab === 'calendar') {
             fetchSchedules();
         } else if (token && activeTab === 'equipment') {
             fetchEquipment();
         }
-    }, [token, activeTab, fetchSchedules, fetchEquipment]);
+    }, [token, activeTab, fetchSchedules, fetchEquipment, fetchAllData]);
 
     // Modal and action handlers
     const handleOpenModal = () => {
@@ -224,6 +231,7 @@ const SchedulePage: React.FC = () => {
     }
 
     const tabs = [
+        { id: 'dashboard', label: 'Dashboard', icon: CalendarDays },
         { id: 'calendar', label: 'Calendar View', icon: Calendar },
         { id: 'equipment', label: 'Equipment', icon: Monitor },
         { id: 'meetings', label: 'Group Meetings', icon: Users },
@@ -233,6 +241,18 @@ const SchedulePage: React.FC = () => {
 
     const getTabActions = () => {
         switch (activeTab) {
+            case 'dashboard':
+                return (
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleOpenModal}
+                            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            New Event
+                        </button>
+                    </div>
+                );
             case 'calendar':
                 return (
                     <div className="flex gap-2">
@@ -339,7 +359,7 @@ const SchedulePage: React.FC = () => {
 
             {/* Tab Content */}
             <div className="space-y-4">
-                {/* Controls - shown for relevant tabs */}
+                {/* Controls - shown for relevant tabs (dashboard has built-in controls) */}
                 {(activeTab === 'calendar' || activeTab === 'my-schedule' || activeTab === 'equipment') && (
                     <div className="bg-white rounded-lg border border-gray-200 p-4">
                         <div className="flex flex-col lg:flex-row lg:items-center gap-4">
@@ -413,6 +433,42 @@ const SchedulePage: React.FC = () => {
                 )}
 
                 {/* Tab Content Views */}
+                {activeTab === 'dashboard' && (
+                    <div className="space-y-6">
+                        <UnifiedScheduleDashboard 
+                            onQuickBookEquipment={(equipmentId) => {
+                                console.log('Quick book equipment:', equipmentId);
+                                // Refresh data after booking
+                                fetchAllData();
+                            }}
+                            onCompleteTask={(taskId) => {
+                                console.log('Complete task:', taskId);
+                                // Refresh data after task completion
+                                fetchAllData();
+                            }}
+                            onNavigateToAction={(actionUrl) => {
+                                console.log('Navigate to action:', actionUrl);
+                                // In real implementation, navigate to the action URL
+                            }}
+                            onRefresh={fetchAllData}
+                        />
+                        <QuickActions 
+                            availableEquipment={availableEquipment}
+                            onEquipmentBooked={(booking) => {
+                                console.log('Equipment booked:', booking);
+                                // Refresh equipment data
+                                fetchEquipment();
+                            }}
+                            onTaskCompleted={(taskId) => {
+                                console.log('Task completed:', taskId);
+                                // Refresh schedules
+                                fetchSchedules();
+                            }}
+                            onRefreshNeeded={fetchAllData}
+                        />
+                    </div>
+                )}
+
                 {activeTab === 'calendar' && (
                     <CalendarView 
                         schedules={filteredSchedules}

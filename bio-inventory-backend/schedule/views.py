@@ -36,6 +36,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count, Q, Avg, Sum
 from django.http import Http404
 from rest_framework.decorators import permission_classes
+from datetime import timedelta
 import json
 
 
@@ -2962,6 +2963,495 @@ class InitializeRotationQueuesView(APIView):
             'status': 'success',
             'message': f"Initialized rotation queues for {len(created_queues)} templates",
             'created_queues': created_queues
+        })
+
+
+# ===============================================
+# Unified Dashboard API - Phase 1 Optimization
+# ===============================================
+
+class UnifiedDashboardViewSet(viewsets.ViewSet):
+    """
+    Unified dashboard providing all schedule-related information in a single view.
+    Optimizes user experience by reducing navigation complexity.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def overview(self, request):
+        """Get unified dashboard overview for current user"""
+        user = request.user
+        today = timezone.now().date()
+        tomorrow = today + timedelta(days=1)
+        next_week = today + timedelta(days=7)
+        
+        try:
+            # Today's events
+            today_events = self._get_today_events(user, today)
+            
+            # Upcoming meetings
+            upcoming_meetings = self._get_upcoming_meetings(user, today, next_week)
+            
+            # My tasks
+            my_tasks = self._get_my_tasks(user)
+            
+            # Equipment bookings
+            equipment_bookings = self._get_equipment_bookings(user, today, next_week)
+            
+            # Pending actions requiring user attention
+            pending_actions = self._get_pending_actions(user)
+            
+            # Quick stats
+            stats = self._get_user_stats(user)
+            
+            return Response({
+                'today_events': today_events,
+                'upcoming_meetings': upcoming_meetings,
+                'my_tasks': my_tasks,
+                'equipment_bookings': equipment_bookings,
+                'pending_actions': pending_actions,
+                'stats': stats,
+                'last_updated': timezone.now()
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to load dashboard: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _get_today_events(self, user, today):
+        """Get all events for today"""
+        events = Event.objects.filter(
+            start_time__date=today
+        ).select_related().order_by('start_time')
+        
+        today_events = []
+        for event in events:
+            event_data = {
+                'id': event.id,
+                'title': event.title,
+                'start_time': event.start_time,
+                'end_time': event.end_time,
+                'event_type': event.event_type,
+                'description': event.description,
+                'is_mine': False
+            }
+            
+            # Check if user is involved
+            if event.event_type == 'booking' and hasattr(event, 'booking'):
+                event_data['is_mine'] = event.booking.user == user
+                event_data['equipment_name'] = event.booking.equipment.name
+                event_data['status'] = event.booking.status
+            elif event.event_type == 'meeting' and hasattr(event, 'meeting_instance'):
+                presenters = event.meeting_instance.presenters.all()
+                event_data['is_mine'] = any(p.user == user for p in presenters)
+                event_data['meeting_type'] = event.meeting_instance.meeting_type
+            elif event.event_type == 'task' and hasattr(event, 'task_instance'):
+                assigned_users = event.task_instance.assigned_to.all()
+                event_data['is_mine'] = user in assigned_users
+                event_data['task_status'] = event.task_instance.status
+            
+            today_events.append(event_data)
+        
+        return today_events
+    
+    def _get_upcoming_meetings(self, user, start_date, end_date):
+        """Get upcoming meetings for the user"""
+        meetings = MeetingInstance.objects.filter(
+            date__gt=start_date,
+            date__lte=end_date,
+            status__in=['scheduled', 'confirmed']
+        ).prefetch_related('presenters__user').order_by('date')
+        
+        upcoming_meetings = []
+        for meeting in meetings[:5]:  # Limit to 5 most recent
+            presenters = meeting.presenters.all()
+            is_presenter = any(p.user == user for p in presenters)
+            
+            meeting_data = {
+                'id': meeting.id,
+                'date': meeting.date,
+                'meeting_type': meeting.meeting_type,
+                'status': meeting.status,
+                'is_presenter': is_presenter,
+                'presenter_names': [p.user.username for p in presenters],
+                'materials_required': meeting.meeting_type == 'journal_club',
+                'materials_submitted': False
+            }
+            
+            # Check if materials are submitted for journal club
+            if is_presenter and meeting.meeting_type == 'journal_club':
+                presenter = presenters.filter(user=user).first()
+                if presenter:
+                    meeting_data['materials_submitted'] = bool(
+                        presenter.paper_title or presenter.paper_url or presenter.paper_file
+                    )
+            
+            upcoming_meetings.append(meeting_data)
+        
+        return upcoming_meetings
+    
+    def _get_my_tasks(self, user):
+        """Get user's assigned tasks"""
+        task_instances = PeriodicTaskInstance.objects.filter(
+            current_assignees__contains=[user.id],
+            status__in=['scheduled', 'pending', 'in_progress']
+        ).select_related('template').order_by('execution_end_date')
+        
+        my_tasks = []
+        for task in task_instances:
+            task_data = {
+                'id': task.id,
+                'template_name': task.template_name,
+                'scheduled_period': task.scheduled_period,
+                'execution_start_date': task.execution_start_date,
+                'execution_end_date': task.execution_end_date,
+                'status': task.status,
+                'is_overdue': task.is_overdue(),
+                'priority': task.template.priority if task.template else 'medium',
+                'estimated_hours': task.template.estimated_hours if task.template else None,
+                'can_complete': task.can_be_completed_by(user),
+                'is_primary': task.get_primary_assignee() == user
+            }
+            my_tasks.append(task_data)
+        
+        return my_tasks
+    
+    def _get_equipment_bookings(self, user, start_date, end_date):
+        """Get user's equipment bookings"""
+        bookings = Booking.objects.filter(
+            user=user,
+            event__start_time__date__gte=start_date,
+            event__end_time__date__lte=end_date,
+            status__in=['confirmed', 'pending', 'in_progress']
+        ).select_related('equipment', 'event').order_by('event__start_time')
+        
+        equipment_bookings = []
+        for booking in bookings:
+            booking_data = {
+                'id': booking.id,
+                'equipment_name': booking.equipment.name,
+                'equipment_location': booking.equipment.location,
+                'start_time': booking.event.start_time,
+                'end_time': booking.event.end_time,
+                'status': booking.status,
+                'requires_qr_checkin': booking.equipment.requires_qr_checkin,
+                'is_today': booking.event.start_time.date() == start_date,
+                'time_until': (booking.event.start_time - timezone.now()).total_seconds() / 3600 if booking.event.start_time > timezone.now() else None
+            }
+            equipment_bookings.append(booking_data)
+        
+        return equipment_bookings
+    
+    def _get_pending_actions(self, user):
+        """Get actions requiring user attention"""
+        pending_actions = []
+        
+        # Journal Club material submissions needed
+        jc_meetings = MeetingInstance.objects.filter(
+            meeting_type='journal_club',
+            date__gt=timezone.now().date(),
+            presenters__user=user,
+            presenters__materials_submitted_at__isnull=True
+        ).prefetch_related('presenters')
+        
+        for meeting in jc_meetings:
+            presenter = meeting.presenters.filter(user=user).first()
+            if presenter:
+                days_until = (meeting.date - timezone.now().date()).days
+                urgency = 'high' if days_until <= 3 else 'medium' if days_until <= 7 else 'low'
+                
+                pending_actions.append({
+                    'type': 'journal_club_submission',
+                    'title': 'Submit Journal Club Paper',
+                    'description': f'Paper submission required for {meeting.date}',
+                    'urgency': urgency,
+                    'due_date': meeting.date,
+                    'days_remaining': days_until,
+                    'action_url': f'/schedule/meetings/{meeting.id}/paper-submission/',
+                    'meeting_id': meeting.id
+                })
+        
+        # Task swap requests pending approval
+        if user.is_staff:
+            pending_swaps = TaskSwapRequest.objects.filter(
+                status='pending',
+                admin_approved__isnull=True
+            ).select_related('from_user', 'task_instance__template')
+            
+            for swap in pending_swaps:
+                pending_actions.append({
+                    'type': 'task_swap_approval',
+                    'title': 'Task Swap Request',
+                    'description': f'{swap.from_user.username} requests to swap {swap.task_instance.template_name}',
+                    'urgency': 'medium',
+                    'action_url': f'/schedule/task-swap-requests/{swap.id}/',
+                    'swap_id': swap.id
+                })
+        
+        # Meeting swap requests for user
+        meeting_swaps = SwapRequest.objects.filter(
+            target_presentation__user=user,
+            status='pending',
+            target_user_approved__isnull=True
+        ).select_related('requester', 'original_presentation__meeting_instance')
+        
+        for swap in meeting_swaps:
+            pending_actions.append({
+                'type': 'meeting_swap_approval',
+                'title': 'Meeting Swap Request',
+                'description': f'{swap.requester.username} wants to swap presentation for {swap.original_presentation.meeting_instance.date}',
+                'urgency': 'medium',
+                'action_url': f'/schedule/swap-requests/{swap.id}/',
+                'swap_id': swap.id
+            })
+        
+        return pending_actions
+    
+    def _get_user_stats(self, user):
+        """Get user statistics"""
+        now = timezone.now()
+        this_year = now.year
+        
+        # Presentations this year
+        presentations_count = Presenter.objects.filter(
+            user=user,
+            meeting_instance__date__year=this_year,
+            status='completed'
+        ).count()
+        
+        # Tasks completed this year
+        tasks_completed = PeriodicTaskInstance.objects.filter(
+            current_assignees__contains=[user.id],
+            status='completed',
+            completed_at__year=this_year
+        ).count()
+        
+        # Equipment usage hours this month
+        usage_logs = EquipmentUsageLog.objects.filter(
+            user=user,
+            check_in_time__month=now.month,
+            check_in_time__year=now.year,
+            is_active=False
+        )
+        
+        total_hours = 0
+        for log in usage_logs:
+            if log.usage_duration:
+                total_hours += log.usage_duration.total_seconds() / 3600
+        
+        return {
+            'presentations_this_year': presentations_count,
+            'tasks_completed_this_year': tasks_completed,
+            'equipment_hours_this_month': round(total_hours, 1),
+            'active_bookings': Booking.objects.filter(
+                user=user,
+                status__in=['confirmed', 'in_progress']
+            ).count(),
+            'pending_swap_requests': TaskSwapRequest.objects.filter(
+                from_user=user,
+                status='pending'
+            ).count()
+        }
+
+
+# ===============================================
+# Quick Action APIs - Phase 2 Optimization  
+# ===============================================
+
+class QuickActionViewSet(viewsets.ViewSet):
+    """
+    Quick actions for streamlined user interactions.
+    Reduces multi-step workflows to single actions.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['post'])
+    def quick_book_equipment(self, request):
+        """One-click equipment booking with intelligent defaults"""
+        equipment_id = request.data.get('equipment_id')
+        duration_minutes = request.data.get('duration_minutes', 60)
+        start_time_str = request.data.get('start_time')  # Optional, defaults to now
+        auto_checkin = request.data.get('auto_checkin', False)
+        
+        try:
+            equipment = Equipment.objects.get(id=equipment_id, is_bookable=True)
+        except Equipment.DoesNotExist:
+            return Response(
+                {'error': 'Equipment not found or not bookable'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Parse start time or use now
+        if start_time_str:
+            try:
+                start_time = timezone.datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid start_time format'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            start_time = timezone.now()
+        
+        end_time = start_time + timedelta(minutes=duration_minutes)
+        
+        # Check for conflicts
+        conflicts = Booking.objects.filter(
+            equipment=equipment,
+            event__start_time__lt=end_time,
+            event__end_time__gt=start_time,
+            status__in=['confirmed', 'pending']
+        )
+        
+        if conflicts.exists():
+            return Response(
+                {'error': 'Time slot conflicts with existing booking'}, 
+                status=status.HTTP_409_CONFLICT
+            )
+        
+        # Create event and booking
+        event = Event.objects.create(
+            title=f"{equipment.name} Booking",
+            start_time=start_time,
+            end_time=end_time,
+            event_type='booking',
+            description=f"Quick booking by {request.user.username}",
+            created_by=request.user
+        )
+        
+        booking = Booking.objects.create(
+            event=event,
+            user=request.user,
+            equipment=equipment,
+            status='confirmed',
+            notes=f"Quick booking - {duration_minutes} minutes"
+        )
+        
+        # Auto check-in if requested and equipment supports QR
+        if auto_checkin and equipment.requires_qr_checkin and not equipment.is_in_use:
+            try:
+                equipment.check_in_user(request.user)
+                booking.status = 'in_progress'
+                booking.save()
+            except ValueError as e:
+                # Booking created but check-in failed
+                pass
+        
+        return Response({
+            'status': 'success',
+            'message': f'Equipment booked successfully for {duration_minutes} minutes',
+            'booking': {
+                'id': booking.id,
+                'equipment_name': equipment.name,
+                'start_time': start_time,
+                'end_time': end_time,
+                'status': booking.status,
+                'auto_checked_in': auto_checkin and equipment.requires_qr_checkin and not equipment.is_in_use
+            }
+        })
+    
+    @action(detail=False, methods=['post'])
+    def extend_booking(self, request):
+        """Extend current booking duration"""
+        booking_id = request.data.get('booking_id')
+        extra_minutes = request.data.get('extra_minutes', 30)
+        
+        try:
+            booking = Booking.objects.get(
+                id=booking_id,
+                user=request.user,
+                status__in=['confirmed', 'in_progress']
+            )
+        except Booking.DoesNotExist:
+            return Response(
+                {'error': 'Booking not found or not owned by user'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculate new end time
+        new_end_time = booking.event.end_time + timedelta(minutes=extra_minutes)
+        
+        # Check for conflicts with the extension
+        conflicts = Booking.objects.filter(
+            equipment=booking.equipment,
+            event__start_time__lt=new_end_time,
+            event__end_time__gt=booking.event.end_time,
+            status__in=['confirmed', 'pending']
+        ).exclude(id=booking.id)
+        
+        if conflicts.exists():
+            next_booking = conflicts.order_by('event__start_time').first()
+            max_extension = (next_booking.event.start_time - booking.event.end_time).total_seconds() / 60
+            return Response(
+                {
+                    'error': f'Cannot extend by {extra_minutes} minutes. Maximum extension: {int(max_extension)} minutes',
+                    'max_extension_minutes': int(max_extension)
+                }, 
+                status=status.HTTP_409_CONFLICT
+            )
+        
+        # Update booking
+        booking.event.end_time = new_end_time
+        booking.event.save()
+        
+        return Response({
+            'status': 'success',
+            'message': f'Booking extended by {extra_minutes} minutes',
+            'new_end_time': new_end_time
+        })
+    
+    @action(detail=False, methods=['post'])
+    def complete_task(self, request):
+        """Quick task completion with optional evidence upload"""
+        task_id = request.data.get('task_id')
+        completion_notes = request.data.get('completion_notes', '')
+        completion_duration = request.data.get('completion_duration')  # in minutes
+        completion_rating = request.data.get('completion_rating')  # 1-5 scale
+        
+        try:
+            task = PeriodicTaskInstance.objects.get(id=task_id)
+        except PeriodicTaskInstance.DoesNotExist:
+            return Response(
+                {'error': 'Task not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if not task.can_be_completed_by(request.user):
+            return Response(
+                {'error': 'You are not assigned to this task'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Complete the task
+        completion_data = {
+            'completion_notes': completion_notes,
+        }
+        
+        if completion_duration:
+            completion_data['completion_duration'] = completion_duration
+        if completion_rating:
+            completion_data['completion_rating'] = completion_rating
+        
+        task.mark_completed(request.user, **completion_data)
+        
+        # Update queue member statistics
+        if hasattr(task.template, 'rotation_queue'):
+            queue_member = QueueMember.objects.filter(
+                rotation_queue=task.template.rotation_queue,
+                user=request.user
+            ).first()
+            if queue_member:
+                completion_hours = completion_duration / 60 if completion_duration else None
+                queue_member.update_completion_stats(completion_hours)
+        
+        return Response({
+            'status': 'success',
+            'message': 'Task completed successfully',
+            'completed_at': task.completed_at,
+            'completion_duration': task.completion_duration,
+            'completion_rating': task.completion_rating
         })
 
 
