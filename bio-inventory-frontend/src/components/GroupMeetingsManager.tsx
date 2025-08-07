@@ -13,7 +13,7 @@ import {
     MeetingConfiguration, 
     groupMeetingHelpers 
 } from '../services/groupMeetingApi.ts';
-import { scheduleApi } from '../services/scheduleApi.ts';
+import { scheduleApi, intelligentMeetingApi } from '../services/scheduleApi.ts';
 import SwapRequestModal, { SwapRequestData } from '../modals/SwapRequestModal.tsx';
 import PostponeMeetingModal, { PostponeData } from '../modals/PostponeMeetingModal.tsx';
 import MaterialsUploadModal, { MaterialsUploadData } from '../modals/MaterialsUploadModal.tsx';
@@ -291,7 +291,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
             const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1); // Start tomorrow
             const endDate = new Date(today.getFullYear(), today.getMonth() + 3, today.getDate()); // 3 months from now
             
-            const result = await scheduleApi.generateMeetings(token, {
+            const result = await intelligentMeetingApi.generateMeetings(token, {
                 start_date: startDate.toISOString().split('T')[0],
                 end_date: endDate.toISOString().split('T')[0],
                 meeting_types: ['research_update', 'journal_club'],
@@ -598,6 +598,8 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                                 onSwap={handleSwapRequest}
                                 onPostpone={handlePostponeMeeting}
                                 onUploadMaterials={handleMaterialsUpload}
+                                onSendReminder={handleSendMeetingReminder}
+                                isSubmitting={isSubmitting}
                             />
                         ))}
                     </div>
@@ -783,6 +785,8 @@ interface MeetingCardProps {
     onSwap?: (meeting: GroupMeeting) => void;
     onPostpone?: (meeting: GroupMeeting) => void;
     onUploadMaterials?: (meeting: GroupMeeting) => void;
+    onSendReminder: (meeting: GroupMeeting) => Promise<void>;
+    isSubmitting: boolean;
 }
 
 const MeetingCard: React.FC<MeetingCardProps> = ({
@@ -790,7 +794,9 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
     onEdit,
     onSwap,
     onPostpone,
-    onUploadMaterials
+    onUploadMaterials,
+    onSendReminder,
+    isSubmitting
 }) => {
     const [showActions, setShowActions] = useState(false);
     
@@ -976,7 +982,7 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
                                 <button
                                     onClick={async () => {
                                         try {
-                                            await handleSendMeetingReminder(meeting);
+                                            await onSendReminder(meeting);
                                             setShowActions(false);
                                         } catch (error) {
                                             console.error('Error sending reminder:', error);

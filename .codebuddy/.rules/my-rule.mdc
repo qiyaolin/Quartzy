@@ -1,0 +1,9 @@
+---
+description: 
+globs:
+alwaysApply: true
+---
+# my-rule
+1. 项目部署在云端Google Cloud服务，本地无法访问后端服务器。
+2. 后端数据库的迁移和构建都是使用脚本在云端自动完成的
+3. 项目必须使用全英文

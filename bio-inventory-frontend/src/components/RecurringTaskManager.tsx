@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
     Calendar, Clock, Users, MapPin, Plus, Edit3, Settings, 
     Repeat, CheckCircle, AlertCircle, User, Trash2, MoreHorizontal,

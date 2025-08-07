@@ -16,9 +16,9 @@ echo "🔍 验证核心模块..."
 python -c "import django; print(f'Django: {django.get_version()}')" || echo "Django导入失败"
 python -c "import rest_framework; print('DRF可用')" || echo "DRF导入失败"
 
-# 智能迁移修复
-echo "🔄 处理数据库迁移..."
-python fix_migrations.py || echo "迁移修复跳过"
+# 智能迁移修复 - 专门处理索引冲突
+echo "🔄 处理数据库迁移和索引冲突..."
+python fix_index_conflict.py || echo "索引冲突修复跳过"
 
 # 运行迁移（使用安全模式）
 python manage.py migrate --fake-initial || echo "初始迁移跳过"

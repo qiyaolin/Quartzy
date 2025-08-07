@@ -1,4 +1,4 @@
-import React, { useState, useContext, useMemo } from 'react';
+import React, { useState, useContext, useMemo, useCallback } from 'react';
 import {
     Zap, Monitor, Clock, CheckCircle, AlertTriangle, 
     Plus, ArrowRight, Timer, CalendarCheck, Users,
@@ -58,6 +58,54 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
     const [showFavorites, setShowFavorites] = useState(false);
     const [actionStatus, setActionStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleQuickBook = useCallback(async (equipment: Equipment) => {
+        setIsSubmitting(true);
+        try {
+            // Quick book for 1 hour starting now
+            const bookingData = {
+                equipment_id: equipment.id,
+                duration_minutes: 60,
+                auto_checkin: equipment.requires_qr_checkin
+            };
+
+            const response = await fetch(
+                buildApiUrl('schedule/quick-actions/quick_book_equipment/'),
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(bookingData)
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to book equipment');
+            }
+
+            setActionStatus({ type: 'success', message: `${equipment.name} booked successfully!` });
+            onEquipmentBooked?.(data.booking);
+            onRefreshNeeded?.();
+            
+            setTimeout(() => setActionStatus(null), 3000);
+        } catch (error) {
+            setActionStatus({
+                type: 'error',
+                message: error instanceof Error ? error.message : 'Booking failed'
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [token, onEquipmentBooked, onRefreshNeeded]);
+
+    const handleQuickTask = useCallback(() => {
+        // TODO: Implement quick task creation modal
+        console.log('Quick task creation not implemented yet');
+    }, []);
 
     // Generate quick actions based on available data
     const quickActions: QuickAction[] = useMemo(() => {
@@ -145,55 +193,7 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
         );
 
         return actions;
-    }, [availableEquipment, onNavigateToTab]);
-
-    const handleQuickBook = async (equipment: Equipment) => {
-        setIsSubmitting(true);
-        try {
-            // Quick book for 1 hour starting now
-            const bookingData = {
-                equipment_id: equipment.id,
-                duration_minutes: 60,
-                auto_checkin: equipment.requires_qr_checkin
-            };
-
-            const response = await fetch(
-                buildApiUrl('schedule/quick-actions/quick_book_equipment/'),
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Token ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(bookingData)
-                }
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to book equipment');
-            }
-
-            setActionStatus({ type: 'success', message: `${equipment.name} booked successfully!` });
-            onEquipmentBooked?.(data.booking);
-            onRefreshNeeded?.();
-            
-            setTimeout(() => setActionStatus(null), 3000);
-        } catch (error) {
-            setActionStatus({
-                type: 'error',
-                message: error instanceof Error ? error.message : 'Booking failed'
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleQuickTask = () => {
-        // TODO: Implement quick task creation modal
-        console.log('Quick task creation not implemented yet');
-    };
+    }, [availableEquipment, onNavigateToTab, handleQuickBook, handleQuickTask]);
 
     const filteredActions = activeCategory === 'all' 
         ? quickActions 

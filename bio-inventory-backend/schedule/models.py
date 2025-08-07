@@ -479,7 +479,7 @@ class WaitingQueueEntry(models.Model):
     
     class Meta:
         ordering = ['equipment', 'position']
-        unique_together = ('equipment', 'time_slot', 'user')
+        # unique_together = ('equipment', 'time_slot', 'user')  # 临时注释，迁移完成后恢复
         indexes = [
             models.Index(fields=['equipment', 'status']),
             models.Index(fields=['user', 'status']),

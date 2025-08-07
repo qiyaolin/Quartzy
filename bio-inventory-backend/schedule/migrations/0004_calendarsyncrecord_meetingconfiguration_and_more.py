@@ -448,33 +448,33 @@ class Migration(migrations.Migration):
             name='user',
             field=models.ForeignKey(help_text='User in waiting queue', on_delete=django.db.models.deletion.CASCADE, related_name='waiting_queue_entries', to=settings.AUTH_USER_MODEL),
         ),
-        migrations.AddIndex(
-            model_name='equipmentusagelog',
-            index=models.Index(fields=['equipment', 'check_in_time'], name='schedule_eq_equipme_2088a1_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_eq_equipme_2088a1_idx" ON "schedule_equipmentusagelog" ("equipment_id", "check_in_time");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_eq_equipme_2088a1_idx";',
         ),
-        migrations.AddIndex(
-            model_name='equipmentusagelog',
-            index=models.Index(fields=['user', 'check_in_time'], name='schedule_eq_user_id_e03600_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_eq_user_id_e03600_idx" ON "schedule_equipmentusagelog" ("user_id", "check_in_time");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_eq_user_id_e03600_idx";',
         ),
-        migrations.AddIndex(
-            model_name='equipmentusagelog',
-            index=models.Index(fields=['is_active'], name='schedule_eq_is_acti_880401_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_eq_is_acti_880401_idx" ON "schedule_equipmentusagelog" ("is_active");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_eq_is_acti_880401_idx";',
         ),
-        migrations.AddIndex(
-            model_name='equipmentusagelog',
-            index=models.Index(fields=['check_in_time'], name='schedule_eq_check_i_811aa5_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_eq_check_i_811aa5_idx" ON "schedule_equipmentusagelog" ("check_in_time");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_eq_check_i_811aa5_idx";',
         ),
-        migrations.AddIndex(
-            model_name='waitingqueueentry',
-            index=models.Index(fields=['equipment', 'status'], name='schedule_wa_equipme_156a2c_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_wa_equipme_156a2c_idx" ON "schedule_waitingqueueentry" ("equipment_id", "status");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_wa_equipme_156a2c_idx";',
         ),
-        migrations.AddIndex(
-            model_name='waitingqueueentry',
-            index=models.Index(fields=['user', 'status'], name='schedule_wa_user_id_5afd91_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_wa_user_id_5afd91_idx" ON "schedule_waitingqueueentry" ("user_id", "status");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_wa_user_id_5afd91_idx";',
         ),
-        migrations.AddIndex(
-            model_name='waitingqueueentry',
-            index=models.Index(fields=['expires_at'], name='schedule_wa_expires_e3a566_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_wa_expires_e3a566_idx" ON "schedule_waitingqueueentry" ("expires_at");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_wa_expires_e3a566_idx";',
         ),
         migrations.AddField(
             model_name='calendarsyncrecord',
@@ -606,17 +606,17 @@ class Migration(migrations.Migration):
             name='template',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='task_instances', to='schedule.tasktemplate'),
         ),
-        migrations.AddIndex(
-            model_name='calendarsyncrecord',
-            index=models.Index(fields=['content_type', 'object_id'], name='schedule_ca_content_49a524_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_ca_content_49a524_idx" ON "schedule_calendarsyncrecord" ("content_type_id", "object_id");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_ca_content_49a524_idx";',
         ),
-        migrations.AddIndex(
-            model_name='calendarsyncrecord',
-            index=models.Index(fields=['google_event_id'], name='schedule_ca_google__175f78_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_ca_google__175f78_idx" ON "schedule_calendarsyncrecord" ("google_event_id");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_ca_google__175f78_idx";',
         ),
-        migrations.AddIndex(
-            model_name='calendarsyncrecord',
-            index=models.Index(fields=['sync_status'], name='schedule_ca_sync_st_a331b7_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_ca_sync_st_a331b7_idx" ON "schedule_calendarsyncrecord" ("sync_status");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_ca_sync_st_a331b7_idx";',
         ),
         migrations.AlterUniqueTogether(
             name='calendarsyncrecord',
@@ -638,20 +638,20 @@ class Migration(migrations.Migration):
             name='queuemember',
             unique_together={('rotation_queue', 'user')},
         ),
-        migrations.AddIndex(
-            model_name='periodictaskinstance',
-            index=models.Index(fields=['scheduled_period'], name='schedule_pe_schedul_a85a15_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_pe_schedul_a85a15_idx" ON "schedule_periodictaskinstance" ("scheduled_period");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_pe_schedul_a85a15_idx";',
         ),
-        migrations.AddIndex(
-            model_name='periodictaskinstance',
-            index=models.Index(fields=['status'], name='schedule_pe_status_60173e_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_pe_status_60173e_idx" ON "schedule_periodictaskinstance" ("status");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_pe_status_60173e_idx";',
         ),
-        migrations.AddIndex(
-            model_name='periodictaskinstance',
-            index=models.Index(fields=['execution_start_date'], name='schedule_pe_executi_6debbe_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_pe_executi_6debbe_idx" ON "schedule_periodictaskinstance" ("execution_start_date");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_pe_executi_6debbe_idx";',
         ),
-        migrations.AddIndex(
-            model_name='periodictaskinstance',
-            index=models.Index(fields=['execution_end_date'], name='schedule_pe_executi_7f65b5_idx'),
+        migrations.RunSQL(
+            sql='CREATE INDEX IF NOT EXISTS "schedule_pe_executi_7f65b5_idx" ON "schedule_periodictaskinstance" ("execution_end_date");',
+            reverse_sql='DROP INDEX IF EXISTS "schedule_pe_executi_7f65b5_idx";',
         ),
     ]

@@ -250,30 +250,57 @@ GOOGLE_CALENDAR_SYNC_MEETINGS = os.environ.get('GOOGLE_CALENDAR_SYNC_MEETINGS', 
 GOOGLE_CALENDAR_SYNC_TASKS = os.environ.get('GOOGLE_CALENDAR_SYNC_TASKS', 'False').lower() == 'true'
 
 # Logging configuration for Google Calendar
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': str(BASE_DIR / 'google_calendar.log'),
+# Configure handlers based on environment - disable file logging in GAE production
+if os.environ.get('GAE_ENV', '').startswith('standard'):
+    # GAE production - console only (filesystem is read-only)
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'console': {
+                'level': 'INFO',
+                'class': 'logging.StreamHandler',
+            },
         },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
+        'loggers': {
+            'schedule.services.google_calendar_service': {
+                'handlers': ['console'],
+                'level': 'INFO',
+                'propagate': True,
+            },
+            'schedule.services.calendar_sync_service': {
+                'handlers': ['console'],
+                'level': 'INFO',
+                'propagate': True,
+            },
         },
-    },
-    'loggers': {
-        'schedule.services.google_calendar_service': {
-            'handlers': ['file', 'console'],
-            'level': 'INFO',
-            'propagate': True,
+    }
+else:
+    # Development/local environment - file and console logging
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'file': {
+                'level': 'INFO',
+                'class': 'logging.FileHandler',
+                'filename': str(BASE_DIR / 'google_calendar.log'),
+            },
+            'console': {
+                'level': 'INFO',
+                'class': 'logging.StreamHandler',
+            },
         },
-        'schedule.services.calendar_sync_service': {
-            'handlers': ['file', 'console'],
-            'level': 'INFO',
-            'propagate': True,
+        'loggers': {
+            'schedule.services.google_calendar_service': {
+                'handlers': ['file', 'console'],
+                'level': 'INFO',
+                'propagate': True,
+            },
+            'schedule.services.calendar_sync_service': {
+                'handlers': ['file', 'console'],
+                'level': 'INFO',
+                'propagate': True,
+            },
         },
-    },
-}
+    }
