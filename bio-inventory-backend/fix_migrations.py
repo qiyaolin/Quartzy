@@ -211,9 +211,186 @@ def check_migration_exists_in_database(migration_name):
         
     return False
 
+def fix_booking_table_name():
+    """Fix booking table name issue - cloud compatible version"""
+    print("Fixing booking table name issue...")
+    
+    try:
+        with connection.cursor() as cursor:
+            # Check existing tables
+            if connection.vendor == 'postgresql':
+                # Production environment PostgreSQL
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_name IN ('schedule_booking', 'schedule_equipmentbooking') 
+                    AND table_schema='public'
+                """)
+            else:
+                # Development environment SQLite
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name IN ('schedule_booking', 'schedule_equipmentbooking')
+                """)
+            
+            existing_tables = [row[0] for row in cursor.fetchall()]
+            
+            if 'schedule_equipmentbooking' in existing_tables:
+                if 'schedule_booking' not in existing_tables:
+                    print("Renaming schedule_equipmentbooking to schedule_booking")
+                    # Rename table
+                    if connection.vendor == 'postgresql':
+                        cursor.execute("ALTER TABLE schedule_equipmentbooking RENAME TO schedule_booking;")
+                    else:
+                        cursor.execute("ALTER TABLE schedule_equipmentbooking RENAME TO schedule_booking;")
+                    print("Table renamed successfully")
+                else:
+                    print("Warning: Both tables exist, need manual data merge")
+            elif 'schedule_booking' in existing_tables:
+                print("schedule_booking table already exists")
+            else:
+                print("booking table does not exist, needs normal migration")
+                
+    except Exception as e:
+        print(f"Error fixing booking table name: {e}")
+
+def fix_missing_unified_dashboard_models():
+    """Fix missing unified dashboard models"""
+    print("Checking unified dashboard required models...")
+    
+    try:
+        recorder = MigrationRecorder(connection)
+        
+        # Check if key models exist
+        required_models = [
+            'MeetingInstance',
+            'PeriodicTaskInstance', 
+            'Presenter',
+            'MeetingConfiguration'
+        ]
+        
+        with connection.cursor() as cursor:
+            missing_models = []
+            
+            for model_name in required_models:
+                table_name = f'schedule_{model_name.lower()}'
+                
+                if connection.vendor == 'postgresql':
+                    cursor.execute("""
+                        SELECT table_name FROM information_schema.tables 
+                        WHERE table_name=%s AND table_schema='public'
+                    """, [table_name])
+                else:
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name=?
+                    """, [table_name])
+                
+                if not cursor.fetchone():
+                    missing_models.append(model_name)
+            
+            if missing_models:
+                print(f"Missing models: {', '.join(missing_models)}")
+                print("Need to create new migration files")
+                
+                # Mark that migration regeneration is needed
+                return True
+            else:
+                print("All unified dashboard models exist")
+                return False
+                
+    except Exception as e:
+        print(f"Error checking unified dashboard models: {e}")
+        return False
+
+def fix_booking_table_name():
+    """Fix booking table name issue - cloud compatible version"""
+    print("Fixing booking table name issue...")
+    
+    try:
+        with connection.cursor() as cursor:
+            # Check existing tables
+            if connection.vendor == 'postgresql':
+                cursor.execute("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_name IN ('schedule_booking', 'schedule_equipmentbooking') 
+                    AND table_schema='public'
+                """)
+            else:
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name IN ('schedule_booking', 'schedule_equipmentbooking')
+                """)
+            
+            existing_tables = [row[0] for row in cursor.fetchall()]
+            
+            if 'schedule_equipmentbooking' in existing_tables:
+                if 'schedule_booking' not in existing_tables:
+                    print("Renaming schedule_equipmentbooking to schedule_booking")
+                    cursor.execute("ALTER TABLE schedule_equipmentbooking RENAME TO schedule_booking;")
+                    print("Table renamed successfully")
+                else:
+                    print("Warning: Both tables exist")
+            elif 'schedule_booking' in existing_tables:
+                print("schedule_booking table already exists")
+            else:
+                print("No booking table found - will be created by migration")
+                
+    except Exception as e:
+        print(f"Error fixing booking table name: {e}")
+
+def check_missing_unified_dashboard_models():
+    """Check for missing unified dashboard models"""
+    print("Checking unified dashboard required models...")
+    
+    try:
+        # Check if key models exist
+        required_models = [
+            'meetinginstance',
+            'periodictaskinstance', 
+            'presenter',
+            'meetingconfiguration'
+        ]
+        
+        with connection.cursor() as cursor:
+            missing_models = []
+            
+            for model_name in required_models:
+                table_name = f'schedule_{model_name}'
+                
+                if connection.vendor == 'postgresql':
+                    cursor.execute("""
+                        SELECT table_name FROM information_schema.tables 
+                        WHERE table_name=%s AND table_schema='public'
+                    """, [table_name])
+                else:
+                    cursor.execute("""
+                        SELECT name FROM sqlite_master 
+                        WHERE type='table' AND name=?
+                    """, [table_name])
+                
+                if not cursor.fetchone():
+                    missing_models.append(model_name)
+            
+            if missing_models:
+                print(f"Missing models: {', '.join(missing_models)}")
+                return True
+            else:
+                print("All unified dashboard models exist")
+                return False
+                
+    except Exception as e:
+        print(f"Error checking models: {e}")
+        return False
+
 if __name__ == '__main__':
-    print("🚀 开始智能迁移修复...")
+    print("Starting intelligent migration fix...")
     fix_barcode_migration()
-    check_schedule_migrations()
+    check_schedule_migrations() 
     fix_qr_migration_records()
-    print("✅ 迁移修复完成")
+    fix_booking_table_name()
+    needs_migration = check_missing_unified_dashboard_models()
+    
+    if needs_migration:
+        print("Dashboard models missing - migrations will be applied")
+    
+    print("Migration fix completed")
