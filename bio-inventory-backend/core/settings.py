@@ -236,3 +236,44 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 # Remove auto-create superuser code from settings.py
 # This should be handled by a startup script or management command instead
+
+# Google Calendar Integration Settings
+GOOGLE_CALENDAR_ENABLED = os.environ.get('GOOGLE_CALENDAR_ENABLED', 'False').lower() == 'true'
+GOOGLE_CALENDAR_CREDENTIALS_PATH = os.environ.get('GOOGLE_CALENDAR_CREDENTIALS_PATH', 
+                                                  str(BASE_DIR / 'google_calendar_credentials.json'))
+GOOGLE_CALENDAR_ID = os.environ.get('GOOGLE_CALENDAR_ID', 'primary')
+
+# Google Calendar sync settings
+GOOGLE_CALENDAR_AUTO_SYNC = os.environ.get('GOOGLE_CALENDAR_AUTO_SYNC', 'True').lower() == 'true'
+GOOGLE_CALENDAR_SYNC_EVENTS = os.environ.get('GOOGLE_CALENDAR_SYNC_EVENTS', 'True').lower() == 'true'
+GOOGLE_CALENDAR_SYNC_MEETINGS = os.environ.get('GOOGLE_CALENDAR_SYNC_MEETINGS', 'True').lower() == 'true'
+GOOGLE_CALENDAR_SYNC_TASKS = os.environ.get('GOOGLE_CALENDAR_SYNC_TASKS', 'False').lower() == 'true'
+
+# Logging configuration for Google Calendar
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': str(BASE_DIR / 'google_calendar.log'),
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'schedule.services.google_calendar_service': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'schedule.services.calendar_sync_service': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}

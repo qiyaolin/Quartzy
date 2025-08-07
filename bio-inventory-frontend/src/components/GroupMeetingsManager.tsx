@@ -13,6 +13,7 @@ import {
     MeetingConfiguration, 
     groupMeetingHelpers 
 } from '../services/groupMeetingApi.ts';
+import { scheduleApi } from '../services/scheduleApi.ts';
 import SwapRequestModal, { SwapRequestData } from '../modals/SwapRequestModal.tsx';
 import PostponeMeetingModal, { PostponeData } from '../modals/PostponeMeetingModal.tsx';
 import MaterialsUploadModal, { MaterialsUploadData } from '../modals/MaterialsUploadModal.tsx';
@@ -78,6 +79,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     const [showMaterialsModal, setShowMaterialsModal] = useState(false);
     const [showRotationModal, setShowRotationModal] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<GroupMeeting | null>(null);
+    const [selectedConfig, setSelectedConfig] = useState<MeetingConfiguration | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Load data from API
@@ -274,6 +276,94 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
         } catch (error) {
             console.error('Error updating rotation:', error);
             throw error;
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleAutoGenerateMeetings = async () => {
+        if (!token) return;
+        
+        setLoading(true);
+        try {
+            // Generate meetings for next 3 months
+            const today = new Date();
+            const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1); // Start tomorrow
+            const endDate = new Date(today.getFullYear(), today.getMonth() + 3, today.getDate()); // 3 months from now
+            
+            const result = await scheduleApi.generateMeetings(token, {
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0],
+                meeting_types: ['research_update', 'journal_club'],
+                auto_assign_presenters: true
+            });
+            
+            // Show success message
+            alert(`Success! Generated ${result.meetings?.length || 0} meetings for the next 3 months.\n\nMeetings have been created with automatic presenter assignments.`);
+            
+            // Reload data to show new meetings
+            await loadData();
+            
+        } catch (error) {
+            console.error('Error generating meetings:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            alert(`Failed to generate meetings: ${errorMessage}\n\nPlease ensure meeting configuration is set up properly and try again.`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleEditConfiguration = (config: MeetingConfiguration) => {
+        setSelectedConfig(config);
+        setShowConfigModal(true);
+    };
+
+    const handleToggleConfigurationActive = async (config: MeetingConfiguration) => {
+        if (!token) return;
+        
+        setIsSubmitting(true);
+        try {
+            const updatedConfig = await groupMeetingApi.updateConfiguration(token, config.id, {
+                is_active: !config.is_active
+            });
+            
+            // Update local state
+            setConfigurations(prev => prev.map(c => 
+                c.id === config.id ? updatedConfig : c
+            ));
+            
+            const action = updatedConfig.is_active ? 'activated' : 'deactivated';
+            alert(`Successfully ${action} ${config.meeting_type.replace('_', ' ')} meetings configuration.`);
+            
+        } catch (error) {
+            console.error('Error toggling configuration:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            alert(`Failed to toggle configuration: ${errorMessage}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleSendMeetingReminder = async (meeting: GroupMeeting) => {
+        if (!token) return;
+        
+        setIsSubmitting(true);
+        try {
+            // Import the API from groupMeetingsApi that has sendEmailReminder
+            const { groupMeetingsApi } = await import('../services/groupMeetingsApi.ts');
+            
+            await groupMeetingsApi.sendEmailReminder(token, meeting.id, 'pre_meeting');
+            
+            const presenterNames = meeting.presenters && meeting.presenters.length > 0 
+                ? meeting.presenters.map(p => `${p.first_name} ${p.last_name}`).join(', ')
+                : 'presenters';
+                
+            alert(`✅ Reminder successfully sent to ${presenterNames} for "${meeting.title}"`);
+            
+        } catch (error) {
+            console.error('Error sending reminder:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            alert(`Failed to send reminder: ${errorMessage}\n\nPlease ensure email service is properly configured.`);
         } finally {
             setIsSubmitting(false);
         }
@@ -521,7 +611,10 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                         <div className="flex items-center justify-between p-6 border-b border-gray-200">
                             <h2 className="text-xl font-semibold text-gray-900">Meeting Configuration</h2>
                             <button
-                                onClick={() => setShowConfigModal(false)}
+                                onClick={() => {
+                                    setShowConfigModal(false);
+                                    setSelectedConfig(null);
+                                }}
                                 className="text-gray-400 hover:text-gray-600"
                             >
                                 <X className="w-5 h-5" />
@@ -574,19 +667,16 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                                         
                                         <div className="mt-3 flex gap-2">
                                             <button
-                                                onClick={() => {
-                                                    alert(`Edit configuration for ${config.meeting_type.replace('_', ' ')}.\n\nFull configuration editing will be implemented in backend integration phase.`);
-                                                }}
-                                                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                                                onClick={() => handleEditConfiguration(config)}
+                                                disabled={isSubmitting}
+                                                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors disabled:opacity-50"
                                             >
                                                 Edit
                                             </button>
                                             <button
-                                                onClick={() => {
-                                                    const action = config.is_active ? 'deactivate' : 'activate';
-                                                    alert(`${action.charAt(0).toUpperCase() + action.slice(1)} ${config.meeting_type.replace('_', ' ')} meetings.\n\nConfiguration changes will be implemented in backend integration phase.`);
-                                                }}
-                                                className={`px-3 py-1 text-sm rounded transition-colors ${
+                                                onClick={() => handleToggleConfigurationActive(config)}
+                                                disabled={isSubmitting}
+                                                className={`px-3 py-1 text-sm rounded transition-colors disabled:opacity-50 ${
                                                     config.is_active 
                                                         ? 'bg-red-100 text-red-700 hover:bg-red-200'
                                                         : 'bg-green-100 text-green-700 hover:bg-green-200'
@@ -605,10 +695,9 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     <button
-                                        onClick={() => {
-                                            alert('Generate next 3 months of meetings based on current configuration.\n\nAuto-generation will be implemented in backend integration phase.');
-                                        }}
-                                        className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                        onClick={handleAutoGenerateMeetings}
+                                        disabled={loading}
+                                        className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                                     >
                                         <Calendar className="w-5 h-5 text-blue-600" />
                                         <div className="text-left">
@@ -618,9 +707,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                                     </button>
                                     
                                     <button
-                                        onClick={() => {
-                                            alert('Manage presenter rotation lists and assignment preferences.\n\nRotation management will be implemented in backend integration phase.');
-                                        }}
+                                        onClick={() => setShowRotationModal(true)}
                                         className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                                     >
                                         <RotateCcw className="w-5 h-5 text-green-600" />
@@ -635,7 +722,10 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                         
                         <div className="border-t border-gray-200 p-6">
                             <button
-                                onClick={() => setShowConfigModal(false)}
+                                onClick={() => {
+                                    setShowConfigModal(false);
+                                    setSelectedConfig(null);
+                                }}
                                 className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                             >
                                 Close
@@ -884,17 +974,15 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
                                 )}
                                 
                                 <button
-                                    onClick={() => {
+                                    onClick={async () => {
                                         try {
-                                            const presenterNames = meeting.presenters && meeting.presenters.length > 0 
-                                                ? meeting.presenters.map(p => `${p.first_name} ${p.last_name}`).join(', ')
-                                                : 'presenters';
-                                            alert(`Reminder sent to ${presenterNames} for "${meeting.title}"\n\nReminder functionality will be fully implemented in backend integration phase.`);
+                                            await handleSendMeetingReminder(meeting);
                                             setShowActions(false);
                                         } catch (error) {
                                             console.error('Error sending reminder:', error);
                                         }
                                     }}
+                                    disabled={isSubmitting}
                                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                 >
                                     <Mail className="w-4 h-4 inline mr-2" />

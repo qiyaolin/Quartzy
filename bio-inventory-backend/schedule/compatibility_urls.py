@@ -30,4 +30,10 @@ urlpatterns = [
     
     # Fixed notifications endpoint
     path('api/notifications/summary/', api_compatibility.notifications_summary_api, name='api-notifications-summary'),
+    
+    # Unified dashboard endpoints
+    path('schedule/unified-dashboard/overview/', api_compatibility.unified_dashboard_overview_api, name='schedule-unified-dashboard-overview'),
+    
+    # Meeting generation endpoints (compatibility for frontend)
+    path('schedule/meetings/generate/', api_compatibility.meetings_generate_api, name='schedule-meetings-generate'),
 ]

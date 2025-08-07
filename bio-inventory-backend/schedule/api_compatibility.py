@@ -167,3 +167,74 @@ def notifications_summary_api(request):
             'by_priority': {},
             'error': f'Notification service unavailable: {str(e)}'
         })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def unified_dashboard_overview_api(request):
+    """Unified dashboard overview API endpoint"""
+    try:
+        # Try to get data from the actual UnifiedDashboardViewSet
+        from . import views
+        
+        # Create a ViewSet instance and call the overview action
+        dashboard_viewset = views.UnifiedDashboardViewSet()
+        dashboard_viewset.action = 'overview'
+        dashboard_viewset.request = request
+        
+        response = dashboard_viewset.overview(request)
+        return response
+        
+    except Exception as e:
+        # Return a minimal dashboard structure if the real one fails
+        minimal_dashboard = {
+            'today_events': [],
+            'upcoming_meetings': [],
+            'active_tasks': [],
+            'overdue_tasks': [],
+            'recent_equipment_usage': [],
+            'available_equipment': [],
+            'statistics': {
+                'total_meetings_this_week': 0,
+                'total_tasks_assigned': 0,
+                'equipment_utilization_rate': 0,
+                'pending_requests': 0
+            },
+            'user_stats': {
+                'meetings_attended': 0,
+                'tasks_completed': 0,
+                'equipment_usage_hours': 0
+            },
+            'quick_actions': [
+                'View Calendar',
+                'Check Equipment',
+                'Create Meeting',
+                'Add Task'
+            ]
+        }
+        
+        return Response(minimal_dashboard)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def meetings_generate_api(request):
+    """Meetings generation API endpoint"""
+    try:
+        # Try to use the actual MeetingInstanceViewSet generate_meetings action
+        from . import views
+        
+        # Create a ViewSet instance and call the generate_meetings action
+        meetings_viewset = views.MeetingInstanceViewSet()
+        meetings_viewset.action = 'generate_meetings'
+        meetings_viewset.request = request
+        
+        response = meetings_viewset.generate_meetings(request)
+        return response
+        
+    except Exception as e:
+        # Return error response if the real endpoint fails
+        return Response(
+            {'error': f'Failed to generate meetings: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -6,6 +6,17 @@ from django.db.models import Q
 from datetime import datetime, date
 from django.utils.dateparse import parse_date
 from django.utils import timezone
+from django.conf import settings
+import logging
+
+# Google Calendar integration
+try:
+    from .services.google_calendar_service import GoogleCalendarService
+    from .services.calendar_sync_service import CalendarSyncService
+except ImportError:
+    GoogleCalendarService = None
+    CalendarSyncService = None
+    logging.warning("Google Calendar integration not available. Install google-api-python-client to enable sync.")
 from .models import (
     Event, Equipment, Booking, GroupMeeting, MeetingPresenterRotation, 
     RecurringTask, TaskInstance, EquipmentUsageLog, WaitingQueueEntry,
@@ -44,6 +55,17 @@ class EventViewSet(viewsets.ModelViewSet):
     """事件管理API"""
     queryset = Event.objects.all()
     serializer_class = EventSerializer
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sync_service = None
+        if GoogleCalendarService and CalendarSyncService and getattr(settings, 'GOOGLE_CALENDAR_ENABLED', False):
+            try:
+                gcal_service = GoogleCalendarService()
+                self.sync_service = CalendarSyncService(gcal_service)
+            except Exception as e:
+                logging.warning(f"Failed to initialize Google Calendar sync: {e}")
+                self.sync_service = None
     
     def get_queryset(self):
         queryset = Event.objects.all()
@@ -114,6 +136,42 @@ class EventViewSet(viewsets.ModelViewSet):
         
         serializer = CalendarEventSerializer(calendar_events, many=True)
         return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Handle event creation with Google Calendar sync"""
+        event = serializer.save()
+        
+        # Sync to Google Calendar if enabled
+        if self.sync_service and getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True):
+            try:
+                self.sync_service.sync_event_to_google(event)
+                logging.info(f"Event {event.id} synced to Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to sync event {event.id} to Google Calendar: {e}")
+    
+    def perform_update(self, serializer):
+        """Handle event updates with Google Calendar sync"""
+        event = serializer.save()
+        
+        # Sync to Google Calendar if enabled
+        if self.sync_service and getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True):
+            try:
+                self.sync_service.sync_event_to_google(event, force_update=True)
+                logging.info(f"Event {event.id} updated in Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to update event {event.id} in Google Calendar: {e}")
+    
+    def perform_destroy(self, instance):
+        """Handle event deletion with Google Calendar sync"""
+        # Remove from Google Calendar if enabled
+        if self.sync_service and getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True):
+            try:
+                self.sync_service.remove_event_from_google(instance)
+                logging.info(f"Event {instance.id} removed from Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to remove event {instance.id} from Google Calendar: {e}")
+        
+        instance.delete()
 
 
 class EquipmentViewSet(viewsets.ModelViewSet):
@@ -900,6 +958,17 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
     serializer_class = PeriodicTaskInstanceSerializer
     permission_classes = [permissions.IsAuthenticated]
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sync_service = None
+        if GoogleCalendarService and CalendarSyncService and getattr(settings, 'GOOGLE_CALENDAR_ENABLED', False):
+            try:
+                gcal_service = GoogleCalendarService()
+                self.sync_service = CalendarSyncService(gcal_service)
+            except Exception as e:
+                logging.warning(f"Failed to initialize Google Calendar sync: {e}")
+                self.sync_service = None
+    
     def get_queryset(self):
         queryset = PeriodicTaskInstance.objects.select_related(
             'template', 'completed_by'
@@ -1204,6 +1273,48 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
         })
         
         return Response(stats.data)
+    
+    def perform_create(self, serializer):
+        """Handle task creation with Google Calendar sync"""
+        task = serializer.save()
+        
+        # Sync to Google Calendar if enabled and task syncing is enabled
+        if (self.sync_service and 
+            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
+            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
+            try:
+                self.sync_service.sync_task_to_google(task)
+                logging.info(f"Task {task.id} synced to Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to sync task {task.id} to Google Calendar: {e}")
+    
+    def perform_update(self, serializer):
+        """Handle task updates with Google Calendar sync"""
+        task = serializer.save()
+        
+        # Sync to Google Calendar if enabled and task syncing is enabled
+        if (self.sync_service and 
+            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
+            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
+            try:
+                self.sync_service.sync_task_to_google(task, force_update=True)
+                logging.info(f"Task {task.id} updated in Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to update task {task.id} in Google Calendar: {e}")
+    
+    def perform_destroy(self, instance):
+        """Handle task deletion with Google Calendar sync"""
+        # Remove from Google Calendar if enabled and task syncing is enabled
+        if (self.sync_service and 
+            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
+            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
+            try:
+                self.sync_service.remove_task_from_google(instance)
+                logging.info(f"Task {instance.id} removed from Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to remove task {instance.id} from Google Calendar: {e}")
+        
+        instance.delete()
 
 
 class TaskRotationQueueViewSet(viewsets.ModelViewSet):
@@ -1495,6 +1606,17 @@ class MeetingInstanceViewSet(viewsets.ModelViewSet):
     serializer_class = MeetingInstanceSerializer
     permission_classes = [permissions.IsAuthenticated]
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sync_service = None
+        if GoogleCalendarService and CalendarSyncService and getattr(settings, 'GOOGLE_CALENDAR_ENABLED', False):
+            try:
+                gcal_service = GoogleCalendarService()
+                self.sync_service = CalendarSyncService(gcal_service)
+            except Exception as e:
+                logging.warning(f"Failed to initialize Google Calendar sync: {e}")
+                self.sync_service = None
+    
     def get_queryset(self):
         queryset = MeetingInstance.objects.select_related('event').prefetch_related('presenters')
         
@@ -1549,12 +1671,75 @@ class MeetingInstanceViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        # Implementation would go here to generate meetings
-        # This is a complex operation that would involve the fair rotation algorithm
-        return Response(
-            {'message': 'Meeting generation not yet implemented'}, 
-            status=status.HTTP_501_NOT_IMPLEMENTED
-        )
+        try:
+            # Extract validated data
+            validated_data = serializer.validated_data
+            start_date = validated_data.get('start_date')
+            end_date = validated_data.get('end_date')
+            meeting_types = validated_data.get('meeting_types', ['research_update', 'journal_club'])
+            auto_assign_presenters = validated_data.get('auto_assign_presenters', True)
+            
+            # Use the MeetingGenerationService
+            from .services import MeetingGenerationService
+            generation_service = MeetingGenerationService()
+            
+            result = generation_service.generate_meetings(
+                start_date=start_date,
+                end_date=end_date,
+                meeting_types=meeting_types,
+                auto_assign_presenters=auto_assign_presenters
+            )
+            
+            # Return the generated meetings with serialized data
+            generated_meetings_data = []
+            for meeting_info in result['generated_meetings']:
+                meeting_instance = meeting_info['meeting_instance']
+                presenters = meeting_info['presenters']
+                
+                meeting_data = {
+                    'id': meeting_instance.id,
+                    'date': meeting_instance.date,
+                    'meeting_type': meeting_instance.meeting_type,
+                    'title': meeting_instance.title,
+                    'description': meeting_instance.description,
+                    'status': meeting_instance.status,
+                    'presenters': [
+                        {
+                            'id': presenter.id,
+                            'user': {
+                                'id': presenter.user.id,
+                                'username': presenter.user.username,
+                                'first_name': presenter.user.first_name,
+                                'last_name': presenter.user.last_name,
+                                'email': presenter.user.email
+                            }
+                        }
+                        for presenter in presenters
+                    ]
+                }
+                generated_meetings_data.append(meeting_data)
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully generated {result["count"]} meetings',
+                'count': result['count'],
+                'generated_meetings': generated_meetings_data,
+                'date_range': {
+                    'start_date': start_date,
+                    'end_date': end_date
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except ValueError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to generate meetings: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
@@ -1570,6 +1755,42 @@ class MeetingInstanceViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(meeting)
         return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Handle meeting creation with Google Calendar sync"""
+        meeting = serializer.save()
+        
+        # Sync to Google Calendar if enabled
+        if self.sync_service and getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True):
+            try:
+                self.sync_service.sync_meeting_to_google(meeting)
+                logging.info(f"Meeting {meeting.id} synced to Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to sync meeting {meeting.id} to Google Calendar: {e}")
+    
+    def perform_update(self, serializer):
+        """Handle meeting updates with Google Calendar sync"""
+        meeting = serializer.save()
+        
+        # Sync to Google Calendar if enabled
+        if self.sync_service and getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True):
+            try:
+                self.sync_service.sync_meeting_to_google(meeting, force_update=True)
+                logging.info(f"Meeting {meeting.id} updated in Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to update meeting {meeting.id} in Google Calendar: {e}")
+    
+    def perform_destroy(self, instance):
+        """Handle meeting deletion with Google Calendar sync"""
+        # Remove from Google Calendar if enabled
+        if self.sync_service and getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True):
+            try:
+                self.sync_service.remove_meeting_from_google(instance)
+                logging.info(f"Meeting {instance.id} removed from Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to remove meeting {instance.id} from Google Calendar: {e}")
+        
+        instance.delete()
 
 
 class PresenterViewSet(viewsets.ModelViewSet):
@@ -2306,6 +2527,17 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
     serializer_class = PeriodicTaskInstanceSerializer
     permission_classes = [permissions.IsAuthenticated]
     
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sync_service = None
+        if GoogleCalendarService and CalendarSyncService and getattr(settings, 'GOOGLE_CALENDAR_ENABLED', False):
+            try:
+                gcal_service = GoogleCalendarService()
+                self.sync_service = CalendarSyncService(gcal_service)
+            except Exception as e:
+                logging.warning(f"Failed to initialize Google Calendar sync: {e}")
+                self.sync_service = None
+    
     def get_queryset(self):
         """Filter task instances"""
         queryset = PeriodicTaskInstance.objects.select_related(
@@ -2488,6 +2720,48 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
         task.save()
         
         return Response(PeriodicTaskInstanceSerializer(task, context={'request': request}).data)
+    
+    def perform_create(self, serializer):
+        """Handle task creation with Google Calendar sync"""
+        task = serializer.save()
+        
+        # Sync to Google Calendar if enabled and task syncing is enabled
+        if (self.sync_service and 
+            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
+            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
+            try:
+                self.sync_service.sync_task_to_google(task)
+                logging.info(f"Task {task.id} synced to Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to sync task {task.id} to Google Calendar: {e}")
+    
+    def perform_update(self, serializer):
+        """Handle task updates with Google Calendar sync"""
+        task = serializer.save()
+        
+        # Sync to Google Calendar if enabled and task syncing is enabled
+        if (self.sync_service and 
+            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
+            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
+            try:
+                self.sync_service.sync_task_to_google(task, force_update=True)
+                logging.info(f"Task {task.id} updated in Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to update task {task.id} in Google Calendar: {e}")
+    
+    def perform_destroy(self, instance):
+        """Handle task deletion with Google Calendar sync"""
+        # Remove from Google Calendar if enabled and task syncing is enabled
+        if (self.sync_service and 
+            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
+            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
+            try:
+                self.sync_service.remove_task_from_google(instance)
+                logging.info(f"Task {instance.id} removed from Google Calendar")
+            except Exception as e:
+                logging.error(f"Failed to remove task {instance.id} from Google Calendar: {e}")
+        
+        instance.delete()
 
 
 class TaskSwapRequestViewSet(viewsets.ModelViewSet):

@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
 from django.utils import timezone
 from datetime import timedelta
 import uuid
@@ -376,7 +378,8 @@ class WaitingQueueEntry(models.Model):
         Booking,
         on_delete=models.CASCADE,
         related_name='waiting_queue',
-        help_text="Time slot user is waiting for"
+        help_text="Time slot user is waiting for",
+        null=True, blank=True  # Temporarily allow null to handle migration
     )
     
     # Queue details
@@ -1985,3 +1988,65 @@ class PresentationHistory(models.Model):
         ordering = ['-archived_at']
         verbose_name = "Presentation History"
         verbose_name_plural = "Presentation Histories"
+
+
+class CalendarSyncRecord(models.Model):
+    """Track synchronization between local schedule objects and Google Calendar"""
+    
+    SYNC_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('error', 'Error'),
+        ('disabled', 'Disabled'),
+    ]
+    
+    # Generic foreign key to support multiple model types
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+    
+    # Google Calendar information
+    google_event_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Google Calendar event ID"
+    )
+    
+    # Sync status
+    sync_enabled = models.BooleanField(
+        default=True,
+        help_text="Whether sync is enabled for this object"
+    )
+    sync_status = models.CharField(
+        max_length=20,
+        choices=SYNC_STATUS_CHOICES,
+        default='pending',
+        help_text="Current sync status"
+    )
+    error_message = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Error message if sync failed"
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last successful sync timestamp"
+    )
+    
+    def __str__(self):
+        return f"Sync: {self.content_type} {self.object_id} -> {self.google_event_id}"
+    
+    class Meta:
+        unique_together = ('content_type', 'object_id')
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=['google_event_id']),
+            models.Index(fields=['sync_status']),
+        ]
+        verbose_name = "Calendar Sync Record"
+        verbose_name_plural = "Calendar Sync Records"
