@@ -114,8 +114,8 @@ export const groupMeetingApi = {
         }
         
         const url = queryParams.toString() 
-            ? `${buildApiUrl('/api/group-meetings/')}?${queryParams.toString()}`
-            : buildApiUrl('/api/group-meetings/');
+            ? `${buildApiUrl('/api/schedule/group-meetings/')}?${queryParams.toString()}`
+            : buildApiUrl('/api/schedule/group-meetings/');
             
         const response = await fetch(url, {
             headers: { 'Authorization': `Token ${token}` }
@@ -216,7 +216,7 @@ export const groupMeetingApi = {
     },
 
     generateMeetings: async (token: string, configId: number): Promise<GroupMeeting[]> => {
-        const response = await fetch(buildApiUrl(`/api/meeting-configurations/${configId}/generate-meetings/`), {
+        const response = await fetch(buildApiUrl(`/api/schedule/meeting-configuration/${configId}/generate-meetings/`), {
             method: 'POST',
             headers: {
                 'Authorization': `Token ${token}`,

@@ -382,8 +382,8 @@ export const equipmentApi = {
     });
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('schedule/equipment/')}?${queryParams.toString()}`
-      : buildApiUrl('schedule/equipment/');
+      ? `${buildApiUrl('/api/schedule/equipment/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/equipment/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }
