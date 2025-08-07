@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
+import '../styles/mobile-schedule.css';
 import { 
     Calendar, Clock, Users, MapPin, Plus, Edit3, Trash2, Search, 
     Settings, QrCode, CheckCircle, AlertCircle, User, Monitor,
@@ -15,6 +16,8 @@ import RecurringTaskFormModal from '../modals/RecurringTaskFormModal.tsx';
 import EquipmentQRScanner from '../components/EquipmentQRScanner.tsx';
 import EquipmentQRDisplay from '../components/EquipmentQRDisplay.tsx';
 import CalendarView from '../components/CalendarView.tsx';
+import ModernCalendarView from '../components/ModernCalendarView.tsx';
+import MobileScheduleDashboard from '../components/MobileScheduleDashboard.tsx';
 import EquipmentManagement from '../components/EquipmentManagement.tsx';
 import GroupMeetingsManager from '../components/GroupMeetingsManager.tsx';
 import PresenterManagement from '../components/PresenterManagement.tsx';
@@ -22,6 +25,7 @@ import RecurringTaskManager from '../components/RecurringTaskManager.tsx';
 import MeetingEditModal from '../modals/MeetingEditModal.tsx';
 import UnifiedScheduleDashboard from '../components/UnifiedScheduleDashboard.tsx';
 import QuickActions from '../components/QuickActions.tsx';
+import EnhancedQuickActions from '../components/EnhancedQuickActions.tsx';
 
 type TabType = 'dashboard' | 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
 
@@ -31,6 +35,18 @@ const SchedulePage: React.FC = () => {
         throw new Error('SchedulePage must be used within an AuthProvider');
     }
     const { token } = authContext;
+
+    // Mobile detection
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [useModernUI, setUseModernUI] = useState(true);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Core state
     const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -320,12 +336,44 @@ const SchedulePage: React.FC = () => {
         }
     };
 
+    // Mobile-first rendering
+    if (isMobile) {
+        return (
+            <MobileScheduleDashboard 
+                availableEquipment={availableEquipment}
+                onQuickBookEquipment={(equipmentId) => {
+                    console.log('Quick book equipment:', equipmentId);
+                    fetchAllData();
+                }}
+                onCompleteTask={(taskId) => {
+                    console.log('Complete task:', taskId);
+                    fetchAllData();
+                }}
+                onNavigateToAction={(actionUrl) => {
+                    console.log('Navigate to action:', actionUrl);
+                }}
+                onNavigateToTab={(tab) => {
+                    setActiveTab(tab as TabType);
+                }}
+                onRefresh={fetchAllData}
+            />
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Laboratory Schedule Management</h1>
+                    <div className="flex items-center gap-4">
+                        <h1 className="text-2xl font-bold text-gray-900">Laboratory Schedule Management</h1>
+                        <button
+                            onClick={() => setUseModernUI(!useModernUI)}
+                            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                        >
+                            {useModernUI ? 'Classic UI' : 'Modern UI'}
+                        </button>
+                    </div>
                     <p className="text-gray-600">Manage meetings, equipment bookings, recurring tasks, and personal schedules</p>
                 </div>
                 {getTabActions()}
@@ -438,31 +486,29 @@ const SchedulePage: React.FC = () => {
                         <UnifiedScheduleDashboard 
                             onQuickBookEquipment={(equipmentId) => {
                                 console.log('Quick book equipment:', equipmentId);
-                                // Refresh data after booking
                                 fetchAllData();
                             }}
                             onCompleteTask={(taskId) => {
                                 console.log('Complete task:', taskId);
-                                // Refresh data after task completion
                                 fetchAllData();
                             }}
                             onNavigateToAction={(actionUrl) => {
                                 console.log('Navigate to action:', actionUrl);
-                                // In real implementation, navigate to the action URL
                             }}
                             onRefresh={fetchAllData}
                         />
-                        <QuickActions 
+                        <EnhancedQuickActions 
                             availableEquipment={availableEquipment}
                             onEquipmentBooked={(booking) => {
                                 console.log('Equipment booked:', booking);
-                                // Refresh equipment data
                                 fetchEquipment();
                             }}
                             onTaskCompleted={(taskId) => {
                                 console.log('Task completed:', taskId);
-                                // Refresh schedules
                                 fetchSchedules();
+                            }}
+                            onNavigateToTab={(tab) => {
+                                setActiveTab(tab as TabType);
                             }}
                             onRefreshNeeded={fetchAllData}
                         />
@@ -470,26 +516,45 @@ const SchedulePage: React.FC = () => {
                 )}
 
                 {activeTab === 'calendar' && (
-                    <CalendarView 
-                        schedules={filteredSchedules}
-                        loading={loading}
-                        selectedDate={selectedDate}
-                        onDateChange={setSelectedDate}
-                        viewMode={viewMode}
-                        onViewModeChange={setViewMode}
-                        onCreateEvent={(date?: string, time?: string) => {
-                            if (date) setSelectedDate(date);
-                            handleOpenModal();
-                        }}
-                        onEditEvent={(event) => {
-                            // Handle edit event
-                            console.log('Edit event:', event);
-                        }}
-                        onDeleteEvent={(eventId) => {
-                            // Handle delete event
-                            console.log('Delete event:', eventId);
-                        }}
-                    />
+                    useModernUI ? (
+                        <ModernCalendarView 
+                            schedules={filteredSchedules}
+                            loading={loading}
+                            selectedDate={selectedDate}
+                            onDateChange={setSelectedDate}
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
+                            onCreateEvent={(date?: string, time?: string) => {
+                                if (date) setSelectedDate(date);
+                                handleOpenModal();
+                            }}
+                            onEditEvent={(event) => {
+                                console.log('Edit event:', event);
+                            }}
+                            onDeleteEvent={(eventId) => {
+                                console.log('Delete event:', eventId);
+                            }}
+                        />
+                    ) : (
+                        <CalendarView 
+                            schedules={filteredSchedules}
+                            loading={loading}
+                            selectedDate={selectedDate}
+                            onDateChange={setSelectedDate}
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
+                            onCreateEvent={(date?: string, time?: string) => {
+                                if (date) setSelectedDate(date);
+                                handleOpenModal();
+                            }}
+                            onEditEvent={(event) => {
+                                console.log('Edit event:', event);
+                            }}
+                            onDeleteEvent={(eventId) => {
+                                console.log('Delete event:', eventId);
+                            }}
+                        />
+                    )
                 )}
 
                 {activeTab === 'equipment' && (
