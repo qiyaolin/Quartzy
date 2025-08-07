@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Booking Replaced Notification</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #343a40; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .details { background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Booking Replaced</h1>
+        </div>
+        <div class="content">
+            <p>Dear {{ recipient.first_name|default:recipient.username }},</p>
+            <p>Your booking for {{ booking.equipment.name }} on {{ booking.event.start_time|date:"F d, Y" }} has been replaced by another user from the waiting queue.</p>
+            <div class="details">
+                <h3>Booking Details</h3>
+                <p><strong>Equipment:</strong> {{ booking.equipment.name }}</p>
+                <p><strong>Date & Time:</strong> {{ booking.event.start_time|date:"F d, Y" }} from {{ booking.event.start_time|time:"g:i A" }} to {{ booking.event.end_time|time:"g:i A" }}</p>
+            </div>
+            <p>If you have any questions, please contact the lab manager.</p>
+        </div>
+        <div class="footer">
+            <p>{{ site_name }} - Equipment Booking System</p>
+            <p>Hayer Lab - McGill University</p>
+        </div>
+    </div>
+</body>
+</html>

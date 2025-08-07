@@ -15,6 +15,110 @@ export interface Schedule {
   updated_at: string;
 }
 
+// Intelligent Meeting Management Types
+export interface MeetingConfiguration {
+  id: number;
+  day_of_week: number; // 0-6, 0=Sunday
+  start_time: string; // "10:00"
+  location: string;
+  research_update_duration: number;
+  journal_club_duration: number;
+  jc_submission_deadline_days: number;
+  jc_final_deadline_days: number;
+  require_admin_approval: boolean;
+  default_postpone_strategy: 'skip' | 'cascade';
+  active_members: User[];
+}
+
+export interface User {
+  id: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  email: string;
+}
+
+export interface MeetingInstance {
+  id: number;
+  date: string;
+  meeting_type: 'research_update' | 'journal_club';
+  status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled';
+  presenters: Presenter[];
+  actual_duration?: number;
+  notes?: string;
+  event?: any;
+}
+
+export interface Presenter {
+  id: number;
+  user: User;
+  meeting_instance: number;
+  order: number;
+  status: 'assigned' | 'confirmed' | 'completed' | 'swapped' | 'postponed';
+  topic?: string;
+  paper_title?: string;
+  paper_url?: string;
+  paper_file?: string;
+  materials_submitted_at?: string;
+}
+
+export interface SwapRequest {
+  id: number;
+  request_type: 'swap' | 'postpone';
+  requester: User;
+  original_presentation: Presenter;
+  target_presentation?: Presenter;
+  target_date?: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  cascade_effect?: 'skip' | 'cascade';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminDashboardData {
+  meeting_statistics: {
+    total_meetings: number;
+    meetings_this_month: number;
+    upcoming_meetings: number;
+  };
+  pending_items: {
+    swap_requests: number;
+    missing_jc_submissions: number;
+  };
+  equipment_status: {
+    active_equipment: number;
+    total_equipment: number;
+    utilization_rate: number;
+  };
+  recent_activity: SwapRequest[];
+}
+
+export interface PersonalDashboardData {
+  next_presentation?: Presenter;
+  upcoming_meetings: MeetingInstance[];
+  swap_requests: SwapRequest[];
+  jc_deadlines: Array<{
+    presentation_id: number;
+    meeting_date: string;
+    deadline: string;
+    final_deadline: string;
+    days_remaining: number;
+    urgency: string;
+  }>;
+  today_equipment_bookings: Array<{
+    id: number;
+    equipment_name: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+  }>;
+  statistics: {
+    presentations_this_year: number;
+    active_swap_requests: number;
+  };
+}
+
 export interface ScheduleFormData {
   title: string;
   description?: string;
@@ -596,5 +700,914 @@ export const scheduleHelpers = {
       isValid: Object.keys(errors).length === 0,
       errors
     };
+  }
+};
+
+// Intelligent Meeting Management API
+export const intelligentMeetingApi = {
+  // Admin Dashboard
+  getAdminDashboard: async (token: string): Promise<AdminDashboardData> => {
+    const response = await fetch(buildApiUrl('schedule/admin-dashboard/'), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch admin dashboard: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Personal Dashboard
+  getPersonalDashboard: async (token: string): Promise<PersonalDashboardData> => {
+    const response = await fetch(buildApiUrl('schedule/personal-dashboard/'), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch personal dashboard: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Meeting Configuration
+  getMeetingConfiguration: async (token: string): Promise<MeetingConfiguration> => {
+    const response = await fetch(buildApiUrl('schedule/meeting-configuration/'), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch meeting configuration: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results?.[0] || data;
+  },
+
+  updateMeetingConfiguration: async (token: string, config: Partial<MeetingConfiguration>): Promise<MeetingConfiguration> => {
+    const response = await fetch(buildApiUrl('schedule/meeting-configuration/'), {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(config)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to update meeting configuration: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Meeting Instances
+  getMeetings: async (token: string, params: { start_date?: string; end_date?: string } = {}): Promise<MeetingInstance[]> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, value);
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/meetings/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/meetings/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch meetings: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results || data;
+  },
+
+  generateMeetings: async (token: string, data: {
+    start_date: string;
+    end_date: string;
+    meeting_types?: string[];
+    auto_assign_presenters?: boolean;
+  }): Promise<{ message: string; meetings: MeetingInstance[] }> => {
+    const response = await fetch(buildApiUrl('schedule/meetings/generate/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to generate meetings: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Journal Club Management
+  uploadPaper: async (token: string, meetingId: number, formData: FormData): Promise<{ message: string; presenter: Presenter }> => {
+    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/upload-paper/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to upload paper: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  submitPaperUrl: async (token: string, meetingId: number, data: {
+    paper_url: string;
+    paper_title: string;
+  }): Promise<{ message: string; presenter: Presenter }> => {
+    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/submit-paper-url/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to submit paper URL: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  getPaperSubmissionStatus: async (token: string, meetingId: number): Promise<{
+    meeting: MeetingInstance;
+    submission_status: Array<{
+      presenter: User;
+      paper_title?: string;
+      has_paper_url: boolean;
+      has_paper_file: boolean;
+      submitted_at?: string;
+      status: string;
+      deadline?: string;
+      final_deadline?: string;
+      is_overdue: boolean;
+    }>;
+  }> => {
+    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/paper-submission/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch paper submission status: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  distributePaper: async (token: string, meetingId: number): Promise<{ message: string; recipients_count: number }> => {
+    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/distribute-paper/`), {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to distribute paper: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  getPaperArchive: async (token: string, params: {
+    start_date?: string;
+    end_date?: string;
+    presenter_id?: number;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  } = {}): Promise<{
+    papers: Array<{
+      id: number;
+      meeting_date: string;
+      presenter: User;
+      paper_title?: string;
+      has_file: boolean;
+      has_url: boolean;
+      paper_url?: string;
+      submitted_at: string;
+      file_download_url?: string;
+    }>;
+    pagination: {
+      total_count: number;
+      total_pages: number;
+      current_page: number;
+      has_next: boolean;
+      has_previous: boolean;
+    };
+  }> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, value.toString());
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/paper-archive/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/paper-archive/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch paper archive: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Swap Requests
+  getSwapRequests: async (token: string): Promise<SwapRequest[]> => {
+    const response = await fetch(buildApiUrl('schedule/swap-requests/'), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch swap requests: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results || data;
+  },
+
+  createSwapRequest: async (token: string, data: {
+    request_type: 'swap' | 'postpone';
+    original_presentation_id: number;
+    target_presentation_id?: number;
+    target_date?: string;
+    reason: string;
+    cascade_effect?: 'skip' | 'cascade';
+  }): Promise<SwapRequest> => {
+    const response = await fetch(buildApiUrl('schedule/swap-requests/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to create swap request: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  approveSwapRequest: async (token: string, requestId: number): Promise<{ message: string }> => {
+    const response = await fetch(buildApiUrl(`schedule/swap-requests/${requestId}/approve/`), {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to approve swap request: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  rejectSwapRequest: async (token: string, requestId: number, reason?: string): Promise<{ message: string }> => {
+    const response = await fetch(buildApiUrl(`schedule/swap-requests/${requestId}/reject/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to reject swap request: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Quebec Holidays
+  getQuebecHolidays: async (token: string, year: number): Promise<{
+    year: number;
+    holidays: Array<{
+      name: string;
+      date: string;
+      type: 'fixed' | 'moveable';
+    }>;
+    count: number;
+  }> => {
+    const response = await fetch(buildApiUrl(`schedule/quebec-holidays/${year}/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Quebec holidays: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  isHoliday: async (token: string, date: string): Promise<{
+    date: string;
+    is_holiday: boolean;
+    holiday_name?: string;
+  }> => {
+    const response = await fetch(buildApiUrl(`schedule/is-holiday/${date}/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to check if date is holiday: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  getNextAvailableDate: async (token: string, preferredDate: string): Promise<{
+    preferred_date: string;
+    next_available_date: string;
+    days_difference: number;
+  }> => {
+    const response = await fetch(buildApiUrl(`schedule/next-available-date/${preferredDate}/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get next available date: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Users
+  getUsers: async (token: string, search?: string): Promise<{ users: User[]; count: number }> => {
+    const queryParams = new URLSearchParams();
+    if (search) queryParams.append('search', search);
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/users/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/users/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch users: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  getUserDetail: async (token: string, userId: number): Promise<{
+    user: User;
+    statistics: {
+      total_presentations: number;
+      completed_presentations: number;
+      completion_rate: number;
+    };
+    queue_status: {
+      priority?: number;
+      last_presented?: string;
+      postpone_count: number;
+    };
+  }> => {
+    const response = await fetch(buildApiUrl(`schedule/users/${userId}/`), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user detail: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Notifications
+  sendNotification: async (token: string, data: {
+    recipients: number[];
+    subject: string;
+    message: string;
+    template_name?: string;
+  }): Promise<{ message: string }> => {
+    const response = await fetch(buildApiUrl('schedule/notifications/send/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to send notification: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  getNotificationHistory: async (token: string): Promise<{ notifications: any[] }> => {
+    const response = await fetch(buildApiUrl('schedule/notification-history/'), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch notification history: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+};
+
+// ===============================================
+// Periodic Task Management Types
+// ===============================================
+
+export interface TaskTemplate {
+  id: number;
+  name: string;
+  description: string;
+  task_type: 'one_time' | 'recurring';
+  category: string;
+  frequency: 'weekly' | 'monthly' | 'quarterly';
+  interval: number;
+  start_date: string;
+  end_date?: string;
+  min_people: number;
+  max_people: number;
+  default_people: number;
+  estimated_hours: number;
+  window_type: 'fixed' | 'flexible';
+  fixed_start_day?: number;
+  fixed_end_day?: number;
+  flexible_position?: 'beginning' | 'middle' | 'end';
+  flexible_duration?: number;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  is_active: boolean;
+  created_by: User;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PeriodicTaskInstance {
+  id: number;
+  template: TaskTemplate;
+  template_name: string;
+  scheduled_period: string;
+  execution_start_date: string;
+  execution_end_date: string;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'overdue';
+  status_display: string;
+  original_assignees: number[];
+  current_assignees: number[];
+  assignees: User[];
+  primary_assignee?: User;
+  assignment_metadata: any;
+  is_overdue: boolean;
+  can_complete: boolean;
+  completed_by?: User;
+  completed_at?: string;
+  completion_duration?: number;
+  completion_notes?: string;
+  completion_photos?: string[];
+  completion_rating?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskRotationQueue {
+  id: number;
+  template: TaskTemplate;
+  algorithm: 'fair_rotation' | 'random' | 'manual';
+  last_updated: string;
+  min_gap_months: number;
+  consider_workload: boolean;
+  random_factor: number;
+  queue_members: QueueMember[];
+  member_count: number;
+}
+
+export interface QueueMember {
+  id: number;
+  user: User;
+  total_assignments: number;
+  last_assigned_date?: string;
+  last_assigned_period?: string;
+  completion_rate: number;
+  average_completion_time: number;
+  priority_score: number;
+  is_active: boolean;
+  availability_data: any;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskSwapRequest {
+  id: number;
+  task_instance: PeriodicTaskInstance;
+  request_type: 'swap' | 'pool';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  from_user: User;
+  to_user?: User;
+  reason: string;
+  target_user_approved: boolean;
+  target_user_approved_at?: string;
+  admin_approved: boolean;
+  admin_approved_at?: string;
+  admin_approved_by?: User;
+  is_public_pool: boolean;
+  pool_published_at?: string;
+  can_approve: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskStatistics {
+  total_tasks: number;
+  completed_tasks: number;
+  overdue_tasks: number;
+  completion_rate: number;
+  average_completion_time: number;
+  user_statistics: Array<{
+    user: User;
+    total_assignments: number;
+    completed_assignments: number;
+    completion_rate: number;
+    average_completion_time: number;
+  }>;
+  template_statistics: Array<{
+    template: TaskTemplate;
+    total_instances: number;
+    completed_instances: number;
+    completion_rate: number;
+    average_completion_time: number;
+  }>;
+}
+
+export interface TaskGenerationPreview {
+  period: string;
+  template_name: string;
+  execution_window: {
+    start_date: string;
+    end_date: string;
+    duration_days: number;
+  };
+  suggested_assignees: string[];
+  assignee_details: User[];
+}
+
+// ===============================================
+// Periodic Task Management API
+// ===============================================
+
+export const periodicTaskApi = {
+  // Task Templates
+  getTaskTemplates: async (token: string, params: { is_active?: boolean; category?: string } = {}): Promise<TaskTemplate[]> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString());
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/task-templates/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/task-templates/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch task templates: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results || data;
+  },
+
+  createTaskTemplate: async (token: string, templateData: Omit<TaskTemplate, 'id' | 'created_by' | 'created_at' | 'updated_at'>): Promise<TaskTemplate> => {
+    const response = await fetch(buildApiUrl('schedule/task-templates/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(templateData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to create task template: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  updateTaskTemplate: async (token: string, id: number, templateData: Partial<TaskTemplate>): Promise<TaskTemplate> => {
+    const response = await fetch(buildApiUrl(`schedule/task-templates/${id}/`), {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(templateData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to update task template: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  deleteTaskTemplate: async (token: string, id: number): Promise<void> => {
+    const response = await fetch(buildApiUrl(`schedule/task-templates/${id}/`), {
+      method: 'DELETE',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to delete task template: ${response.statusText}`);
+    }
+  },
+
+  // Task Instances
+  getPeriodicTasks: async (token: string, params: {
+    period?: string;
+    status?: string;
+    template_id?: number;
+    assigned_to?: number;
+  } = {}): Promise<PeriodicTaskInstance[]> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString());
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/periodic-tasks/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/periodic-tasks/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch periodic tasks: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results || data;
+  },
+
+  completeTask: async (token: string, taskId: number, completionData: {
+    completion_duration?: number;
+    completion_notes?: string;
+    completion_photos?: string[];
+    completion_rating?: number;
+  }): Promise<PeriodicTaskInstance> => {
+    const response = await fetch(buildApiUrl(`schedule/periodic-tasks/${taskId}/complete/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(completionData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to complete task: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  updateTaskAssignees: async (token: string, taskId: number, assigneeIds: number[]): Promise<PeriodicTaskInstance> => {
+    const response = await fetch(buildApiUrl(`schedule/periodic-tasks/${taskId}/update-assignees/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ assignee_ids: assigneeIds })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to update task assignees: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Task Rotation Queues
+  getTaskRotationQueues: async (token: string): Promise<TaskRotationQueue[]> => {
+    const response = await fetch(buildApiUrl('schedule/task-rotation-queues/'), {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch rotation queues: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results || data;
+  },
+
+  updateQueueSettings: async (token: string, queueId: number, settings: {
+    algorithm?: string;
+    min_gap_months?: number;
+    consider_workload?: boolean;
+    random_factor?: number;
+  }): Promise<TaskRotationQueue> => {
+    const response = await fetch(buildApiUrl(`schedule/task-rotation-queues/${queueId}/`), {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(settings)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Failed to update queue settings: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Task Swap Requests
+  getTaskSwapRequests: async (token: string, params: { status?: string; user_id?: number } = {}): Promise<TaskSwapRequest[]> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, value.toString());
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/task-swap-requests/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/task-swap-requests/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch task swap requests: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.results || data;
+  },
+
+  createTaskSwapRequest: async (token: string, data: {
+    task_instance_id: number;
+    request_type: 'swap' | 'pool';
+    to_user_id?: number;
+    reason: string;
+    is_public_pool?: boolean;
+  }): Promise<TaskSwapRequest> => {
+    const response = await fetch(buildApiUrl('schedule/task-swap-requests/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to create swap request: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  approveTaskSwapRequest: async (token: string, requestId: number): Promise<{ message: string }> => {
+    const response = await fetch(buildApiUrl(`schedule/task-swap-requests/${requestId}/approve/`), {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to approve swap request: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  rejectTaskSwapRequest: async (token: string, requestId: number, reason?: string): Promise<{ message: string }> => {
+    const response = await fetch(buildApiUrl(`schedule/task-swap-requests/${requestId}/reject/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to reject swap request: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Task Generation and Management
+  previewTaskGeneration: async (token: string, data: {
+    periods: string[];
+    template_ids?: number[];
+  }): Promise<TaskGenerationPreview[]> => {
+    const response = await fetch(buildApiUrl('schedule/periodic-tasks/preview-generation/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ...data, preview_only: true })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to preview task generation: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  generateTasks: async (token: string, data: {
+    periods: string[];
+    template_ids?: number[];
+  }): Promise<{ message: string; generated_tasks: PeriodicTaskInstance[] }> => {
+    const response = await fetch(buildApiUrl('schedule/periodic-tasks/generate/'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ...data, preview_only: false })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to generate tasks: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Statistics
+  getTaskStatistics: async (token: string, params: {
+    start_period?: string;
+    end_period?: string;
+    template_ids?: number[];
+  } = {}): Promise<TaskStatistics> => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) {
+        if (Array.isArray(value)) {
+          queryParams.append(key, value.join(','));
+        } else {
+          queryParams.append(key, value.toString());
+        }
+      }
+    });
+    
+    const url = queryParams.toString() 
+      ? `${buildApiUrl('schedule/periodic-tasks/statistics/')}?${queryParams.toString()}`
+      : buildApiUrl('schedule/periodic-tasks/statistics/');
+      
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch task statistics: ${response.statusText}`);
+    }
+    
+    return response.json();
   }
 };

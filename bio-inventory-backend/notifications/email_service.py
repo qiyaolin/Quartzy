@@ -3,6 +3,7 @@ from django.template.loader import render_to_string
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db import models
 from django.db.models import Q
 import logging
 import re
@@ -266,5 +267,234 @@ class EmailNotificationService:
             recipients=[booking.user],
             subject=f"Reminder: {booking.equipment.name} booking in {minutes_until} minutes",
             template_name='booking_reminder',
+            context=context
+        )
+
+    @staticmethod
+    def send_journal_club_submission_reminder(presenter, days_remaining):
+        """Send Journal Club paper submission reminder"""
+        if not presenter.user or not presenter.user.email:
+            logger.warning(f"Presenter {presenter.id} has no user or user has no email")
+            return False
+        
+        context = {
+            'presenter': presenter,
+            'meeting': presenter.meeting_instance,
+            'days_remaining': days_remaining,
+            'recipient': presenter.user,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=[presenter.user],
+            subject=f"Journal Club Paper Submission - {days_remaining} Days Remaining",
+            template_name='jc_materials_submission_reminder',
+            context=context
+        )
+
+    @staticmethod
+    def send_journal_club_final_reminder(presenter, admins=None):
+        """Send Journal Club paper final deadline reminder"""
+        recipients = [presenter.user] if presenter.user and presenter.user.email else []
+        
+        if admins:
+            recipients.extend([admin for admin in admins if admin.email])
+        
+        if not recipients:
+            logger.warning(f"No valid recipients for final reminder for presenter {presenter.id}")
+            return False
+        
+        context = {
+            'presenter': presenter,
+            'meeting': presenter.meeting_instance,
+            'recipient': presenter.user,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=recipients,
+            subject="URGENT: Journal Club Paper - Final Reminder",
+            template_name='jc_materials_submission_request',
+            context=context
+        )
+
+    @staticmethod
+    def send_research_update_reminder(presenters):
+        """Send Research Update presentation reminder"""
+        if not presenters:
+            return False
+        
+        valid_presenters = [p for p in presenters if p.user and p.user.email]
+        if not valid_presenters:
+            logger.warning("No presenters with valid email addresses")
+            return False
+        
+        context = {
+            'presenters': valid_presenters,
+            'meeting': valid_presenters[0].meeting_instance,
+        }
+        
+        recipients = [p.user for p in valid_presenters]
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=recipients,
+            subject="Research Update - 3 Day Reminder",
+            template_name='presenter_special_reminder',
+            context=context
+        )
+
+    @staticmethod
+    def send_meeting_reminder_24h(meeting, all_members):
+        """Send 24-hour meeting reminder to all members"""
+        valid_members = [m for m in all_members if m.email]
+        if not valid_members:
+            logger.warning("No members with valid email addresses")
+            return False
+        
+        context = {
+            'meeting': meeting,
+            'presenters': list(meeting.presenters.all()),
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=valid_members,
+            subject=f"{meeting.get_meeting_type_display()} Tomorrow - {meeting.date}",
+            template_name='meeting_reminder',
+            context=context
+        )
+
+    @staticmethod
+    def send_meeting_reminder_1h(meeting, all_members):
+        """Send 1-hour meeting reminder to all members"""
+        valid_members = [m for m in all_members if m.email]
+        if not valid_members:
+            logger.warning("No members with valid email addresses")
+            return False
+        
+        context = {
+            'meeting': meeting,
+            'presenters': list(meeting.presenters.all()),
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=valid_members,
+            subject=f"{meeting.get_meeting_type_display()} Starting in 1 Hour",
+            template_name='meeting_reminder',
+            context=context
+        )
+
+    @staticmethod
+    def send_paper_distribution(meeting, all_members):
+        """Send Journal Club paper distribution to all members"""
+        valid_members = [m for m in all_members if m.email]
+        if not valid_members:
+            logger.warning("No members with valid email addresses")
+            return False
+        
+        presenters_with_papers = meeting.presenters.filter(
+            models.Q(paper_file__isnull=False) | models.Q(paper_url__isnull=False),
+            materials_submitted_at__isnull=False
+        )
+        
+        context = {
+            'meeting': meeting,
+            'presenters': list(presenters_with_papers),
+            'papers': [
+                {
+                    'presenter': p.user.get_full_name() or p.user.username,
+                    'title': p.paper_title,
+                    'file': p.paper_file,
+                    'url': p.paper_url
+                }
+                for p in presenters_with_papers
+            ]
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=valid_members,
+            subject=f"Journal Club Paper for {meeting.date}",
+            template_name='jc_materials_distributed',
+            context=context
+        )
+
+    @staticmethod
+    def send_swap_request_notification(swap_request):
+        """Send swap request notification to target user"""
+        if not swap_request.target_presentation or not swap_request.target_presentation.user or not swap_request.target_presentation.user.email:
+            logger.warning(f"Swap request {swap_request.id} has no valid target user email")
+            return False
+        
+        context = {
+            'swap_request': swap_request,
+            'recipient': swap_request.target_presentation.user,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=[swap_request.target_presentation.user],
+            subject=f"Presentation Swap Request from {swap_request.requester.get_full_name() or swap_request.requester.username}",
+            template_name='swap_request_notification',
+            context=context
+        )
+
+    @staticmethod
+    def send_postpone_request_notification(swap_request, admins):
+        """Send postpone request notification to admins"""
+        valid_admins = [admin for admin in admins if admin.email]
+        if not valid_admins:
+            logger.warning("No admins with valid email addresses")
+            return False
+        
+        context = {
+            'swap_request': swap_request,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=valid_admins,
+            subject=f"Presentation Postponement Request from {swap_request.requester.get_full_name() or swap_request.requester.username}",
+            template_name='postpone_request_notification',
+            context=context
+        )
+
+    @staticmethod
+    def send_swap_approved_notification(swap_request):
+        """Send swap approval notification"""
+        recipients = []
+        
+        if swap_request.requester and swap_request.requester.email:
+            recipients.append(swap_request.requester)
+        
+        if swap_request.target_presentation and swap_request.target_presentation.user and swap_request.target_presentation.user.email:
+            recipients.append(swap_request.target_presentation.user)
+        
+        if not recipients:
+            logger.warning(f"No valid recipients for swap approval notification {swap_request.id}")
+            return False
+        
+        context = {
+            'swap_request': swap_request,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=recipients,
+            subject="Presentation Swap Approved",
+            template_name='booking_replaced_notification',
+            context=context
+        )
+
+    @staticmethod
+    def send_presenter_assignment_notification(presenter):
+        """Send presenter assignment notification"""
+        if not presenter.user or not presenter.user.email:
+            logger.warning(f"Presenter {presenter.id} has no user or user has no email")
+            return False
+        
+        context = {
+            'presenter': presenter,
+            'meeting': presenter.meeting_instance,
+            'recipient': presenter.user,
+        }
+        
+        return EmailNotificationService.send_email_notification(
+            recipients=[presenter.user],
+            subject=f"You have been assigned to present at {presenter.meeting_instance.get_meeting_type_display()}",
+            template_name='presenter_assignment',
             context=context
         )

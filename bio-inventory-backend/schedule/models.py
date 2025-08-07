@@ -644,6 +644,826 @@ class TaskInstance(models.Model):
 
 
 # ===============================================
+# Enhanced Periodic Task Management Models  
+# ===============================================
+
+class TaskTemplate(models.Model):
+    """Task template defining recurring task rules"""
+    
+    TYPE_CHOICES = [
+        ('recurring', 'Recurring'),
+        ('one_time', 'One Time'),
+    ]
+    
+    CATEGORY_CHOICES = [
+        ('system', 'System'),
+        ('custom', 'Custom'),
+    ]
+    
+    FREQUENCY_CHOICES = [
+        ('weekly', 'Weekly'),
+        ('biweekly', 'Bi-weekly'),
+        ('monthly', 'Monthly'),
+        ('quarterly', 'Quarterly'),
+        ('custom', 'Custom'),
+    ]
+    
+    WINDOW_TYPE_CHOICES = [
+        ('fixed', 'Fixed'),
+        ('flexible', 'Flexible'),
+    ]
+    
+    WINDOW_POSITION_CHOICES = [
+        ('start', 'Month Start'),
+        ('middle', 'Month Middle'),
+        ('end', 'Month End'),
+    ]
+    
+    PRIORITY_CHOICES = [
+        ('high', 'High'),
+        ('medium', 'Medium'),
+        ('low', 'Low'),
+    ]
+    
+    # Basic information
+    name = models.CharField(max_length=255, help_text="Task template name")
+    description = models.TextField(blank=True, null=True, help_text="Task description")
+    task_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='recurring')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='custom')
+    
+    # Recurrence configuration
+    frequency = models.CharField(
+        max_length=20, 
+        choices=FREQUENCY_CHOICES, 
+        blank=True, 
+        null=True,
+        help_text="Frequency for recurring tasks"
+    )
+    interval = models.PositiveIntegerField(
+        default=1, 
+        help_text="Frequency multiplier (e.g., 3 for every 3 months)"
+    )
+    start_date = models.DateField(
+        default=timezone.now,
+        help_text="Task series start date"
+    )
+    end_date = models.DateField(
+        blank=True, 
+        null=True, 
+        help_text="Task series end date (optional)"
+    )
+    
+    # Execution requirements
+    min_people = models.PositiveIntegerField(default=1, help_text="Minimum people required")
+    max_people = models.PositiveIntegerField(default=2, help_text="Maximum people allowed")
+    default_people = models.PositiveIntegerField(default=1, help_text="Default people to assign")
+    estimated_hours = models.FloatField(
+        blank=True, 
+        null=True, 
+        help_text="Estimated hours to complete"
+    )
+    
+    # Time window configuration
+    window_type = models.CharField(
+        max_length=20, 
+        choices=WINDOW_TYPE_CHOICES, 
+        default='fixed'
+    )
+    # Fixed window settings
+    fixed_start_day = models.PositiveIntegerField(
+        blank=True, 
+        null=True, 
+        help_text="Start day of month for fixed window"
+    )
+    fixed_end_day = models.PositiveIntegerField(
+        blank=True, 
+        null=True, 
+        help_text="End day of month for fixed window"
+    )
+    # Flexible window settings  
+    flexible_position = models.CharField(
+        max_length=20, 
+        choices=WINDOW_POSITION_CHOICES, 
+        blank=True, 
+        null=True
+    )
+    flexible_duration = models.PositiveIntegerField(
+        blank=True, 
+        null=True, 
+        help_text="Duration in days for flexible window"
+    )
+    
+    # Settings
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+    is_active = models.BooleanField(default=True)
+    
+    # Metadata
+    created_by = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='created_task_templates'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def should_generate_for_period(self, period_str):
+        """Check if task should be generated for given period (YYYY-MM format)"""
+        from datetime import datetime
+        period_date = datetime.strptime(period_str, '%Y-%m').date()
+        
+        if not self.is_active:
+            return False
+            
+        if self.task_type == 'one_time':
+            return False
+            
+        if period_date < self.start_date.replace(day=1):
+            return False
+            
+        if self.end_date and period_date > self.end_date.replace(day=1):
+            return False
+        
+        # Calculate if this period matches the frequency
+        months_since_start = (period_date.year - self.start_date.year) * 12 + \
+                           (period_date.month - self.start_date.month)
+        
+        if self.frequency == 'monthly':
+            return months_since_start % self.interval == 0
+        elif self.frequency == 'quarterly':
+            return months_since_start % (3 * self.interval) == 0
+        elif self.frequency == 'weekly':
+            # For weekly tasks, generate monthly but check specific weeks
+            return True
+        elif self.frequency == 'biweekly':
+            return True
+        
+        return False
+    
+    def get_execution_window(self, period_str):
+        """Get execution window for given period"""
+        from datetime import datetime
+        import calendar
+        
+        year, month = map(int, period_str.split('-'))
+        
+        if self.window_type == 'fixed':
+            start_day = min(self.fixed_start_day or 25, 
+                          calendar.monthrange(year, month)[1])
+            end_day = min(self.fixed_end_day or 31, 
+                        calendar.monthrange(year, month)[1])
+            
+            start_date = datetime(year, month, start_day).date()
+            end_date = datetime(year, month, end_day).date()
+            
+        else:  # flexible
+            days_in_month = calendar.monthrange(year, month)[1]
+            duration = self.flexible_duration or 7
+            
+            if self.flexible_position == 'start':
+                start_date = datetime(year, month, 1).date()
+                end_date = datetime(year, month, min(duration, days_in_month)).date()
+            elif self.flexible_position == 'middle':
+                mid_point = days_in_month // 2
+                start_day = max(1, mid_point - duration // 2)
+                end_day = min(days_in_month, start_day + duration - 1)
+                start_date = datetime(year, month, start_day).date()
+                end_date = datetime(year, month, end_day).date()
+            else:  # end
+                end_day = days_in_month
+                start_day = max(1, end_day - duration + 1)
+                start_date = datetime(year, month, start_day).date()
+                end_date = datetime(year, month, end_day).date()
+        
+        return start_date, end_date
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_frequency_display() if self.frequency else 'One-time'})"
+    
+    class Meta:
+        ordering = ['name']
+
+
+class PeriodicTaskInstance(models.Model):
+    """Individual task instance generated from template"""
+    
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('overdue', 'Overdue'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    # Template reference
+    template = models.ForeignKey(
+        TaskTemplate, 
+        on_delete=models.CASCADE, 
+        related_name='task_instances'
+    )
+    template_name = models.CharField(max_length=255, help_text="Template name at creation time")
+    
+    # Time information
+    scheduled_period = models.CharField(
+        max_length=7, 
+        help_text="Period in YYYY-MM format"
+    )
+    execution_start_date = models.DateField(help_text="Execution window start date")
+    execution_end_date = models.DateField(help_text="Execution window end date")
+    
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
+    
+    # Assignment tracking
+    original_assignees = models.JSONField(
+        default=list, 
+        help_text="Original assignee user IDs"
+    )
+    current_assignees = models.JSONField(
+        default=list, 
+        help_text="Current assignee user IDs after swaps"
+    )
+    assignment_metadata = models.JSONField(
+        default=dict, 
+        help_text="Assignment roles and timestamps"
+    )
+    
+    # Completion information
+    completed_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='completed_periodic_tasks'
+    )
+    completed_at = models.DateTimeField(blank=True, null=True)
+    completion_duration = models.PositiveIntegerField(
+        blank=True, 
+        null=True, 
+        help_text="Actual completion time in minutes"
+    )
+    completion_notes = models.TextField(blank=True, null=True)
+    completion_photos = models.JSONField(
+        default=list, 
+        help_text="List of photo URLs"
+    )
+    completion_rating = models.PositiveIntegerField(
+        blank=True, 
+        null=True, 
+        help_text="Self-rating 1-5"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def get_assignees(self):
+        """Get current assignee User objects"""
+        if not self.current_assignees:
+            return User.objects.none()
+        return User.objects.filter(id__in=self.current_assignees)
+    
+    def get_primary_assignee(self):
+        """Get primary assignee if specified in metadata"""
+        metadata = self.assignment_metadata or {}
+        primary_id = metadata.get('primary_assignee')
+        if primary_id:
+            try:
+                return User.objects.get(id=primary_id)
+            except User.DoesNotExist:
+                pass
+        # Fall back to first assignee
+        assignees = self.get_assignees()
+        return assignees.first() if assignees.exists() else None
+    
+    def is_overdue(self):
+        """Check if task is overdue"""
+        from datetime import date
+        return (self.status in ['scheduled', 'pending', 'in_progress'] and 
+                date.today() > self.execution_end_date)
+    
+    def can_be_completed_by(self, user):
+        """Check if user can mark this task as complete"""
+        return user.id in self.current_assignees
+    
+    def mark_completed(self, user, **kwargs):
+        """Mark task as completed"""
+        if not self.can_be_completed_by(user):
+            raise ValueError("User not assigned to this task")
+        
+        self.status = 'completed'
+        self.completed_by = user
+        self.completed_at = timezone.now()
+        
+        # Update optional completion data
+        for field in ['completion_duration', 'completion_notes', 
+                     'completion_photos', 'completion_rating']:
+            if field in kwargs:
+                setattr(self, field, kwargs[field])
+        
+        self.save()
+    
+    def add_status_change(self, from_status, to_status, changed_by, reason=None):
+        """Record status change"""
+        StatusChangeRecord.objects.create(
+            task_instance=self,
+            from_status=from_status,
+            to_status=to_status,
+            changed_by=changed_by,
+            reason=reason
+        )
+    
+    def __str__(self):
+        return f"{self.template_name} - {self.scheduled_period} ({self.get_status_display()})"
+    
+    class Meta:
+        ordering = ['-scheduled_period', 'execution_start_date']
+        indexes = [
+            models.Index(fields=['scheduled_period']),
+            models.Index(fields=['status']),
+            models.Index(fields=['execution_start_date']),
+            models.Index(fields=['execution_end_date']),
+        ]
+
+
+class StatusChangeRecord(models.Model):
+    """Record of task status changes"""
+    
+    task_instance = models.ForeignKey(
+        PeriodicTaskInstance, 
+        on_delete=models.CASCADE, 
+        related_name='status_history'
+    )
+    from_status = models.CharField(max_length=20)
+    to_status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-changed_at']
+
+
+class TaskRotationQueue(models.Model):
+    """Rotation queue for fair task assignment"""
+    
+    ALGORITHM_CHOICES = [
+        ('fair_rotation', 'Fair Rotation'),
+        ('random', 'Random'),
+        ('sequential', 'Sequential'),
+    ]
+    
+    template = models.OneToOneField(
+        TaskTemplate, 
+        on_delete=models.CASCADE, 
+        related_name='rotation_queue'
+    )
+    algorithm = models.CharField(
+        max_length=20, 
+        choices=ALGORITHM_CHOICES, 
+        default='fair_rotation'
+    )
+    last_updated = models.DateTimeField(auto_now=True)
+    
+    # Configuration
+    min_gap_months = models.PositiveIntegerField(
+        default=1, 
+        help_text="Minimum months between assignments for same person"
+    )
+    consider_workload = models.BooleanField(
+        default=True, 
+        help_text="Consider overall workload balance"
+    )
+    random_factor = models.FloatField(
+        default=0.1, 
+        help_text="Random factor weight (0-1)"
+    )
+    
+    def get_queue_members(self):
+        """Get all queue members ordered by priority"""
+        return self.queue_members.filter(is_active=True).order_by('-priority_score')
+    
+    def get_available_members(self, period_str):
+        """Get members available for given period"""
+        members = self.get_queue_members()
+        
+        # Filter out members on leave for this period
+        available_members = []
+        for member in members:
+            exclude_periods = member.availability_data.get('exclude_periods', [])
+            if period_str not in exclude_periods:
+                available_members.append(member)
+        
+        return available_members
+    
+    def assign_members_for_period(self, period_str, required_count=None):
+        """Assign members using configured algorithm"""
+        if not required_count:
+            required_count = self.template.default_people
+        
+        available_members = self.get_available_members(period_str)
+        
+        if len(available_members) < required_count:
+            raise ValueError(f"Not enough available members: {len(available_members)} < {required_count}")
+        
+        if self.algorithm == 'fair_rotation':
+            return self._fair_rotation_assignment(available_members, period_str, required_count)
+        elif self.algorithm == 'random':
+            import random
+            return random.sample(available_members, required_count)
+        else:  # sequential
+            return available_members[:required_count]
+    
+    def _fair_rotation_assignment(self, available_members, period_str, required_count):
+        """Implement fair rotation algorithm"""
+        import random
+        from datetime import datetime
+        
+        period_date = datetime.strptime(period_str, '%Y-%m').date()
+        
+        # Calculate scores for each member
+        scored_members = []
+        for member in available_members:
+            score = self._calculate_member_priority(member, period_date)
+            scored_members.append((member, score))
+        
+        # Sort by score (higher is better)
+        scored_members.sort(key=lambda x: x[1], reverse=True)
+        
+        # Select top members
+        selected = [member for member, score in scored_members[:required_count]]
+        
+        # Update assignment statistics
+        for member in selected:
+            member.update_assignment_stats(period_str)
+        
+        return selected
+    
+    def _calculate_member_priority(self, member, target_date):
+        """Calculate priority score for member"""
+        base_score = 100.0
+        
+        # Factor 1: Time since last assignment
+        if member.last_assigned_period:
+            last_period_date = datetime.strptime(member.last_assigned_period, '%Y-%m').date()
+            months_gap = (target_date.year - last_period_date.year) * 12 + \
+                        (target_date.month - last_period_date.month)
+            base_score += months_gap * 20  # 20 points per month
+        else:
+            base_score += 200  # Never assigned bonus
+        
+        # Factor 2: Total assignment balance
+        avg_assignments = self.queue_members.filter(is_active=True).aggregate(
+            avg_count=models.Avg('total_assignments')
+        )['avg_count'] or 0
+        
+        assignment_difference = avg_assignments - member.total_assignments
+        base_score += assignment_difference * 30  # 30 points per assignment difference
+        
+        # Factor 3: Completion rate
+        base_score += member.completion_rate * 10  # Max 10 points for 100% completion
+        
+        # Factor 4: Random factor
+        import random
+        base_score += random.random() * self.random_factor * 20
+        
+        return max(0, base_score)
+    
+    def __str__(self):
+        return f"Rotation Queue for {self.template.name}"
+    
+    class Meta:
+        verbose_name = "Task Rotation Queue"
+
+
+class QueueMember(models.Model):
+    """Member in a task rotation queue"""
+    
+    rotation_queue = models.ForeignKey(
+        TaskRotationQueue, 
+        on_delete=models.CASCADE, 
+        related_name='queue_members'
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    
+    # Assignment statistics
+    total_assignments = models.PositiveIntegerField(default=0)
+    last_assigned_date = models.DateTimeField(blank=True, null=True)
+    last_assigned_period = models.CharField(
+        max_length=7, 
+        blank=True, 
+        null=True,
+        help_text="Last assigned period in YYYY-MM format"
+    )
+    completion_rate = models.FloatField(
+        default=100.0, 
+        help_text="Completion rate percentage"
+    )
+    average_completion_time = models.FloatField(
+        blank=True, 
+        null=True, 
+        help_text="Average completion time in hours"
+    )
+    priority_score = models.FloatField(default=50.0)
+    
+    # Availability settings
+    is_active = models.BooleanField(default=True)
+    availability_data = models.JSONField(
+        default=dict, 
+        help_text="Availability preferences and exclusions"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def update_assignment_stats(self, period_str):
+        """Update statistics after assignment"""
+        self.total_assignments += 1
+        self.last_assigned_date = timezone.now()
+        self.last_assigned_period = period_str
+        self.save()
+    
+    def update_completion_stats(self, completion_time_hours=None):
+        """Update completion statistics"""
+        # Recalculate completion rate
+        completed_tasks = PeriodicTaskInstance.objects.filter(
+            current_assignees__contains=[self.user.id],
+            status='completed'
+        ).count()
+        
+        total_tasks = PeriodicTaskInstance.objects.filter(
+            current_assignees__contains=[self.user.id]
+        ).count()
+        
+        if total_tasks > 0:
+            self.completion_rate = (completed_tasks / total_tasks) * 100
+        
+        # Update average completion time
+        if completion_time_hours:
+            if self.average_completion_time:
+                # Simple moving average
+                self.average_completion_time = (self.average_completion_time + completion_time_hours) / 2
+            else:
+                self.average_completion_time = completion_time_hours
+        
+        self.save()
+    
+    def set_unavailable_periods(self, periods):
+        """Set periods when user is unavailable"""
+        data = self.availability_data or {}
+        data['exclude_periods'] = periods
+        self.availability_data = data
+        self.save()
+    
+    def is_available_for_period(self, period_str):
+        """Check if user is available for given period"""
+        if not self.is_active:
+            return False
+        
+        exclude_periods = self.availability_data.get('exclude_periods', [])
+        return period_str not in exclude_periods
+    
+    def __str__(self):
+        return f"{self.user.username} in {self.rotation_queue.template.name} queue"
+    
+    class Meta:
+        unique_together = ['rotation_queue', 'user']
+        ordering = ['-priority_score']
+
+
+class TaskSwapRequest(models.Model):
+    """Task swap/transfer request"""
+    
+    REQUEST_TYPE_CHOICES = [
+        ('swap', 'Swap with another user'),
+        ('transfer', 'Transfer to another user'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    task_instance = models.ForeignKey(
+        PeriodicTaskInstance, 
+        on_delete=models.CASCADE, 
+        related_name='swap_requests'
+    )
+    request_type = models.CharField(max_length=20, choices=REQUEST_TYPE_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    # Request details
+    from_user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='outgoing_swap_requests'
+    )
+    to_user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='incoming_swap_requests',
+        blank=True,
+        null=True,
+        help_text="Target user for direct swap/transfer"
+    )
+    reason = models.TextField(help_text="Reason for the request")
+    
+    # Approval tracking
+    target_user_approved = models.BooleanField(
+        null=True, 
+        blank=True,
+        help_text="Target user approval for swap requests"
+    )
+    target_user_approved_at = models.DateTimeField(blank=True, null=True)
+    admin_approved = models.BooleanField(
+        null=True, 
+        blank=True,
+        help_text="Admin approval if required"
+    )
+    admin_approved_at = models.DateTimeField(blank=True, null=True)
+    admin_approved_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='approved_task_swaps'
+    )
+    
+    # Public pool settings
+    is_public_pool = models.BooleanField(
+        default=False, 
+        help_text="Published to public swap pool"
+    )
+    pool_published_at = models.DateTimeField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def can_approve(self):
+        """Check if request can be approved"""
+        if self.request_type == 'swap' and self.to_user:
+            return (self.target_user_approved == True and 
+                   (self.admin_approved == True or not self._requires_admin_approval()))
+        else:  # transfer or pool request
+            return self.admin_approved == True or not self._requires_admin_approval()
+    
+    def _requires_admin_approval(self):
+        """Check if admin approval is required"""
+        # This could be configurable per task template or system-wide
+        return True  # Default: require admin approval
+    
+    def approve_by_target_user(self):
+        """Approve by target user"""
+        if self.request_type != 'swap' or not self.to_user:
+            raise ValueError("Invalid request type for target user approval")
+        
+        self.target_user_approved = True
+        self.target_user_approved_at = timezone.now()
+        
+        if self.can_approve():
+            self.status = 'approved'
+            self._execute_swap()
+        
+        self.save()
+    
+    def approve_by_admin(self, admin_user):
+        """Approve by admin"""
+        self.admin_approved = True
+        self.admin_approved_at = timezone.now()
+        self.admin_approved_by = admin_user
+        
+        if self.can_approve():
+            self.status = 'approved'
+            self._execute_swap()
+        
+        self.save()
+    
+    def reject(self, reason=None):
+        """Reject the request"""
+        self.status = 'rejected'
+        if reason:
+            self.reason += f"\n\nRejection reason: {reason}"
+        self.save()
+    
+    def publish_to_pool(self):
+        """Publish request to public swap pool"""
+        self.is_public_pool = True
+        self.pool_published_at = timezone.now()
+        self.save()
+    
+    def claim_from_pool(self, claiming_user):
+        """Claim request from public pool"""
+        if not self.is_public_pool:
+            raise ValueError("Request not in public pool")
+        
+        self.to_user = claiming_user
+        self.is_public_pool = False
+        
+        if self.request_type == 'swap':
+            # For swap, still need target user approval
+            self.target_user_approved = True
+            self.target_user_approved_at = timezone.now()
+        
+        if self.can_approve():
+            self.status = 'approved'
+            self._execute_swap()
+        
+        self.save()
+    
+    def _execute_swap(self):
+        """Execute the approved swap/transfer"""
+        task = self.task_instance
+        current_assignees = list(task.current_assignees)
+        
+        if self.from_user.id not in current_assignees:
+            raise ValueError("From user not in current assignees")
+        
+        # Remove from user
+        current_assignees.remove(self.from_user.id)
+        
+        # Add to user (if not already there)
+        if self.to_user and self.to_user.id not in current_assignees:
+            current_assignees.append(self.to_user.id)
+        
+        task.current_assignees = current_assignees
+        task.save()
+        
+        # Update assignment metadata
+        metadata = task.assignment_metadata or {}
+        swap_record = {
+            'type': self.request_type,
+            'from_user': self.from_user.id,
+            'to_user': self.to_user.id if self.to_user else None,
+            'executed_at': timezone.now().isoformat(),
+            'request_id': self.id
+        }
+        
+        if 'swap_history' not in metadata:
+            metadata['swap_history'] = []
+        metadata['swap_history'].append(swap_record)
+        
+        task.assignment_metadata = metadata
+        task.save()
+    
+    def __str__(self):
+        return f"{self.get_request_type_display()} - {self.from_user.username} ({self.get_status_display()})"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
+class NotificationRecord(models.Model):
+    """Record of notifications sent for periodic tasks"""
+    
+    NOTIFICATION_TYPE_CHOICES = [
+        ('assignment', 'Task Assignment'),
+        ('reminder', 'Task Reminder'),
+        ('overdue', 'Task Overdue'),
+        ('swap_request', 'Swap Request'),
+        ('swap_approved', 'Swap Approved'),
+        ('completion', 'Task Completion'),
+    ]
+    
+    CHANNEL_CHOICES = [
+        ('email', 'Email'),
+        ('in_app', 'In-App'),
+        ('both', 'Both'),
+    ]
+    
+    task_instance = models.ForeignKey(
+        PeriodicTaskInstance, 
+        on_delete=models.CASCADE, 
+        related_name='notifications'
+    )
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPE_CHOICES)
+    channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default='email')
+    
+    sent_to_users = models.JSONField(
+        default=list, 
+        help_text="List of user IDs who received notification"
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+    content_summary = models.TextField(help_text="Summary of notification content")
+    
+    # Tracking
+    email_sent = models.BooleanField(default=False)
+    email_errors = models.JSONField(default=list, help_text="Email sending errors")
+    
+    def mark_as_read(self, user):
+        """Mark notification as read by user (for in-app notifications)"""
+        # This could be extended with a separate read tracking table
+        pass
+    
+    def __str__(self):
+        return f"{self.get_notification_type_display()} for {self.task_instance}"
+    
+    class Meta:
+        ordering = ['-sent_at']
+
+
+# ===============================================
 # Intelligent Meeting Management Models
 # ===============================================
 

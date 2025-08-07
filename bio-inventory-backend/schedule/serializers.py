@@ -3,6 +3,9 @@ from django.contrib.auth.models import User
 from .models import (
     Event, Equipment, Booking, GroupMeeting, MeetingPresenterRotation, 
     RecurringTask, TaskInstance, EquipmentUsageLog, WaitingQueueEntry,
+    # Periodic Task Management Models
+    TaskTemplate, PeriodicTaskInstance, StatusChangeRecord,
+    TaskRotationQueue, QueueMember, TaskSwapRequest, NotificationRecord,
     # Intelligent Meeting Management Models
     MeetingConfiguration, MeetingInstance, Presenter, RotationSystem,
     QueueEntry, SwapRequest, PresentationHistory
@@ -336,6 +339,241 @@ class QRCodeScanSerializer(serializers.Serializer):
         except Equipment.DoesNotExist:
             raise serializers.ValidationError("Invalid QR code or equipment not found")
         return value
+
+
+# ===============================================
+# Periodic Task Management Serializers
+# ===============================================
+
+class TaskTemplateSerializer(serializers.ModelSerializer):
+    """Task template serializer"""
+    created_by = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = TaskTemplate
+        fields = [
+            'id', 'name', 'description', 'task_type', 'category',
+            'frequency', 'interval', 'start_date', 'end_date',
+            'min_people', 'max_people', 'default_people', 'estimated_hours',
+            'window_type', 'fixed_start_day', 'fixed_end_day',
+            'flexible_position', 'flexible_duration',
+            'priority', 'is_active', 'created_by', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        """Validate task template data"""
+        if data.get('task_type') == 'recurring':
+            if not data.get('frequency'):
+                raise serializers.ValidationError("Frequency is required for recurring tasks")
+        
+        if data.get('window_type') == 'fixed':
+            if not data.get('fixed_start_day') or not data.get('fixed_end_day'):
+                raise serializers.ValidationError("Fixed start and end days are required for fixed window type")
+            if data.get('fixed_start_day', 0) > data.get('fixed_end_day', 31):
+                raise serializers.ValidationError("Fixed start day cannot be greater than end day")
+        
+        if data.get('window_type') == 'flexible':
+            if not data.get('flexible_position') or not data.get('flexible_duration'):
+                raise serializers.ValidationError("Position and duration are required for flexible window type")
+        
+        if data.get('min_people', 1) > data.get('max_people', 1):
+            raise serializers.ValidationError("Minimum people cannot be greater than maximum people")
+        
+        return data
+
+
+class PeriodicTaskInstanceSerializer(serializers.ModelSerializer):
+    """Periodic task instance serializer"""
+    template = TaskTemplateSerializer(read_only=True)
+    assignees = serializers.SerializerMethodField()
+    primary_assignee = serializers.SerializerMethodField()
+    completed_by = UserSerializer(read_only=True)
+    is_overdue = serializers.ReadOnlyField()
+    can_complete = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = PeriodicTaskInstance
+        fields = [
+            'id', 'template', 'template_name', 'scheduled_period',
+            'execution_start_date', 'execution_end_date', 'status', 'status_display',
+            'original_assignees', 'current_assignees', 'assignment_metadata',
+            'assignees', 'primary_assignee', 'is_overdue', 'can_complete',
+            'completed_by', 'completed_at', 'completion_duration',
+            'completion_notes', 'completion_photos', 'completion_rating',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'template', 'template_name', 'original_assignees',
+            'completed_by', 'completed_at', 'created_at', 'updated_at'
+        ]
+    
+    def get_assignees(self, obj):
+        """Get current assignees"""
+        assignees = obj.get_assignees()
+        return UserSerializer(assignees, many=True).data
+    
+    def get_primary_assignee(self, obj):
+        """Get primary assignee"""
+        primary = obj.get_primary_assignee()
+        return UserSerializer(primary).data if primary else None
+    
+    def get_can_complete(self, obj):
+        """Check if current user can complete this task"""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            return obj.can_be_completed_by(request.user)
+        return False
+
+
+class StatusChangeRecordSerializer(serializers.ModelSerializer):
+    """Status change record serializer"""
+    changed_by = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = StatusChangeRecord
+        fields = [
+            'id', 'from_status', 'to_status', 'changed_by', 'changed_at', 'reason'
+        ]
+        read_only_fields = ['id', 'changed_at']
+
+
+class QueueMemberSerializer(serializers.ModelSerializer):
+    """Queue member serializer"""
+    user = UserSerializer(read_only=True)
+    
+    class Meta:
+        model = QueueMember
+        fields = [
+            'id', 'user', 'total_assignments', 'last_assigned_date',
+            'last_assigned_period', 'completion_rate', 'average_completion_time',
+            'priority_score', 'is_active', 'availability_data',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'total_assignments', 'priority_score', 'created_at', 'updated_at']
+
+
+class TaskRotationQueueSerializer(serializers.ModelSerializer):
+    """Task rotation queue serializer"""
+    template = TaskTemplateSerializer(read_only=True)
+    queue_members = QueueMemberSerializer(many=True, read_only=True)
+    member_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = TaskRotationQueue
+        fields = [
+            'id', 'template', 'algorithm', 'last_updated',
+            'min_gap_months', 'consider_workload', 'random_factor',
+            'queue_members', 'member_count'
+        ]
+        read_only_fields = ['id', 'template', 'last_updated']
+    
+    def get_member_count(self, obj):
+        """Get active member count"""
+        return obj.queue_members.filter(is_active=True).count()
+
+
+class TaskSwapRequestSerializer(serializers.ModelSerializer):
+    """Task swap request serializer"""
+    task_instance = PeriodicTaskInstanceSerializer(read_only=True)
+    from_user = UserSerializer(read_only=True)
+    to_user = UserSerializer(read_only=True)
+    admin_approved_by = UserSerializer(read_only=True)
+    can_approve = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = TaskSwapRequest
+        fields = [
+            'id', 'task_instance', 'request_type', 'status',
+            'from_user', 'to_user', 'reason',
+            'target_user_approved', 'target_user_approved_at',
+            'admin_approved', 'admin_approved_at', 'admin_approved_by',
+            'is_public_pool', 'pool_published_at', 'can_approve',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = [
+            'id', 'task_instance', 'from_user', 'admin_approved_by',
+            'target_user_approved_at', 'admin_approved_at',
+            'pool_published_at', 'created_at', 'updated_at'
+        ]
+
+
+class NotificationRecordSerializer(serializers.ModelSerializer):
+    """Notification record serializer"""
+    notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
+    channel_display = serializers.CharField(source='get_channel_display', read_only=True)
+    
+    class Meta:
+        model = NotificationRecord
+        fields = [
+            'id', 'notification_type', 'notification_type_display',
+            'channel', 'channel_display', 'sent_to_users', 'sent_at',
+            'content_summary', 'email_sent', 'email_errors'
+        ]
+        read_only_fields = ['id', 'sent_at']
+
+
+class TaskCompletionSerializer(serializers.Serializer):
+    """Serializer for task completion data"""
+    completion_duration = serializers.IntegerField(required=False, help_text="Duration in minutes")
+    completion_notes = serializers.CharField(required=False, allow_blank=True)
+    completion_photos = serializers.ListField(
+        child=serializers.URLField(),
+        required=False,
+        help_text="List of photo URLs"
+    )
+    completion_rating = serializers.IntegerField(
+        required=False, 
+        min_value=1, 
+        max_value=5,
+        help_text="Rating from 1-5"
+    )
+
+
+class TaskGenerationPreviewSerializer(serializers.Serializer):
+    """Serializer for task generation preview"""
+    period = serializers.CharField()
+    template_name = serializers.CharField()
+    execution_window = serializers.DictField()
+    suggested_assignees = serializers.ListField(child=serializers.CharField())
+    assignee_details = serializers.ListField(child=UserSerializer())
+
+
+class BatchTaskGenerationSerializer(serializers.Serializer):
+    """Serializer for batch task generation"""
+    periods = serializers.ListField(
+        child=serializers.CharField(max_length=7),
+        help_text="List of periods in YYYY-MM format"
+    )
+    template_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="Optional list of template IDs to generate (default: all active)"
+    )
+    preview_only = serializers.BooleanField(
+        default=True,
+        help_text="Only preview without creating tasks"
+    )
+    
+    def validate_periods(self, value):
+        """Validate period format"""
+        import re
+        for period in value:
+            if not re.match(r'^\d{4}-\d{2}$', period):
+                raise serializers.ValidationError(f"Invalid period format: {period}. Use YYYY-MM format.")
+        return value
+
+
+class TaskStatisticsSerializer(serializers.Serializer):
+    """Serializer for task statistics"""
+    total_tasks = serializers.IntegerField()
+    completed_tasks = serializers.IntegerField()
+    overdue_tasks = serializers.IntegerField()
+    completion_rate = serializers.FloatField()
+    average_completion_time = serializers.FloatField()
+    user_statistics = serializers.ListField(child=serializers.DictField())
+    template_statistics = serializers.ListField(child=serializers.DictField())
 
 
 # ===============================================

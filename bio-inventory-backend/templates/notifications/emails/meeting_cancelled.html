@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Group Meeting Cancelled</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #343a40; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Group Meeting Cancelled</h1>
+        </div>
+        <div class="content">
+            <p>Dear {{ recipient.first_name|default:recipient.username }},</p>
+            <p>The group meeting scheduled for {{ meeting.date }} has been cancelled.</p>
+            <p><strong>Reason:</strong> {{ meeting.cancellation_reason }}</p>
+            <p>Please update your calendar accordingly.</p>
+        </div>
+        <div class="footer">
+            <p>{{ site_name }} - Group Meeting Management System</p>
+            <p>Hayer Lab - McGill University</p>
+        </div>
+    </div>
+</body>
+</html>

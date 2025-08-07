@@ -197,6 +197,28 @@ class NotificationPreference(models.Model):
         help_text="How to receive funding/budget alerts"
     )
     
+    # Periodic task notifications
+    task_assignments = models.CharField(
+        max_length=10,
+        choices=DELIVERY_CHOICES,
+        default='both',
+        help_text="How to receive task assignment notifications"
+    )
+    
+    task_reminders = models.CharField(
+        max_length=10,
+        choices=DELIVERY_CHOICES,
+        default='both',
+        help_text="How to receive task deadline reminders"
+    )
+    
+    task_swaps = models.CharField(
+        max_length=10,
+        choices=DELIVERY_CHOICES,
+        default='web',
+        help_text="How to receive task swap request notifications"
+    )
+    
     # Email digest settings
     enable_daily_digest = models.BooleanField(
         default=False,

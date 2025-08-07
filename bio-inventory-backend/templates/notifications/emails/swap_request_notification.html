@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Swap Request Notification</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #fd7e14; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .swap-details { background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #fd7e14; color: white; text-decoration: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Swap Request Received</h1>
+        </div>
+        <div class="content">
+            <p>Dear {{ target_user.first_name|default:target_user.username }},</p>
+            <p>{{ requester.first_name|default:requester.username }} has requested to swap presentation dates with you for the group meeting on {{ meeting.date }}.</p>
+            <div class="swap-details">
+                <h3>Swap Request Details</h3>
+                <p><strong>Original Date:</strong> {{ request.original_date }}</p>
+                <p><strong>Requested Date:</strong> {{ request.target_date }}</p>
+                <p><strong>Reason:</strong> {{ request.reason }}</p>
+            </div>
+            <p>Please review and respond to the request in the system.</p>
+            <p style="text-align: center;">
+                <a href="{{ base_url }}/swap-requests" class="button">View Swap Requests</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>{{ site_name }} - Group Meeting Management System</p>
+            <p>Hayer Lab - McGill University</p>
+        </div>
+    </div>
+</body>
+</html>

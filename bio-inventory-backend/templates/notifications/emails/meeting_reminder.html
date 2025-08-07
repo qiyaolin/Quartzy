@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Group Meeting Reminder</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #28a745; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .meeting-details { background-color: white; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        .button { display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; }
+        .urgent { background-color: #ffc107; color: #856404; padding: 10px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Group Meeting Reminder</h1>
+        </div>
+        <div class="content">
+            <p>Dear {{ recipient.first_name|default:recipient.username }},</p>
+            <div class="urgent">
+                <strong>Reminder:</strong> The group meeting starts in {{ reminder_minutes }} minutes!
+            </div>
+            <div class="meeting-details">
+                <h3>Meeting Details</h3>
+                <p><strong>Date:</strong> {{ meeting.date }}</p>
+                <p><strong>Time:</strong> {{ meeting.time }}</p>
+                <p><strong>Location:</strong> {{ meeting.location }}</p>
+                <p><strong>Type:</strong> {{ meeting.type }}</p>
+            </div>
+            <p style="text-align: center;">
+                <a href="{{ base_url }}/meetings" class="button">View All Meetings</a>
+            </p>
+        </div>
+        <div class="footer">
+            <p>{{ site_name }} - Group Meeting Management System</p>
+            <p>Hayer Lab - McGill University</p>
+        </div>
+    </div>
+</body>
+</html>
