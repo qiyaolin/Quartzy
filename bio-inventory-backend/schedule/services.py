@@ -255,7 +255,26 @@ class MeetingGenerationService:
         
         config = MeetingConfiguration.objects.first()
         if not config:
-            raise ValueError("No meeting configuration found. Please set up meeting configuration first.")
+            # Auto-create default configuration if none exists
+            from django.contrib.auth.models import User
+            admin_user = User.objects.filter(is_superuser=True).first()
+            if not admin_user:
+                admin_user = User.objects.first()
+            
+            if admin_user:
+                config = MeetingConfiguration.objects.create(
+                    day_of_week=1,  # Monday
+                    start_time='10:00:00',
+                    location='Conference Room',
+                    research_update_duration=60,
+                    journal_club_duration=60,
+                    created_by=admin_user
+                )
+                # Add all active users to the configuration
+                active_users = User.objects.filter(is_active=True)
+                config.active_members.set(active_users)
+            else:
+                raise ValueError("No meeting configuration found. Please set up meeting configuration first.")
         
         generated_meetings = []
         current_date = start_date
@@ -344,11 +363,15 @@ class MeetingGenerationService:
     
     def _assign_presenters(self, meeting_instance: MeetingInstance) -> List[Presenter]:
         """Assign presenters to a meeting instance"""
+        import logging
+        logger = logging.getLogger(__name__)
+
         presenters = []
         
         # Get active rotation system
         rotation_system = RotationSystem.objects.filter(is_active=True).first()
         if not rotation_system:
+            logger.warning("No active rotation system found. Cannot assign presenters.")
             return presenters
         
         # Determine number of presenters needed
@@ -359,6 +382,8 @@ class MeetingGenerationService:
                 QueueEntry.objects.filter(rotation_system=rotation_system).count()
             )
         
+        logger.info(f"Attempting to assign {presenter_count} presenters for meeting on {meeting_instance.date}")
+
         # Get next presenters using fair rotation algorithm
         algorithm = MeetingFairRotationAlgorithm(rotation_system)
         selected_entries = algorithm.get_next_presenters(
@@ -366,20 +391,32 @@ class MeetingGenerationService:
             presenter_count
         )
         
-        # Create presenter records
-        for i, queue_entry in enumerate(selected_entries):
-            presenter = Presenter.objects.create(
-                meeting_instance=meeting_instance,
-                user=queue_entry.user,
-                order=i + 1,
-                status='assigned'
-            )
-            presenters.append(presenter)
-            
-            # Update queue entry
-            queue_entry.next_scheduled_date = meeting_instance.date
-            queue_entry.save()
-        
+        logger.info(f"Selected entries from algorithm: {selected_entries}")
+
+        try:
+            # Create presenter records
+            for i, queue_entry in enumerate(selected_entries):
+                logger.info(f"Processing entry {i}: {queue_entry}")
+                presenter = Presenter.objects.create(
+                    meeting_instance=meeting_instance,
+                    user=queue_entry.user,
+                    order=i + 1,
+                    status='assigned'
+                )
+                presenters.append(presenter)
+                
+                # Update queue entry
+                queue_entry.next_scheduled_date = meeting_instance.date
+                queue_entry.save()
+        except TypeError as e:
+            logger.error(f"TypeError during presenter assignment: {e}")
+            logger.error(f"Data that caused error: presenter_count={presenter_count}, selected_entries={selected_entries}")
+            # Re-raise the exception to be caught by the view
+            raise e
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during presenter assignment: {e}")
+            raise e
+
         return presenters
 
 

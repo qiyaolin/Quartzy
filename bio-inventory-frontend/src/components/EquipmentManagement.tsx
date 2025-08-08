@@ -19,7 +19,7 @@ import {
   X
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
-import { Equipment, equipmentApi, Booking } from '../services/scheduleApi.ts';
+import { Equipment, equipmentApi, Booking } from "../services/scheduleApi.ts";
 
 interface EquipmentManagementProps {
   onShowQRCode?: (equipment: Equipment) => void;
@@ -54,6 +54,9 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<'name' | 'location' | 'status' | 'usage'>('name');
+  const [showFilters, setShowFilters] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<EquipmentFormData>({
@@ -65,6 +68,13 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Quick actions state
+  const [quickActions, setQuickActions] = useState({
+    showAvailableOnly: false,
+    showBookableOnly: false,
+    showQROnly: false
+  });
 
   // Fetch equipment data
   const fetchEquipment = useCallback(async () => {
@@ -128,29 +138,11 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     if (!token) return;
     
     try {
-      // Mock bookings data
-      setBookings([
-        {
-          id: 1,
-          equipment_id: equipmentId,
-          user: { id: 2, username: 'bob', first_name: 'Bob', last_name: 'Smith' },
-          start_time: '2024-01-16T10:00:00Z',
-          end_time: '2024-01-16T12:00:00Z',
-          status: 'confirmed',
-          notes: 'Cell culture work'
-        },
-        {
-          id: 2,
-          equipment_id: equipmentId,
-          user: { id: 3, username: 'carol', first_name: 'Carol', last_name: 'Davis' },
-          start_time: '2024-01-16T14:00:00Z',
-          end_time: '2024-01-16T16:00:00Z',
-          status: 'pending',
-          notes: 'Sample preparation'
-        }
-      ]);
+      const bookingsData = await equipmentApi.getEquipmentBookings(token, equipmentId);
+      setBookings(bookingsData);
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      setBookings([]); // Set empty array on error
     }
   }, [token]);
 
@@ -544,7 +536,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
                       <div key={booking.id} className="border border-gray-200 rounded p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-medium text-sm">
-                            {booking.user.first_name} {booking.user.last_name}
+                            {booking.user}
                           </span>
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                             booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
@@ -560,9 +552,9 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
                             <Clock className="w-3 h-3" />
                             <span>{formatDateTime(booking.start_time)} - {formatDateTime(booking.end_time)}</span>
                           </div>
-                          {booking.notes && (
-                            <p className="text-gray-500">{booking.notes}</p>
-                          )}
+                          <div className="text-gray-500">
+                            {booking.title}
+                          </div>
                         </div>
                       </div>
                     ))}

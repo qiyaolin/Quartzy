@@ -1,13 +1,13 @@
 import React, { useState, useContext, useMemo, useCallback } from 'react';
 import {
-    Zap, Monitor, Clock, CheckCircle, AlertTriangle, 
-    Plus, ArrowRight, Timer, CalendarCheck, Users,
-    Calendar, ClipboardList, Search, Grid3X3, List,
-    Star, Bookmark, TrendingUp, Activity, Award,
-    MapPin, Bell, Settings, ChevronDown, ChevronRight
+    Zap, Monitor, CheckCircle, AlertTriangle, 
+    Plus, ArrowRight, Users,
+    Calendar, ClipboardList, Grid3X3,
+    Star
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { buildApiUrl } from '../config/api.ts';
+import QuickBookModal from './QuickBookModal.tsx';
 
 interface Equipment {
     id: number;
@@ -58,17 +58,12 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
     const [showFavorites, setShowFavorites] = useState(false);
     const [actionStatus, setActionStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isQuickBookModalOpen, setIsQuickBookModalOpen] = useState(false);
+    const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
 
-    const handleQuickBook = useCallback(async (equipment: Equipment) => {
+    const handleQuickBookEquipment = useCallback(async (bookingData: any) => {
         setIsSubmitting(true);
         try {
-            // Quick book for 1 hour starting now
-            const bookingData = {
-                equipment_id: equipment.id,
-                duration_minutes: 60,
-                auto_checkin: equipment.requires_qr_checkin
-            };
-
             const response = await fetch(
                 buildApiUrl('schedule/quick-actions/quick_book_equipment/'),
                 {
@@ -87,9 +82,10 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
                 throw new Error(data.error || 'Failed to book equipment');
             }
 
-            setActionStatus({ type: 'success', message: `${equipment.name} booked successfully!` });
+            setActionStatus({ type: 'success', message: `${selectedEquipment?.name} booked successfully!` });
             onEquipmentBooked?.(data.booking);
             onRefreshNeeded?.();
+            setIsQuickBookModalOpen(false);
             
             setTimeout(() => setActionStatus(null), 3000);
         } catch (error) {
@@ -100,7 +96,12 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
         } finally {
             setIsSubmitting(false);
         }
-    }, [token, onEquipmentBooked, onRefreshNeeded]);
+    }, [token, onEquipmentBooked, onRefreshNeeded, selectedEquipment]);
+
+    const openQuickBookModal = useCallback((equipment: Equipment) => {
+        setSelectedEquipment(equipment);
+        setIsQuickBookModalOpen(true);
+    }, []);
 
     const handleQuickTask = useCallback(() => {
         // TODO: Implement quick task creation modal
@@ -123,7 +124,7 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
                     icon: Monitor,
                     color: 'text-blue-600',
                     bgColor: 'bg-blue-100',
-                    onClick: () => handleQuickBook(equipment),
+                    onClick: () => openQuickBookModal(equipment),
                     priority: 'high',
                     category: 'equipment'
                 });
@@ -193,7 +194,7 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
         );
 
         return actions;
-    }, [availableEquipment, onNavigateToTab, handleQuickBook, handleQuickTask]);
+    }, [availableEquipment, onNavigateToTab, openQuickBookModal, handleQuickTask]);
 
     const filteredActions = activeCategory === 'all' 
         ? quickActions 
@@ -361,6 +362,16 @@ const EnhancedQuickActions: React.FC<EnhancedQuickActionsProps> = ({
                     )}
                 </div>
             </div>
+
+            {/* Quick Book Modal */}
+            {isQuickBookModalOpen && selectedEquipment && (
+                <QuickBookModal
+                    equipment={selectedEquipment}
+                    isSubmitting={isSubmitting}
+                    onClose={() => setIsQuickBookModalOpen(false)}
+                    onSubmit={handleQuickBookEquipment}
+                />
+            )}
         </div>
     );
 };

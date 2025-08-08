@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Upload, FileText, Calendar, User, AlertCircle, CheckCircle } from 'lucide-react';
-import { GroupMeeting } from '../services/groupMeetingApi.ts';
+import { GroupMeeting } from "../services/groupMeetingApi.ts";
 
 interface MaterialsUploadModalProps {
   isOpen: boolean;

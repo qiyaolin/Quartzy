@@ -42,7 +42,8 @@ export const API_ENDPOINTS = {
   USER_ME: '/api/users/me/',
   
   // User Management
-  USERS: '/api/users/',
+  USERS: '/api/users/active/',
+  USERS_ADMIN: '/api/users/',  // For admin-only operations
   
   // Item Management
   ITEMS: '/api/items/',

@@ -18,9 +18,11 @@ urlpatterns = [
     
     # Group meetings endpoints
     path('api/group-meetings/', api_compatibility.group_meetings_api, name='api-group-meetings'),
+    path('api/schedule/group-meetings/', api_compatibility.meetings_api, name='api-schedule-group-meetings'),
     
     # User endpoints
     path('api/users/active/', api_compatibility.active_users_api, name='api-users-active'),
+    path('schedule/users/', api_compatibility.active_users_api, name='schedule-users'),
     
     # Meeting configuration endpoints
     path('api/meeting-configurations/', api_compatibility.meeting_configurations_api, name='api-meeting-configs'),
@@ -36,4 +38,9 @@ urlpatterns = [
     
     # Meeting generation endpoints (compatibility for frontend)
     path('schedule/meetings/generate/', api_compatibility.meetings_generate_api, name='schedule-meetings-generate'),
+    path('schedule/meetings/', api_compatibility.meetings_api, name='schedule-meetings'),
+    
+    # Quick actions endpoints
+    path('schedule/quick-actions/quick_book_equipment/', api_compatibility.quick_book_equipment_api, name='schedule-quick-book-equipment'),
+    path('schedule/quick-actions/complete_task/', api_compatibility.complete_task_api, name='schedule-complete-task'),
 ]

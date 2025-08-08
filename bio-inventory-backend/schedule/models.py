@@ -534,24 +534,45 @@ class MeetingPresenterRotation(models.Model):
     is_active = models.BooleanField(default=True, help_text="是否激活")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
+    def save(self, *args, **kwargs):
+        # 强制将 next_presenter_index 转换为有效的整数
+        try:
+            numeric_index = int(self.next_presenter_index)
+            if numeric_index < 0:
+                numeric_index = 0
+            self.next_presenter_index = numeric_index
+        except (ValueError, TypeError, AttributeError):
+            self.next_presenter_index = 0
+        
+        # 使用数据库高效的方式获取用户数量
+        users_count = self.user_list.count()
+        if users_count > 0:
+            # 使用取模运算确保索引始终在有效范围内
+            self.next_presenter_index %= users_count
+        else:
+            # 如果没有用户，则重置索引
+            self.next_presenter_index = 0
+            
+        super().save(*args, **kwargs)
+
     def get_next_presenter(self):
         """获取下一个报告人"""
-        users = list(self.user_list.all())
-        if not users:
+        users = self.user_list.all()
+        users_count = users.count()
+
+        if users_count == 0:
             return None
         
-        if self.next_presenter_index >= len(users):
-            self.next_presenter_index = 0
-            self.save()
-        
+        # save 方法已确保索引始终有效且在范围内
         return users[self.next_presenter_index]
-    
+
     def advance_presenter(self):
         """轮换到下一个报告人"""
         users_count = self.user_list.count()
         if users_count > 0:
-            self.next_presenter_index = (self.next_presenter_index + 1) % users_count
+            # save 方法将处理取模运算
+            self.next_presenter_index += 1
             self.save()
     
     def __str__(self):

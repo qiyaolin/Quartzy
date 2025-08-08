@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Users, RotateCcw, Plus, Edit3, Trash2, ArrowUp, ArrowDown, Calendar, AlertTriangle, CheckCircle, User } from 'lucide-react';
-import { Presenter, GroupMeeting } from '../services/groupMeetingApi.ts';
+import { Presenter, GroupMeeting } from "../services/groupMeetingApi.ts";
 
 interface RotationManagementModalProps {
   isOpen: boolean;

@@ -16,7 +16,7 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
         const fetchUsers = async () => {
             setLoading(true); setError(null);
             try {
-                const response = await fetch(buildApiUrl(API_ENDPOINTS.USERS), { 
+                const response = await fetch(buildApiUrl(API_ENDPOINTS.USERS_ADMIN), { 
                     headers: { 'Authorization': `Token ${token}` } 
                 });
                 if (!response.ok) throw new Error('Failed to load users');
@@ -38,7 +38,7 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
                 throw new Error(errorData.error || 'Failed to toggle user status');
             }
             // Refresh the user list
-            const updatedResponse = await fetch(buildApiUrl(API_ENDPOINTS.USERS), { 
+            const updatedResponse = await fetch(buildApiUrl(API_ENDPOINTS.USERS_ADMIN), { 
                 headers: { 'Authorization': `Token ${token}` } 
             });
             const updatedData = await updatedResponse.json();

@@ -15,30 +15,138 @@ import json
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def schedules_api(request):
-    """Minimal schedules API endpoint"""
+    """Enhanced schedules API endpoint with actual Event model integration"""
+    from .models import Event
+    from .serializers import EventSerializer
+    from django.utils.dateparse import parse_date
+    
     if request.method == 'GET':
-        # Return empty schedules list with proper structure
-        return Response([])
+        # Get query parameters for filtering
+        date_param = request.GET.get('date')
+        view_mode = request.GET.get('view', 'month')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        
+        # Build queryset
+        queryset = Event.objects.all()
+        
+        # Apply date filtering based on view mode
+        if date_param:
+            try:
+                target_date = parse_date(date_param)
+                if target_date and view_mode:
+                    if view_mode == 'day':
+                        queryset = queryset.filter(start_time__date=target_date)
+                    elif view_mode == 'week':
+                        # Get start of week (Sunday)
+                        start_of_week = target_date - timedelta(days=target_date.weekday() + 1)
+                        if target_date.weekday() == 6:  # Sunday
+                            start_of_week = target_date
+                        end_of_week = start_of_week + timedelta(days=6)
+                        queryset = queryset.filter(
+                            start_time__date__gte=start_of_week,
+                            start_time__date__lte=end_of_week
+                        )
+                    elif view_mode == 'month':
+                        # Get full month
+                        start_of_month = target_date.replace(day=1)
+                        if target_date.month == 12:
+                            end_of_month = start_of_month.replace(year=target_date.year + 1, month=1) - timedelta(days=1)
+                        else:
+                            end_of_month = start_of_month.replace(month=target_date.month + 1) - timedelta(days=1)
+                        queryset = queryset.filter(
+                            start_time__date__gte=start_of_month,
+                            start_time__date__lte=end_of_month
+                        )
+            except ValueError:
+                pass
+        
+        # Apply start/end date filtering if provided
+        if start_date:
+            try:
+                start_date_parsed = parse_date(start_date)
+                if start_date_parsed:
+                    queryset = queryset.filter(start_time__date__gte=start_date_parsed)
+            except ValueError:
+                pass
+                
+        if end_date:
+            try:
+                end_date_parsed = parse_date(end_date)
+                if end_date_parsed:
+                    queryset = queryset.filter(start_time__date__lte=end_date_parsed)
+            except ValueError:
+                pass
+        
+        # Convert to frontend-compatible format
+        events = []
+        for event in queryset.order_by('start_time'):
+            events.append({
+                'id': event.id,
+                'title': event.title,
+                'description': event.description or '',
+                'date': event.start_time.date().isoformat(),
+                'start_time': event.start_time.strftime('%H:%M'),
+                'end_time': event.end_time.strftime('%H:%M'),
+                'location': '',  # Event model doesn't have location, could add later
+                'status': 'scheduled',  # Map event_type to status if needed
+                'attendees_count': 0,
+                'created_at': event.created_at.isoformat(),
+                'updated_at': event.updated_at.isoformat()
+            })
+        
+        return Response(events)
     
     elif request.method == 'POST':
-        # Accept schedule creation but return minimal response
+        # Create actual Event instance
         data = request.data
         
-        response_data = {
-            'id': 1,
-            'title': data.get('title', 'New Schedule'),
-            'description': data.get('description', ''),
-            'date': data.get('date', timezone.now().date().isoformat()),
-            'start_time': data.get('start_time', '10:00'),
-            'end_time': data.get('end_time', '11:00'),
-            'location': data.get('location', ''),
-            'status': 'scheduled',
-            'attendees_count': 0,
-            'created_at': timezone.now().isoformat(),
-            'updated_at': timezone.now().isoformat()
-        }
-        
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        # Parse start and end times
+        try:
+            date_str = data.get('date', timezone.now().date().isoformat())
+            start_time_str = data.get('start_time', '10:00')
+            end_time_str = data.get('end_time', '11:00')
+            
+            # Combine date and time
+            start_datetime = timezone.make_aware(
+                datetime.strptime(f"{date_str} {start_time_str}", '%Y-%m-%d %H:%M')
+            )
+            end_datetime = timezone.make_aware(
+                datetime.strptime(f"{date_str} {end_time_str}", '%Y-%m-%d %H:%M')
+            )
+            
+            # Create event
+            event = Event.objects.create(
+                title=data.get('title', 'New Event'),
+                description=data.get('description', ''),
+                start_time=start_datetime,
+                end_time=end_datetime,
+                event_type='meeting',  # Default type
+                created_by=request.user
+            )
+            
+            # Return frontend-compatible response
+            response_data = {
+                'id': event.id,
+                'title': event.title,
+                'description': event.description or '',
+                'date': event.start_time.date().isoformat(),
+                'start_time': event.start_time.strftime('%H:%M'),
+                'end_time': event.end_time.strftime('%H:%M'),
+                'location': '',
+                'status': 'scheduled',
+                'attendees_count': 0,
+                'created_at': event.created_at.isoformat(),
+                'updated_at': event.updated_at.isoformat()
+            }
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+            
+        except (ValueError, TypeError) as e:
+            return Response(
+                {'error': f'Invalid date/time format: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 @api_view(['POST'])
@@ -49,12 +157,35 @@ def initialize_default_schedules(request):
     return Response([])
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def equipment_api(request):
     """Minimal equipment API endpoint"""
-    # Return empty equipment list
-    return Response([])
+    if request.method == 'GET':
+        # Return empty equipment list
+        return Response([])
+    
+    elif request.method == 'POST':
+        # Accept equipment creation and return minimal response
+        data = request.data
+        
+        response_data = {
+            'id': 1,
+            'name': data.get('name', 'New Equipment'),
+            'description': data.get('description', ''),
+            'location': data.get('location', ''),
+            'is_bookable': data.get('is_bookable', True),
+            'requires_qr_checkin': data.get('requires_qr_checkin', False),
+            'qr_code': data.get('qr_code', ''),
+            'is_in_use': False,
+            'current_user': None,
+            'current_checkin_time': None,
+            'current_usage_duration': None,
+            'created_at': timezone.now().isoformat(),
+            'updated_at': timezone.now().isoformat()
+        }
+        
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -104,6 +235,67 @@ def group_meetings_api(request):
     """Minimal group meetings API endpoint"""
     # Return empty meetings list
     return Response([])
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def meetings_api(request):
+    """Schedule meetings API endpoint"""
+    try:
+        # Try to get data from the actual MeetingInstanceViewSet
+        from .models import MeetingInstance
+        
+        # Get meetings with ordering and limit support
+        ordering = request.GET.get('ordering', '-date')
+        limit = request.GET.get('limit', '100')
+        
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 100
+            
+        # Query meetings with related event data
+        queryset = MeetingInstance.objects.select_related('event').prefetch_related('presenters__user')
+        
+        # Apply ordering
+        if ordering:
+            queryset = queryset.order_by(ordering)
+            
+        # Apply limit
+        queryset = queryset[:limit]
+        
+        # Serialize the data
+        meetings_data = []
+        for meeting in queryset:
+            # Get the main presenter
+            main_presenter = meeting.presenters.first()
+            
+            meetings_data.append({
+                'id': meeting.id,
+                'title': meeting.event.title if meeting.event else f"{meeting.get_meeting_type_display()} - {meeting.date}",
+                'date': meeting.date.isoformat() if meeting.date else timezone.now().date().isoformat(),
+                'start_time': meeting.event.start_time.strftime('%H:%M') if meeting.event and meeting.event.start_time else '10:00',
+                'end_time': meeting.event.end_time.strftime('%H:%M') if meeting.event and meeting.event.end_time else '11:00',
+                'location': getattr(meeting.event, 'location', '') if meeting.event else '',
+                'description': meeting.event.description if meeting.event else meeting.notes or '',
+                'presenter': {
+                    'id': main_presenter.user.id,
+                    'username': main_presenter.user.username,
+                    'first_name': main_presenter.user.first_name,
+                    'last_name': main_presenter.user.last_name,
+                } if main_presenter and main_presenter.user else None,
+                'status': meeting.status or 'scheduled',
+                'meeting_type': meeting.meeting_type or 'research_update',
+                'created_at': meeting.created_at.isoformat() if meeting.created_at else timezone.now().isoformat(),
+                'updated_at': meeting.updated_at.isoformat() if meeting.updated_at else timezone.now().isoformat(),
+            })
+        
+        return Response(meetings_data)
+        
+    except Exception as e:
+        # Return empty meetings list if anything fails
+        print(f"Error in meetings_api: {str(e)}")  # For debugging
+        return Response([])
 
 
 @api_view(['GET'])
@@ -186,31 +378,27 @@ def unified_dashboard_overview_api(request):
         return response
         
     except Exception as e:
-        # Return a minimal dashboard structure if the real one fails
+        # Log the exception for debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Dashboard overview API failed, using fallback data: {str(e)}")
+        
+        # Return a minimal dashboard structure with correct field names if the real one fails
         minimal_dashboard = {
             'today_events': [],
             'upcoming_meetings': [],
-            'active_tasks': [],
-            'overdue_tasks': [],
-            'recent_equipment_usage': [],
-            'available_equipment': [],
-            'statistics': {
-                'total_meetings_this_week': 0,
-                'total_tasks_assigned': 0,
-                'equipment_utilization_rate': 0,
-                'pending_requests': 0
+            'my_tasks': [],
+            'equipment_bookings': [],
+            'pending_actions': [],
+            'stats': {
+                'presentations_total': 0,
+                'presentations_this_year': 0,
+                'tasks_completed_this_year': 0,
+                'equipment_hours_this_month': 0,
+                'active_bookings': 0,
+                'pending_swap_requests': 0
             },
-            'user_stats': {
-                'meetings_attended': 0,
-                'tasks_completed': 0,
-                'equipment_usage_hours': 0
-            },
-            'quick_actions': [
-                'View Calendar',
-                'Check Equipment',
-                'Create Meeting',
-                'Add Task'
-            ]
+            'last_updated': timezone.now()
         }
         
         return Response(minimal_dashboard)
@@ -236,5 +424,53 @@ def meetings_generate_api(request):
         # Return error response if the real endpoint fails
         return Response(
             {'error': f'Failed to generate meetings: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def quick_book_equipment_api(request):
+    """Quick book equipment API endpoint"""
+    try:
+        # Try to use the actual QuickActionViewSet quick_book_equipment action
+        from . import views
+        
+        # Create a ViewSet instance and call the quick_book_equipment action
+        quick_actions_viewset = views.QuickActionViewSet()
+        quick_actions_viewset.action = 'quick_book_equipment'
+        quick_actions_viewset.request = request
+        
+        response = quick_actions_viewset.quick_book_equipment(request)
+        return response
+        
+    except Exception as e:
+        # Return error response if the real endpoint fails
+        return Response(
+            {'error': f'Failed to book equipment: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def complete_task_api(request):
+    """Complete task API endpoint"""
+    try:
+        # Try to use the actual QuickActionViewSet complete_task action
+        from . import views
+        
+        # Create a ViewSet instance and call the complete_task action
+        quick_actions_viewset = views.QuickActionViewSet()
+        quick_actions_viewset.action = 'complete_task'
+        quick_actions_viewset.request = request
+        
+        response = quick_actions_viewset.complete_task(request)
+        return response
+        
+    except Exception as e:
+        # Return error response if the real endpoint fails
+        return Response(
+            {'error': f'Failed to complete task: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

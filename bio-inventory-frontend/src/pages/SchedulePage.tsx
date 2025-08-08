@@ -3,13 +3,14 @@ import '../styles/mobile-schedule.css';
 import { 
     Calendar, Clock, Users, MapPin, Plus, Edit3, Trash2, Search, 
     Settings, QrCode, CheckCircle, AlertCircle, User, Monitor,
-    CalendarDays, BookOpen, Repeat, Filter, Eye, EyeOff
+    CalendarDays, BookOpen, Repeat, Filter, Eye, EyeOff, X
 } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { 
     scheduleApi, equipmentApi, Schedule, Equipment, ScheduleParams, 
     ScheduleFormData, scheduleHelpers 
 } from '../services/scheduleApi.ts';
+import { groupMeetingApi } from '../services/groupMeetingApi.ts';
 import ScheduleFormModal from '../modals/ScheduleFormModal.tsx';
 import GroupMeetingFormModal from '../modals/GroupMeetingFormModal.tsx';
 import RecurringTaskFormModal from '../modals/RecurringTaskFormModal.tsx';
@@ -26,6 +27,10 @@ import MeetingEditModal from '../modals/MeetingEditModal.tsx';
 import UnifiedScheduleDashboard from '../components/UnifiedScheduleDashboard.tsx';
 import QuickActions from '../components/QuickActions.tsx';
 import EnhancedQuickActions from '../components/EnhancedQuickActions.tsx';
+import MyScheduleView from '../components/MyScheduleView.tsx';
+import QuickTourModal from '../components/QuickTourModal.tsx';
+import SmartWelcomeBanner from '../components/SmartWelcomeBanner.tsx';
+import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal.tsx';
 
 type TabType = 'dashboard' | 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
 
@@ -36,16 +41,51 @@ const SchedulePage: React.FC = () => {
     }
     const { token } = authContext;
 
-    // Mobile detection
+    // Mobile detection and UX state
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [useModernUI, setUseModernUI] = useState(true);
+    const [showQuickTour, setShowQuickTour] = useState(false);
+    const [contextualHelp, setContextualHelp] = useState<string | null>(null);
 
     useEffect(() => {
         const handleResize = () => {
             setIsMobile(window.innerWidth < 768);
         };
+        
+        const handleKeyboardShortcuts = (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key) {
+                    case '1':
+                        e.preventDefault();
+                        setActiveTab('dashboard');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        setActiveTab('calendar');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        setActiveTab('equipment');
+                        break;
+                    case 'n':
+                        e.preventDefault();
+                        handleOpenModal();
+                        break;
+                    case '?':
+                        e.preventDefault();
+                        setShowKeyboardShortcuts(true);
+                        break;
+                }
+            }
+        };
+        
         window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        window.addEventListener('keydown', handleKeyboardShortcuts);
+        
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            window.removeEventListener('keydown', handleKeyboardShortcuts);
+        };
     }, []);
 
     // Core state
@@ -74,6 +114,10 @@ const SchedulePage: React.FC = () => {
     const [showQRDisplay, setShowQRDisplay] = useState(false);
     const [isMeetingEditModalOpen, setIsMeetingEditModalOpen] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+    
+    // Enhanced UX state
+    const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+    const [lastAction, setLastAction] = useState<{ type: string; message: string; timestamp: number } | null>(null);
 
     // Fetch functions
     const fetchSchedules = useCallback(async () => {
@@ -165,6 +209,64 @@ const SchedulePage: React.FC = () => {
         }
     }, [token, activeTab, fetchSchedules, fetchEquipment, fetchAllData]);
 
+    // Equipment handlers
+    const handleBookEquipment = async (equipment: Equipment) => {
+        try {
+            const bookingData = {
+                equipment_id: equipment.id,
+                duration_minutes: 60, // Default 1 hour
+                auto_checkin: equipment.requires_qr_checkin ? false : true // Auto check-in for non-QR equipment
+            };
+            
+            const result = await equipmentApi.quickBookEquipment(token, bookingData);
+            console.log('Equipment booked successfully:', result);
+            
+            // Refresh equipment data
+            await fetchEquipment();
+            
+            // Show success feedback
+            setLastAction({
+                type: 'Equipment Booked',
+                message: `Successfully booked ${equipment.name} for 1 hour!`,
+                timestamp: Date.now()
+            });
+            
+            // Auto-hide after 3 seconds
+            setTimeout(() => setLastAction(null), 3000);
+        } catch (error) {
+            console.error('Failed to book equipment:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            setLastAction({
+                type: 'Booking Failed',
+                message: `Failed to book equipment: ${errorMessage}`,
+                timestamp: Date.now()
+            });
+            setTimeout(() => setLastAction(null), 5000);
+        }
+    };
+
+    const handleEditEquipment = async (equipment: Equipment) => {
+        const newName = prompt('Enter new equipment name:', equipment.name);
+        if (!newName || newName === equipment.name) return;
+        
+        try {
+            const updatedEquipment = await equipmentApi.updateEquipment(token, equipment.id, {
+                name: newName
+            });
+            console.log('Equipment updated:', updatedEquipment);
+            
+            // Refresh equipment data
+            await fetchEquipment();
+            
+            // Show success message
+            alert(`Equipment renamed to: ${newName}`);
+        } catch (error) {
+            console.error('Failed to update equipment:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            alert(`Failed to update equipment: ${errorMessage}`);
+        }
+    };
+
     // Modal and action handlers
     const handleOpenModal = () => {
         setIsModalOpen(true);
@@ -209,6 +311,14 @@ const SchedulePage: React.FC = () => {
             setSchedules(prev => [newSchedule, ...prev]);
             // Refresh the schedule list
             await fetchSchedules();
+            
+            // Show success feedback
+            setLastAction({
+                type: 'Event Created',
+                message: `Successfully created "${scheduleData.title}"`,
+                timestamp: Date.now()
+            });
+            setTimeout(() => setLastAction(null), 3000);
         } catch (error) {
             console.error('Error creating schedule:', error);
             // Re-throw error to show user feedback
@@ -242,17 +352,44 @@ const SchedulePage: React.FC = () => {
         return (
             <div className="flex items-center justify-center h-64">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-            </div>
+            
+            {/* Keyboard Shortcuts Modal */}
+            <KeyboardShortcutsModal 
+                isOpen={showKeyboardShortcuts}
+                onClose={() => setShowKeyboardShortcuts(false)}
+            />
+            
+            {/* Action Feedback Toast */}
+            {lastAction && (
+                <div className="fixed top-4 right-4 z-50 max-w-sm">
+                    <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-4 transform transition-all duration-300 animate-in slide-in-from-right">
+                        <div className="flex items-start gap-3">
+                            <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900">{lastAction.type}</p>
+                                <p className="text-sm text-gray-600">{lastAction.message}</p>
+                            </div>
+                            <button
+                                onClick={() => setLastAction(null)}
+                                className="p-1 hover:bg-gray-100 rounded"
+                            >
+                                <X className="w-4 h-4 text-gray-400" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
         );
     }
 
     const tabs = [
-        { id: 'dashboard', label: 'Dashboard', icon: CalendarDays },
-        { id: 'calendar', label: 'Calendar View', icon: Calendar },
-        { id: 'equipment', label: 'Equipment', icon: Monitor },
-        { id: 'meetings', label: 'Group Meetings', icon: Users },
-        { id: 'tasks', label: 'Recurring Tasks', icon: Repeat },
-        { id: 'my-schedule', label: 'My Schedule', icon: User }
+        { id: 'dashboard', label: 'Dashboard', icon: CalendarDays, description: 'Overview of all activities' },
+        { id: 'calendar', label: 'Calendar View', icon: Calendar, description: 'Detailed calendar view' },
+        { id: 'equipment', label: 'Equipment', icon: Monitor, description: 'Book and manage lab equipment' },
+        { id: 'meetings', label: 'Group Meetings', icon: Users, description: 'Team meetings and presentations' },
+        { id: 'tasks', label: 'Recurring Tasks', icon: Repeat, description: 'Lab maintenance and tasks' },
+        { id: 'my-schedule', label: 'My Schedule', icon: User, description: 'Personal schedule view' }
     ] as const;
 
     const getTabActions = () => {
@@ -336,69 +473,186 @@ const SchedulePage: React.FC = () => {
         }
     };
 
-    // Mobile-first rendering
+    // Mobile-first rendering with enhanced UX
     if (isMobile) {
         return (
-            <MobileScheduleDashboard 
-                availableEquipment={availableEquipment}
-                onQuickBookEquipment={(equipmentId) => {
-                    console.log('Quick book equipment:', equipmentId);
-                    fetchAllData();
-                }}
-                onCompleteTask={(taskId) => {
-                    console.log('Complete task:', taskId);
-                    fetchAllData();
-                }}
-                onNavigateToAction={(actionUrl) => {
-                    console.log('Navigate to action:', actionUrl);
-                }}
-                onNavigateToTab={(tab) => {
-                    setActiveTab(tab as TabType);
-                }}
-                onRefresh={fetchAllData}
-            />
+            <div className="relative">
+                <MobileScheduleDashboard 
+                    availableEquipment={availableEquipment}
+                    onQuickBookEquipment={(equipmentId) => {
+                        console.log('Quick book equipment:', equipmentId);
+                        fetchAllData();
+                        setLastAction({
+                            type: 'Quick Book',
+                            message: 'Equipment booking initiated',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 2000);
+                    }}
+                    onCompleteTask={(taskId) => {
+                        console.log('Complete task:', taskId);
+                        fetchAllData();
+                        setLastAction({
+                            type: 'Task Complete',
+                            message: 'Task marked as completed',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 2000);
+                    }}
+                    onNavigateToAction={(actionUrl) => {
+                        console.log('Navigate to action:', actionUrl);
+                    }}
+                    onNavigateToTab={(tab) => {
+                        setActiveTab(tab as TabType);
+                    }}
+                    onRefresh={fetchAllData}
+                />
+                
+                {/* Mobile Toast Notifications */}
+                {lastAction && (
+                    <div className="fixed bottom-4 left-4 right-4 z-50">
+                        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 transform transition-all duration-300 animate-in slide-in-from-bottom">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-green-500" />
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-gray-900">{lastAction.type}</p>
+                                    <p className="text-xs text-gray-600">{lastAction.message}</p>
+                                </div>
+                                <button
+                                    onClick={() => setLastAction(null)}
+                                    className="p-1 hover:bg-gray-100 rounded"
+                                >
+                                    <X className="w-3 h-3 text-gray-400" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
+        <div className="space-y-6 relative">
+            {/* Quick Tour Modal */}
+            {showQuickTour && (
+                <QuickTourModal 
+                    onClose={() => setShowQuickTour(false)}
+                    activeTab={activeTab}
+                    onNavigateToTab={setActiveTab}
+                />
+            )}
+            
+            {/* Floating Quick Actions - Mobile Only */}
+            {!isMobile && (
+                <div className="fixed bottom-6 right-6 z-40">
+                    <div className="relative">
+                        {/* Main FAB */}
+                        <button
+                            onClick={() => setIsModalOpen(true)}
+                            className="bg-primary-600 hover:bg-primary-700 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 group"
+                            title="Quick add event"
+                        >
+                            <Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-200" />
+                        </button>
+                        
+                        {/* Quick actions mini menu */}
+                        <div className="absolute bottom-16 right-0 bg-white rounded-lg shadow-lg border border-gray-200 p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
+                            <div className="flex flex-col gap-1">
+                                <button
+                                    onClick={() => setActiveTab('equipment')}
+                                    className="flex items-center gap-2 p-2 text-sm text-gray-700 hover:bg-gray-50 rounded whitespace-nowrap"
+                                >
+                                    <Monitor className="w-4 h-4" />
+                                    Book Equipment
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('meetings')}
+                                    className="flex items-center gap-2 p-2 text-sm text-gray-700 hover:bg-gray-50 rounded whitespace-nowrap"
+                                >
+                                    <Users className="w-4 h-4" />
+                                    Schedule Meeting
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Enhanced Header with Breadcrumbs and Context */}
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-4">
                         <h1 className="text-2xl font-bold text-gray-900">Laboratory Schedule Management</h1>
-                        <button
-                            onClick={() => setUseModernUI(!useModernUI)}
-                            className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                        >
-                            {useModernUI ? 'Classic UI' : 'Modern UI'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setUseModernUI(!useModernUI)}
+                                className="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                                title={useModernUI ? 'Switch to classic view' : 'Switch to modern view'}
+                            >
+                                {useModernUI ? 'Classic UI' : 'Modern UI'}
+                            </button>
+                            <button
+                                onClick={() => setShowQuickTour(true)}
+                                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors flex items-center gap-1"
+                                title="Take a quick tour"
+                            >
+                                <Users className="w-3 h-3" />
+                                Tour
+                            </button>
+                            <button
+                                onClick={() => setShowKeyboardShortcuts(true)}
+                                className="px-3 py-1 text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg transition-colors flex items-center gap-1"
+                                title="Keyboard shortcuts (Ctrl + ?)"
+                            >
+                                ⌘
+                            </button>
+                        </div>
                     </div>
-                    <p className="text-gray-600">Manage meetings, equipment bookings, recurring tasks, and personal schedules</p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-gray-600">Manage meetings, equipment bookings, recurring tasks, and personal schedules</p>
+                        {contextualHelp && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-sm text-blue-700">
+                                {contextualHelp}
+                            </div>
+                        )}
+                    </div>
                 </div>
                 {getTabActions()}
             </div>
 
-            {/* Tab Navigation */}
+            {/* Enhanced Tab Navigation with Descriptions and Indicators */}
             <div className="bg-white rounded-lg border border-gray-200">
                 <div className="border-b border-gray-200">
-                    <nav className="flex space-x-8 px-6" aria-label="Tabs">
+                    <nav className="flex space-x-1 px-6" aria-label="Tabs">
                         {tabs.map((tab) => {
                             const Icon = tab.icon;
                             const isActive = activeTab === tab.id;
                             return (
-                                <button
+                                <div
                                     key={tab.id}
-                                    onClick={() => setActiveTab(tab.id as TabType)}
-                                    className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
-                                        isActive
-                                            ? 'border-primary-500 text-primary-600'
-                                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                    }`}
+                                    className="relative group"
+                                    onMouseEnter={() => setContextualHelp(tab.description)}
+                                    onMouseLeave={() => setContextualHelp(null)}
                                 >
-                                    <Icon className="w-4 h-4" />
-                                    {tab.label}
-                                </button>
+                                    <button
+                                        onClick={() => setActiveTab(tab.id as TabType)}
+                                        className={`py-4 px-4 border-b-2 font-medium text-sm flex items-center gap-2 transition-all duration-200 rounded-t-lg ${
+                                            isActive
+                                                ? 'border-primary-500 text-primary-600 bg-primary-50'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                                        }`}
+                                        title={tab.description}
+                                    >
+                                        <Icon className="w-4 h-4" />
+                                        <span className="hidden sm:inline">{tab.label}</span>
+                                        <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+                                    </button>
+                                    {/* Active indicator */}
+                                    {isActive && (
+                                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1 w-2 h-2 bg-primary-500 rounded-full"></div>
+                                    )}
+                                </div>
                             );
                         })}
                     </nav>
@@ -483,6 +737,12 @@ const SchedulePage: React.FC = () => {
                 {/* Tab Content Views */}
                 {activeTab === 'dashboard' && (
                     <div className="space-y-6">
+                        {/* Smart Banner for New Users */}
+                        <SmartWelcomeBanner 
+                            onStartTour={() => setShowQuickTour(true)}
+                            onDismiss={() => {/* Handle dismiss */}}
+                        />
+                        
                         <UnifiedScheduleDashboard 
                             onQuickBookEquipment={(equipmentId) => {
                                 console.log('Quick book equipment:', equipmentId);
@@ -561,14 +821,8 @@ const SchedulePage: React.FC = () => {
                     <EquipmentManagement 
                         onShowQRCode={handleShowQRCode}
                         onQRScan={handleOpenQRScanner}
-                        onBookEquipment={(equipment) => {
-                            console.log('Book equipment:', equipment);
-                            // Handle equipment booking
-                        }}
-                        onEditEquipment={(equipment) => {
-                            console.log('Edit equipment:', equipment);
-                            // Handle equipment editing
-                        }}
+                        onBookEquipment={handleBookEquipment}
+                        onEditEquipment={handleEditEquipment}
                     />
                 )}
 
@@ -637,21 +891,23 @@ const SchedulePage: React.FC = () => {
                 onSubmit={async (taskData) => {
                     console.log('Recurring task data:', taskData);
                     try {
-                        // In real implementation, this would create a recurring task via groupMeetingApi
-                        // For now, create a placeholder schedule
-                        const newTask = await scheduleApi.createSchedule(token, {
-                            title: taskData.title || 'New Recurring Task',
-                            description: taskData.description || 'Recurring maintenance task',
-                            date: new Date().toISOString().split('T')[0],
-                            start_time: '09:00',
-                            end_time: '10:00',
-                            location: taskData.location || 'Lab',
-                            status: 'scheduled'
+                        // Create recurring task via groupMeetingApi
+                        const newTask = await groupMeetingApi.createRecurringTask(token, {
+                            title: taskData.title,
+                            description: taskData.description,
+                            cron_schedule: taskData.cron_schedule,
+                            assignee_group: taskData.assignee_group,
+                            location: taskData.location,
+                            is_active: true
                         });
-                        setSchedules(prev => [newTask, ...prev]);
-                        await fetchSchedules();
+                        console.log('Recurring task created successfully:', newTask);
+                        
+                        // Refresh data to show the new task
+                        if (activeTab === 'tasks') {
+                            // The RecurringTaskManager component will automatically refresh its data
+                        }
                     } catch (error) {
-                        console.error('Error creating task:', error);
+                        console.error('Error creating recurring task:', error);
                         throw error;
                     }
                 }}
@@ -1043,104 +1299,5 @@ const TasksView: React.FC<{
     );
 };
 
-// My Schedule View Component
-const MyScheduleView: React.FC<{
-    schedules: Schedule[];
-    loading: boolean;
-    formatTime: (time: string | undefined) => string;
-}> = ({ schedules, loading, formatTime }) => {
-    if (loading) {
-        return <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-        </div>;
-    }
-
-    const todaySchedules = schedules.filter(s => s.date === new Date().toISOString().split('T')[0]);
-    const upcomingSchedules = schedules.filter(s => s.date > new Date().toISOString().split('T')[0]).slice(0, 5);
-
-    return (
-        <div className="space-y-6">
-            {/* Today's Schedule */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Today's Schedule</h3>
-                {todaySchedules.length === 0 ? (
-                    <div className="text-center py-6">
-                        <Calendar className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No events scheduled for today</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {todaySchedules.map((schedule) => (
-                            <div key={schedule.id} className="border border-gray-200 rounded-lg p-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <h5 className="font-medium text-gray-900">{schedule.title}</h5>
-                                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                                            <div className="flex items-center gap-1">
-                                                <Clock className="w-4 h-4" />
-                                                <span>
-                                                    {formatTime(schedule.start_time)}
-                                                    {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
-                                                </span>
-                                            </div>
-                                            {schedule.location && (
-                                                <div className="flex items-center gap-1">
-                                                    <MapPin className="w-4 h-4" />
-                                                    <span>{schedule.location}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${scheduleHelpers.getStatusColor(schedule.status)}`}>
-                                        {schedule.status?.replace('_', ' ')}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* Upcoming Events */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Upcoming Events</h3>
-                {upcomingSchedules.length === 0 ? (
-                    <div className="text-center py-6">
-                        <CalendarDays className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-500">No upcoming events</p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {upcomingSchedules.map((schedule) => (
-                            <div key={schedule.id} className="border border-gray-200 rounded-lg p-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex-1">
-                                        <h5 className="font-medium text-gray-900">{schedule.title}</h5>
-                                        <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                                            <div className="flex items-center gap-1">
-                                                <Calendar className="w-4 h-4" />
-                                                <span>{schedule.date}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1">
-                                                <Clock className="w-4 h-4" />
-                                                <span>
-                                                    {formatTime(schedule.start_time)}
-                                                    {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${scheduleHelpers.getStatusColor(schedule.status)}`}>
-                                        {schedule.status?.replace('_', ' ')}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
 
 export default SchedulePage;

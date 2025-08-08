@@ -82,6 +82,8 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
     const [refreshing, setRefreshing] = useState(false);
     const [activeSection, setActiveSection] = useState<'overview' | 'today' | 'actions'>('overview');
     const [showMobileMenu, setShowMobileMenu] = useState(false);
+    const [showActionSheet, setShowActionSheet] = useState(false);
+    const [hapticFeedback, setHapticFeedback] = useState(true);
 
     const quickActions: QuickAction[] = useMemo(() => [
         {
@@ -143,12 +145,25 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
             color: 'text-emerald-600',
             bgColor: 'bg-emerald-100',
             onClick: () => {
+                if (hapticFeedback && 'vibrate' in navigator) {
+                    navigator.vibrate(50);
+                }
                 // TODO: Implement QR scanner
                 console.log('Open QR scanner');
             },
             priority: 'low'
         }
-    ], [availableEquipment, onNavigateToTab]);
+    ], [availableEquipment, onNavigateToTab, hapticFeedback]);
+    
+    const handleActionTap = (action: () => void, withHaptic = true) => {
+        if (withHaptic && hapticFeedback && 'vibrate' in navigator) {
+            navigator.vibrate(30);
+        }
+        action();
+    };
+    
+    const priorityActions = quickActions.filter(action => action.priority === 'high');
+    const secondaryActions = quickActions.filter(action => action.priority !== 'high');
 
     const fetchDashboardData = async () => {
         try {

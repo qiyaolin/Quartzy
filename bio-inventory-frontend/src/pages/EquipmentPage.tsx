@@ -9,9 +9,10 @@ import {
     Settings
 } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
-import { equipmentApi, Equipment } from '../services/scheduleApi.ts';
+import { equipmentApi, Equipment } from "../services/scheduleApi.ts";
 import EquipmentCard from '../components/EquipmentCard';
 import EquipmentQRScanner from '../components/EquipmentQRScanner';
+import QuickBookModal from '../components/QuickBookModal';
 
 const EquipmentPage: React.FC = () => {
     const authContext = useContext(AuthContext);
@@ -61,10 +62,24 @@ const EquipmentPage: React.FC = () => {
         fetchEquipment();
     };
 
+    const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+    const [selectedEquipmentForBooking, setSelectedEquipmentForBooking] = useState<Equipment | null>(null);
+
     const handleBooking = (equipment: Equipment) => {
-        // TODO: Implement booking modal or redirect to booking page
-        console.log('Booking equipment:', equipment);
-        alert(`Booking functionality for ${equipment.name} will be implemented`);
+        setSelectedEquipmentForBooking(equipment);
+        setIsBookingModalOpen(true);
+    };
+
+    const handleBookingSubmit = async (bookingData: any) => {
+        // This can reuse the same booking API logic
+        try {
+            // Implementation similar to EnhancedQuickActions
+            console.log('Booking equipment:', selectedEquipmentForBooking, 'with data:', bookingData);
+            // TODO: Add actual API call here
+            setIsBookingModalOpen(false);
+        } catch (error) {
+            console.error('Booking failed:', error);
+        }
     };
 
     const handleViewUsage = (equipment: Equipment) => {
@@ -274,6 +289,16 @@ const EquipmentPage: React.FC = () => {
                 onSuccess={handleQRScanSuccess}
                 mode={scannerMode}
             />
+
+            {/* Booking Modal */}
+            {isBookingModalOpen && selectedEquipmentForBooking && (
+                <QuickBookModal
+                    equipment={selectedEquipmentForBooking}
+                    isSubmitting={false}
+                    onClose={() => setIsBookingModalOpen(false)}
+                    onSubmit={handleBookingSubmit}
+                />
+            )}
         </div>
     );
 };

@@ -121,17 +121,19 @@ class FairRotationAlgorithm:
         
         # Calculate current year presentation counts
         current_year = timezone.now().year
-        user_presentation_counts = {}
-        
-        for queue_entry in all_entries:
-            count = Presenter.objects.filter(
-                user=queue_entry.user,
+        user_presentation_counts = {
+            qe.user.id: Presenter.objects.filter(
+                user=qe.user,
                 meeting_instance__date__year=current_year,
                 status__in=['confirmed', 'completed']
             ).count()
-            user_presentation_counts[queue_entry.user.id] = count
+            for qe in all_entries
+        }
         
         # Calculate average presentations per person
+        if not user_presentation_counts:
+            return 0.0
+            
         total_presentations = sum(user_presentation_counts.values())
         average_presentations = total_presentations / len(user_presentation_counts)
         
@@ -349,7 +351,7 @@ class FairRotationAlgorithm:
         return False
     
     def _get_last_presentation_date(self, user: User) -> Optional[date]:
-        \"\"\"Get user's last presentation date\"\"\"
+        """Get user's last presentation date"""
         last_presentation = Presenter.objects.filter(
             user=user,
             status__in=['confirmed', 'completed']
@@ -360,7 +362,7 @@ class FairRotationAlgorithm:
         return None
     
     def _get_presentation_count_this_year(self, user: User) -> int:
-        \"\"\"Get user's presentation count for current year\"\"\"
+        """Get user's presentation count for current year"""
         current_year = timezone.now().year
         return Presenter.objects.filter(
             user=user,
@@ -373,7 +375,7 @@ class FairRotationAlgorithm:
         selected_presenters: List[User],
         meeting_date: date
     ) -> float:
-        \"\"\"Calculate confidence score for the suggestion\"\"\"
+        """Calculate confidence score for the suggestion"""
         if not selected_presenters:
             return 0.0
         

@@ -494,7 +494,7 @@ export const emailNotificationApi = {
     }): Promise<any> => {
         // This would integrate with the existing email notification system
         // For now, we'll use a generic endpoint that would route to the existing system
-        const response = await fetch(buildApiUrl('notifications/send/'), {
+        const response = await fetch(buildApiUrl('/api/notifications/send/'), {
             method: 'POST',
             headers: {
                 'Authorization': `Token ${token}`,
@@ -519,7 +519,7 @@ export const emailNotificationApi = {
         context: Record<string, any>;
         scheduled_for: string; // ISO datetime string
     }): Promise<any> => {
-        const response = await fetch(buildApiUrl('notifications/schedule/'), {
+        const response = await fetch(buildApiUrl('/api/notifications/schedule/'), {
             method: 'POST',
             headers: {
                 'Authorization': `Token ${token}`,

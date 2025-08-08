@@ -4,7 +4,7 @@ import {
     Plus, Trash2, RotateCcw, CheckCircle, Info, BookOpen, FileText
 } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
-import { groupMeetingApi, MeetingConfiguration } from '../services/groupMeetingApi.ts';
+import { groupMeetingApi, MeetingConfiguration } from "../services/groupMeetingApi';
 
 interface MeetingConfigurationModalProps {
     isOpen: boolean;

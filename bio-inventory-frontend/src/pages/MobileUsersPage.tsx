@@ -49,7 +49,7 @@ const MobileUsersPage: React.FC<MobileUsersPageProps> = ({
     setLoading(true);
     try {
       const response = await fetch(
-        buildApiUrl(API_ENDPOINTS.USERS),
+        buildApiUrl(API_ENDPOINTS.USERS_ADMIN),
         { headers: { 'Authorization': `Token ${token}` } }
       );
       

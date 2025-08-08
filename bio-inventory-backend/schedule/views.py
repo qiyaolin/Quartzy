@@ -8,6 +8,7 @@ from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.conf import settings
 import logging
+logger = logging.getLogger(__name__)
 
 # Google Calendar integration
 try:
@@ -485,11 +486,52 @@ class BookingViewSet(viewsets.ModelViewSet):
     def cancel(self, request, pk=None):
         """取消预约"""
         booking = self.get_object()
+        
+        # Check permissions - only booking owner or admin can cancel
+        if booking.user != request.user and not request.user.is_staff:
+            return Response({
+                'error': 'You are not authorized to cancel this booking'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if booking.status == 'cancelled':
+            return Response({
+                'error': 'Booking is already cancelled'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if booking.status == 'completed':
+            return Response({
+                'error': 'Cannot cancel a completed booking'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        reason = request.data.get('reason', 'No reason provided')
+        
+        # If equipment is currently in use for this booking, check it out
+        if (booking.status == 'in_progress' and 
+            booking.equipment.is_in_use and 
+            booking.equipment.current_user == booking.user):
+            booking.equipment.check_out_user(booking.user)
+        
         booking.status = 'cancelled'
         booking.save()
         
+        # Notify waiting queue if applicable
+        if hasattr(booking.equipment, 'waiting_queue') and booking.equipment.waiting_queue.exists():
+            # Process waiting queue for this time slot
+            waiting_entries = booking.equipment.waiting_queue.filter(
+                status='waiting',
+                requested_start_time__lte=booking.event.end_time,
+                requested_end_time__gte=booking.event.start_time
+            ).order_by('position')
+            
+            for entry in waiting_entries[:1]:  # Notify first person in queue
+                entry.notify_user()
+        
         serializer = self.get_serializer(booking)
-        return Response(serializer.data)
+        return Response({
+            'message': 'Booking cancelled successfully',
+            'booking': serializer.data,
+            'reason': reason
+        })
 
 
 class GroupMeetingViewSet(viewsets.ModelViewSet):
@@ -1102,6 +1144,36 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
             'task': self.get_serializer(task).data
         })
     
+    @action(detail=True, methods=['post'])
+    def cancel_task(self, request, pk=None):
+        """Cancel periodic task"""
+        task = self.get_object()
+        
+        # Check permissions - only assignees or admins can cancel
+        if not task.can_be_completed_by(request.user) and not request.user.is_staff:
+            return Response({
+                'error': 'You are not authorized to cancel this task'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if task.status in ['completed', 'cancelled']:
+            return Response({
+                'error': f'Task is already {task.status} and cannot be cancelled'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        reason = request.data.get('reason', 'No reason provided')
+        
+        old_status = task.status
+        task.status = 'cancelled'
+        task.save()
+        
+        # Add status change record
+        task.add_status_change(old_status, 'cancelled', request.user, reason)
+        
+        return Response({
+            'message': 'Task cancelled successfully',
+            'task': self.get_serializer(task).data
+        })
+    
     @action(detail=False, methods=['post'])
     def batch_generate(self, request):
         """Batch generate periodic tasks"""
@@ -1664,8 +1736,9 @@ class MeetingInstanceViewSet(viewsets.ModelViewSet):
             'count': upcoming_meetings.count()
         })
     
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='generate')
     def generate_meetings(self, request):
+        logger.debug(f"generate_meetings called with request.data: {request.data}")
         """Generate meetings for a date range"""
         serializer = MeetingGenerationSerializer(data=request.data)
         if not serializer.is_valid():
@@ -1674,34 +1747,40 @@ class MeetingInstanceViewSet(viewsets.ModelViewSet):
         try:
             # Extract validated data
             validated_data = serializer.validated_data
+            logger.debug(f"Meeting generation request - dates: {validated_data.get('start_date')} to {validated_data.get('end_date')}")
+            
             start_date = validated_data.get('start_date')
             end_date = validated_data.get('end_date')
             meeting_types = validated_data.get('meeting_types', ['research_update', 'journal_club'])
             auto_assign_presenters = validated_data.get('auto_assign_presenters', True)
             
+            logger.debug(f"Parameters: types={meeting_types} (type: {type(meeting_types)}), auto_assign={auto_assign_presenters}")
+            
             # Use the MeetingGenerationService
-            from .services import MeetingGenerationService
+            from .services.meeting_generation import MeetingGenerationService
             generation_service = MeetingGenerationService()
             
-            result = generation_service.generate_meetings(
-                start_date=start_date,
-                end_date=end_date,
-                meeting_types=meeting_types,
-                auto_assign_presenters=auto_assign_presenters
-            )
+            try:
+                result = generation_service.generate_meetings(
+                    start_date=start_date,
+                    end_date=end_date,
+                    meeting_types=meeting_types,
+                    auto_assign_presenters=auto_assign_presenters
+                )
+            except Exception as e:
+                logger.error(f"Error in generate_meetings: {e}", exc_info=True)
+                return Response({'error': f'Failed to generate meetings: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Return the generated meetings with serialized data
             generated_meetings_data = []
-            for meeting_info in result['generated_meetings']:
-                meeting_instance = meeting_info['meeting_instance']
-                presenters = meeting_info['presenters']
+            for meeting_instance in result['generated_meetings']:
+                # Get presenters for this meeting
+                presenters = meeting_instance.presenters.all() if hasattr(meeting_instance, 'presenters') else []
                 
                 meeting_data = {
                     'id': meeting_instance.id,
                     'date': meeting_instance.date,
                     'meeting_type': meeting_instance.meeting_type,
-                    'title': meeting_instance.title,
-                    'description': meeting_instance.description,
                     'status': meeting_instance.status,
                     'presenters': [
                         {
@@ -1755,6 +1834,57 @@ class MeetingInstanceViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(meeting)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Cancel meeting"""
+        meeting = self.get_object()
+        
+        # Check permissions - admin or assigned presenter can cancel
+        is_presenter = meeting.presenters.filter(
+            user=request.user, 
+            status__in=['assigned', 'confirmed']
+        ).exists()
+        
+        if not request.user.is_staff and not is_presenter:
+            return Response({
+                'error': 'You are not authorized to cancel this meeting'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        if meeting.status in ['completed', 'cancelled']:
+            return Response({
+                'error': f'Meeting is already {meeting.status} and cannot be cancelled'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        reason = request.data.get('reason', 'No reason provided')
+        reschedule = request.data.get('reschedule', False)
+        
+        old_status = meeting.status
+        meeting.status = 'cancelled'
+        meeting.cancellation_reason = reason
+        meeting.cancelled_by = request.user
+        meeting.cancelled_at = timezone.now()
+        meeting.save()
+        
+        # Update presenters status
+        meeting.presenters.update(status='cancelled')
+        
+        # If reschedule requested, keep track for rescheduling
+        if reschedule:
+            # Add metadata for rescheduling
+            meeting.metadata = meeting.metadata or {}
+            meeting.metadata['reschedule_requested'] = True
+            meeting.metadata['reschedule_requested_by'] = request.user.id
+            meeting.metadata['reschedule_requested_at'] = timezone.now().isoformat()
+            meeting.save()
+        
+        serializer = self.get_serializer(meeting)
+        return Response({
+            'message': 'Meeting cancelled successfully',
+            'meeting': serializer.data,
+            'reason': reason,
+            'reschedule_requested': reschedule
+        })
     
     def perform_create(self, serializer):
         """Handle meeting creation with Google Calendar sync"""
@@ -1938,6 +2068,81 @@ class RotationSystemViewSet(viewsets.ModelViewSet):
             'message': f'Recalculated priorities for {queue_entries.count()} entries',
             'recalculated_count': queue_entries.count()
         })
+    
+    @action(detail=False, methods=['post'])
+    def update_rotation(self, request):
+        """Update rotation list with active/inactive status changes"""
+        try:
+            rotation_type = request.data.get('rotationType', 'research_update')
+            rotation_list = request.data.get('rotationList', [])
+            
+            # Get or create default rotation system
+            rotation_system, created = RotationSystem.objects.get_or_create(
+                name="Default Rotation",
+                defaults={'is_active': True}
+            )
+            
+            # Get current configuration
+            config = MeetingConfiguration.objects.first()
+            if not config:
+                return Response(
+                    {'error': 'Meeting configuration not found. Please set up meeting configuration first.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update active members based on rotation list
+            active_user_ids = []
+            inactive_user_ids = []
+            
+            for entry in rotation_list:
+                user_id = entry.get('presenterId')
+                is_active = entry.get('isActive', True)
+                
+                if is_active:
+                    active_user_ids.append(user_id)
+                else:
+                    inactive_user_ids.append(user_id)
+            
+            # Update meeting configuration active members
+            if active_user_ids:
+                active_users = User.objects.filter(id__in=active_user_ids)
+                config.active_members.set(active_users)
+            
+            # Remove inactive users from rotation queue or mark them differently
+            QueueEntry.objects.filter(
+                rotation_system=rotation_system,
+                user_id__in=inactive_user_ids
+            ).delete()
+            
+            # Ensure active users have queue entries
+            for user_id in active_user_ids:
+                user = User.objects.get(id=user_id)
+                queue_entry, created = QueueEntry.objects.get_or_create(
+                    rotation_system=rotation_system,
+                    user=user,
+                    defaults={
+                        'postpone_count': 0,
+                        'priority': 100.0
+                    }
+                )
+            
+            # Recalculate priorities
+            queue_entries = QueueEntry.objects.filter(rotation_system=rotation_system)
+            for entry in queue_entries:
+                entry.calculate_priority()
+            
+            return Response({
+                'message': 'Rotation updated successfully',
+                'type': rotation_type,
+                'active_participants': len(active_user_ids),
+                'inactive_participants': len(inactive_user_ids)
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to update rotation: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class QueueEntryViewSet(viewsets.ModelViewSet):
@@ -3250,34 +3455,33 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
     Optimizes user experience by reducing navigation complexity.
     """
     permission_classes = [permissions.IsAuthenticated]
-    
+
     @action(detail=False, methods=['get'])
     def overview(self, request):
         """Get unified dashboard overview for current user"""
         user = request.user
         today = timezone.now().date()
-        tomorrow = today + timedelta(days=1)
         next_week = today + timedelta(days=7)
-        
+
         try:
             # Today's events
             today_events = self._get_today_events(user, today)
-            
+
             # Upcoming meetings
             upcoming_meetings = self._get_upcoming_meetings(user, today, next_week)
-            
+
             # My tasks
             my_tasks = self._get_my_tasks(user)
-            
+
             # Equipment bookings
             equipment_bookings = self._get_equipment_bookings(user, today, next_week)
-            
+
             # Pending actions requiring user attention
             pending_actions = self._get_pending_actions(user)
-            
+
             # Quick stats
             stats = self._get_user_stats(user)
-            
+
             return Response({
                 'today_events': today_events,
                 'upcoming_meetings': upcoming_meetings,
@@ -3287,19 +3491,27 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'stats': stats,
                 'last_updated': timezone.now()
             })
-            
+
         except Exception as e:
+            # A simple log for production debugging
+            print(f"Error in UnifiedDashboardViewSet.overview for user {user.id}: {e}")
             return Response(
-                {'error': f'Failed to load dashboard: {str(e)}'}, 
+                {'error': f'Failed to load dashboard: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    
+
     def _get_today_events(self, user, today):
         """Get all events for today"""
         events = Event.objects.filter(
             start_time__date=today
-        ).select_related().order_by('start_time')
-        
+        ).select_related(
+            'booking__equipment', 
+            'task_instance'
+        ).prefetch_related(
+            'meeting_instance__presenters__user',
+            'task_instance__assigned_to'
+        ).order_by('start_time')
+
         today_events = []
         for event in events:
             event_data = {
@@ -3311,25 +3523,24 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'description': event.description,
                 'is_mine': False
             }
-            
-            # Check if user is involved
-            if event.event_type == 'booking' and hasattr(event, 'booking'):
+
+            if event.event_type == 'booking' and hasattr(event, 'booking') and event.booking:
                 event_data['is_mine'] = event.booking.user == user
                 event_data['equipment_name'] = event.booking.equipment.name
                 event_data['status'] = event.booking.status
-            elif event.event_type == 'meeting' and hasattr(event, 'meeting_instance'):
+            elif event.event_type == 'meeting' and hasattr(event, 'meeting_instance') and event.meeting_instance:
                 presenters = event.meeting_instance.presenters.all()
                 event_data['is_mine'] = any(p.user == user for p in presenters)
                 event_data['meeting_type'] = event.meeting_instance.meeting_type
-            elif event.event_type == 'task' and hasattr(event, 'task_instance'):
+            elif event.event_type == 'task' and hasattr(event, 'task_instance') and event.task_instance:
                 assigned_users = event.task_instance.assigned_to.all()
                 event_data['is_mine'] = user in assigned_users
                 event_data['task_status'] = event.task_instance.status
-            
+
             today_events.append(event_data)
-        
+
         return today_events
-    
+
     def _get_upcoming_meetings(self, user, start_date, end_date):
         """Get upcoming meetings for the user"""
         meetings = MeetingInstance.objects.filter(
@@ -3337,12 +3548,12 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
             date__lte=end_date,
             status__in=['scheduled', 'confirmed']
         ).prefetch_related('presenters__user').order_by('date')
-        
+
         upcoming_meetings = []
-        for meeting in meetings[:5]:  # Limit to 5 most recent
+        for meeting in meetings[:5]:
             presenters = meeting.presenters.all()
             is_presenter = any(p.user == user for p in presenters)
-            
+
             meeting_data = {
                 'id': meeting.id,
                 'date': meeting.date,
@@ -3353,26 +3564,25 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'materials_required': meeting.meeting_type == 'journal_club',
                 'materials_submitted': False
             }
-            
-            # Check if materials are submitted for journal club
+
             if is_presenter and meeting.meeting_type == 'journal_club':
                 presenter = presenters.filter(user=user).first()
                 if presenter:
                     meeting_data['materials_submitted'] = bool(
                         presenter.paper_title or presenter.paper_url or presenter.paper_file
                     )
-            
+
             upcoming_meetings.append(meeting_data)
-        
+
         return upcoming_meetings
-    
+
     def _get_my_tasks(self, user):
         """Get user's assigned tasks"""
         task_instances = PeriodicTaskInstance.objects.filter(
             current_assignees__contains=[user.id],
             status__in=['scheduled', 'pending', 'in_progress']
         ).select_related('template').order_by('execution_end_date')
-        
+
         my_tasks = []
         for task in task_instances:
             task_data = {
@@ -3389,9 +3599,9 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'is_primary': task.get_primary_assignee() == user
             }
             my_tasks.append(task_data)
-        
+
         return my_tasks
-    
+
     def _get_equipment_bookings(self, user, start_date, end_date):
         """Get user's equipment bookings"""
         bookings = Booking.objects.filter(
@@ -3400,9 +3610,13 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
             event__end_time__date__lte=end_date,
             status__in=['confirmed', 'pending', 'in_progress']
         ).select_related('equipment', 'event').order_by('event__start_time')
-        
+
         equipment_bookings = []
         for booking in bookings:
+            time_until_val = None
+            if booking.event.start_time > timezone.now():
+                time_until_val = (booking.event.start_time - timezone.now()).total_seconds() / 3600
+
             booking_data = {
                 'id': booking.id,
                 'equipment_name': booking.equipment.name,
@@ -3412,30 +3626,28 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'status': booking.status,
                 'requires_qr_checkin': booking.equipment.requires_qr_checkin,
                 'is_today': booking.event.start_time.date() == start_date,
-                'time_until': (booking.event.start_time - timezone.now()).total_seconds() / 3600 if booking.event.start_time > timezone.now() else None
+                'time_until': time_until_val
             }
             equipment_bookings.append(booking_data)
-        
+
         return equipment_bookings
-    
+
     def _get_pending_actions(self, user):
         """Get actions requiring user attention"""
         pending_actions = []
-        
-        # Journal Club material submissions needed
+
         jc_meetings = MeetingInstance.objects.filter(
             meeting_type='journal_club',
             date__gt=timezone.now().date(),
             presenters__user=user,
             presenters__materials_submitted_at__isnull=True
         ).prefetch_related('presenters')
-        
+
         for meeting in jc_meetings:
             presenter = meeting.presenters.filter(user=user).first()
             if presenter:
                 days_until = (meeting.date - timezone.now().date()).days
                 urgency = 'high' if days_until <= 3 else 'medium' if days_until <= 7 else 'low'
-                
                 pending_actions.append({
                     'type': 'journal_club_submission',
                     'title': 'Submit Journal Club Paper',
@@ -3446,14 +3658,12 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                     'action_url': f'/schedule/meetings/{meeting.id}/paper-submission/',
                     'meeting_id': meeting.id
                 })
-        
-        # Task swap requests pending approval
+
         if user.is_staff:
             pending_swaps = TaskSwapRequest.objects.filter(
                 status='pending',
                 admin_approved__isnull=True
             ).select_related('from_user', 'task_instance__template')
-            
             for swap in pending_swaps:
                 pending_actions.append({
                     'type': 'task_swap_approval',
@@ -3463,14 +3673,12 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                     'action_url': f'/schedule/task-swap-requests/{swap.id}/',
                     'swap_id': swap.id
                 })
-        
-        # Meeting swap requests for user
+
         meeting_swaps = SwapRequest.objects.filter(
             target_presentation__user=user,
             status='pending',
             target_user_approved__isnull=True
         ).select_related('requester', 'original_presentation__meeting_instance')
-        
         for swap in meeting_swaps:
             pending_actions.append({
                 'type': 'meeting_swap_approval',
@@ -3480,53 +3688,52 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'action_url': f'/schedule/swap-requests/{swap.id}/',
                 'swap_id': swap.id
             })
-        
+
         return pending_actions
-    
+
     def _get_user_stats(self, user):
         """Get user statistics"""
         now = timezone.now()
         this_year = now.year
-        
-        # Presentations this year
-        presentations_count = Presenter.objects.filter(
-            user=user,
-            meeting_instance__date__year=this_year,
-            status='completed'
+
+        # Count total presentations with meaningful statuses (assigned, confirmed, completed)
+        # Only exclude swapped and postponed presentations
+        presentations_total = Presenter.objects.filter(
+            user=user
+        ).exclude(
+            status__in=['swapped', 'postponed']
         ).count()
         
-        # Tasks completed this year
+        # Also keep the current year count for potential future use
+        presentations_this_year = Presenter.objects.filter(
+            user=user,
+            meeting_instance__date__year=this_year
+        ).exclude(
+            status__in=['swapped', 'postponed']
+        ).count()
+
+        # Use icontains for SQLite compatibility instead of contains for JSON field
         tasks_completed = PeriodicTaskInstance.objects.filter(
-            current_assignees__contains=[user.id],
+            current_assignees__icontains=f'"{user.id}"',
             status='completed',
             completed_at__year=this_year
         ).count()
-        
-        # Equipment usage hours this month
+
         usage_logs = EquipmentUsageLog.objects.filter(
             user=user,
             check_in_time__month=now.month,
             check_in_time__year=now.year,
             is_active=False
         )
-        
-        total_hours = 0
-        for log in usage_logs:
-            if log.usage_duration:
-                total_hours += log.usage_duration.total_seconds() / 3600
-        
+        total_hours = sum(log.usage_duration.total_seconds() / 3600 for log in usage_logs if log.usage_duration)
+
         return {
-            'presentations_this_year': presentations_count,
+            'presentations_total': presentations_total,
+            'presentations_this_year': presentations_this_year,
             'tasks_completed_this_year': tasks_completed,
             'equipment_hours_this_month': round(total_hours, 1),
-            'active_bookings': Booking.objects.filter(
-                user=user,
-                status__in=['confirmed', 'in_progress']
-            ).count(),
-            'pending_swap_requests': TaskSwapRequest.objects.filter(
-                from_user=user,
-                status='pending'
-            ).count()
+            'active_bookings': Booking.objects.filter(user=user, status__in=['confirmed', 'in_progress']).count(),
+            'pending_swap_requests': TaskSwapRequest.objects.filter(from_user=user, status='pending').count()
         }
 
 

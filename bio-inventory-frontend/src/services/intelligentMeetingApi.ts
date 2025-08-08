@@ -1,4 +1,4 @@
-import { buildApiUrl } from '../config/api';
+import { buildApiUrl } from '../config/api.ts';
 import {
   User,
   MeetingConfiguration,

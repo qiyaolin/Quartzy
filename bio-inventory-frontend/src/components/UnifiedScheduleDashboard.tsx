@@ -71,6 +71,7 @@ interface PendingAction {
 }
 
 interface UserStats {
+    presentations_total: number;
     presentations_this_year: number;
     tasks_completed_this_year: number;
     equipment_hours_this_month: number;
@@ -263,8 +264,8 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             <BookOpen className="w-4 h-4 text-blue-600" />
                             <span className="text-sm text-blue-700">Presentations</span>
                         </div>
-                        <p className="text-lg font-bold text-blue-900">{stats.presentations_this_year}</p>
-                        <p className="text-xs text-blue-600">this year</p>
+                        <p className="text-lg font-bold text-blue-900">{stats.presentations_total}</p>
+                        <p className="text-xs text-blue-600">total</p>
                     </div>
                     <div className="bg-green-50 p-3 rounded-lg">
                         <div className="flex items-center gap-2">

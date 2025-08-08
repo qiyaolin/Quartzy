@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { X, Calendar, Clock, FileText, User, Repeat, Settings, Plus, Trash2 } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
-import { ScheduleFormData, scheduleHelpers } from '../services/scheduleApi.ts';
+import { ScheduleFormData, scheduleHelpers } from "../services/scheduleApi.ts";
+import { buildApiUrl } from '../config/api.ts';
 
 interface RecurringTaskFormData extends ScheduleFormData {
   cron_schedule: string;
@@ -44,7 +45,7 @@ const RecurringTaskFormModal: React.FC<RecurringTaskFormModalProps> = ({
     title: '',
     description: '',
     date: new Date().toISOString().split('T')[0],
-  start_time: '09:00',
+    start_time: '09:00',
     end_time: '10:00',
     location: '',
     status: 'scheduled',
@@ -71,16 +72,34 @@ const RecurringTaskFormModal: React.FC<RecurringTaskFormModalProps> = ({
     { label: 'Quarterly', value: '0 9 1 */3 *', description: 'First day of every quarter at 9:00 AM' }
   ];
 
-  // Mock data for development
+  // Load users from API
   useEffect(() => {
-    // In real implementation, this would be an API call
-    setUsers([
-      { id: 1, username: 'alice', first_name: 'Alice', last_name: 'Johnson' },
-      { id: 2, username: 'bob', first_name: 'Bob', last_name: 'Smith' },
-      { id: 3, username: 'carol', first_name: 'Carol', last_name: 'Davis' },
-      { id: 4, username: 'david', first_name: 'David', last_name: 'Wilson' },
-      { id: 5, username: 'eve', first_name: 'Eve', last_name: 'Brown' }
-    ]);
+    const loadUsers = async () => {
+      if (!token) return;
+      
+      try {
+        // Fetch users from the backend API
+        const response = await fetch(buildApiUrl('schedule/users/'), {
+          headers: {
+            'Authorization': `Token ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setUsers(userData.results || userData);
+        } else {
+          console.error('Failed to fetch users:', response.statusText);
+          setUsers([]);
+        }
+      } catch (error) {
+        console.error('Error loading users:', error);
+        setUsers([]);
+      }
+    };
+    
+    loadUsers();
   }, [token]);
 
   // Update selected users when assignee_group changes

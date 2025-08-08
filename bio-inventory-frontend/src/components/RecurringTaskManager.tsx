@@ -9,7 +9,7 @@ import {
     groupMeetingApi, 
     RecurringTask, 
     User as TaskUser 
-} from '../services/groupMeetingApi.ts';
+} from "../services/groupMeetingApi.ts";
 import EditTaskModal, { EditTaskData } from '../modals/EditTaskModal.tsx';
 
 interface RecurringTaskManagerProps {
@@ -151,6 +151,48 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
         }
     };
 
+    const handleAutoGenerateTasks = async () => {
+        if (!token || tasks.length === 0) return;
+
+        const monthsStr = prompt('How many months of tasks would you like to generate?', '3');
+        if (!monthsStr) return;
+
+        const months = parseInt(monthsStr);
+        if (isNaN(months) || months < 1 || months > 12) {
+            alert('Please enter a valid number of months (1-12)');
+            return;
+        }
+
+        const activeTasks = tasks.filter(t => t.is_active);
+        if (activeTasks.length === 0) {
+            alert('No active tasks available for generation');
+            return;
+        }
+
+        try {
+            setError(null);
+            const results = [];
+            
+            for (const task of activeTasks) {
+                const result = await groupMeetingApi.generateTaskInstances(token, task.id, months);
+                results.push({
+                    task: task.title,
+                    ...result
+                });
+            }
+
+            const totalGenerated = results.reduce((sum, r) => sum + (r.generated_tasks || 0), 0);
+            alert(`Successfully generated ${totalGenerated} task instances for ${months} months!`);
+            
+            // Refresh task data
+            await loadData();
+        } catch (error) {
+            console.error('Error auto-generating tasks:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            setError(`Failed to auto-generate tasks: ${errorMessage}`);
+        }
+    };
+
     const getTaskIcon = (taskType: string) => {
         switch (taskType) {
             case 'cell_culture_room_cleaning':
@@ -212,6 +254,14 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleAutoGenerateTasks}
+                            disabled={tasks.length === 0}
+                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <Settings className="w-4 h-4 mr-2" />
+                            Auto-Generate
+                        </button>
                         {onCreateTask && (
                             <button
                                 onClick={onCreateTask}
@@ -491,7 +541,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                                 
                                 <button
                                     onClick={() => {
-                                        handleEditTask(task);
+                                        console.log('Edit task:', task.id);
                                         setShowActions(false);
                                     }}
                                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -502,7 +552,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                                 
                                 <button
                                     onClick={() => {
-                                        handleConfigureTask(task);
+                                        console.log('Configure task:', task.id);
                                         setShowActions(false);
                                     }}
                                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

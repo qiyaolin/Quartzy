@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Edit3, Clock, MapPin, Users, Calendar, Settings } from 'lucide-react';
-import { RecurringTask } from '../services/groupMeetingApi.ts';
+import { RecurringTask } from "../services/groupMeetingApi.ts";
 
 interface EditTaskModalProps {
   isOpen: boolean;

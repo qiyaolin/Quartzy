@@ -28,45 +28,105 @@ class MeetingGenerationService:
         end_date: date,
         meeting_types: List[str] = None,
         auto_assign_presenters: bool = True
-    ) -> List[MeetingInstance]:
+    ) -> Dict[str, object]:
         """
-        Generate meetings for a date range with intelligent scheduling
+        Generate meetings for a date range with intelligent scheduling.
+        Returns a dict containing generated_meetings list, count, start_date, end_date.
         """
+        # Defensive coding: ensure meeting_types is always a list
+        import logging
+        logger = logging.getLogger(__name__)
+        original_meeting_types = meeting_types
+        original_type = type(meeting_types)
+        
         if meeting_types is None:
             meeting_types = ['research_update', 'journal_club']
-        
-        # Get meeting configuration
+            logger.debug(f"meeting_types was None, set to default: {meeting_types}")
+        elif isinstance(meeting_types, str):
+            # If a single string is passed, convert to list
+            meeting_types = [meeting_types]
+            logger.warning(f"meeting_types was string '{original_meeting_types}', converted to list: {meeting_types}")
+        elif hasattr(meeting_types, 'items') and hasattr(meeting_types, 'keys'):
+            # If it's a dictionary-like object, extract values
+            meeting_types = list(meeting_types.values()) if meeting_types else ['research_update', 'journal_club']
+            logger.warning(f"meeting_types was dict-like {original_type}: {original_meeting_types}, extracted values: {meeting_types}")
+        elif not isinstance(meeting_types, (list, tuple)):
+            # Try to convert other iterables to list
+            try:
+                meeting_types = list(meeting_types)
+                logger.warning(f"meeting_types was {original_type}: {original_meeting_types}, converted to list: {meeting_types}")
+            except (TypeError, ValueError):
+                # Fallback to default if conversion fails
+                meeting_types = ['research_update', 'journal_club']
+                logger.error(f"meeting_types was {original_type}: {original_meeting_types}, conversion failed, using default: {meeting_types}")
+        else:
+            logger.debug(f"meeting_types is already a valid list/tuple: {meeting_types}")
+            
+        logger.debug(f"Final meeting_types: {meeting_types} (type: {type(meeting_types)})")
+
+        # Ensure configuration exists or auto-create
         config = MeetingConfiguration.objects.first()
         if not config:
-            raise ValueError("Meeting configuration not found. Please set up meeting configuration first.")
-        
+            logger.warning("No MeetingConfiguration found, creating default configuration")
+            admin_user = User.objects.filter(is_superuser=True).first() or User.objects.first()
+            if admin_user:
+                config = MeetingConfiguration.objects.create(
+                    day_of_week=1,  # Monday
+                    start_time='10:00:00',
+                    location='Conference Room',
+                    research_update_duration=60,
+                    journal_club_duration=60,
+                    created_by=admin_user
+                )
+                active_users = User.objects.filter(is_active=True)
+                config.active_members.set(active_users)
+                logger.info(f"Created default MeetingConfiguration: day_of_week=Monday, active_members={active_users.count()}")
+            else:
+                logger.error("No admin user found, cannot create MeetingConfiguration")
+                return {'generated_meetings': [], 'count': 0, 'start_date': start_date, 'end_date': end_date}
+        else:
+            logger.debug(f"Using existing MeetingConfiguration: id={config.id}, day_of_week={config.day_of_week}, active_members={config.active_members.count()}")
+
         # Get all possible meeting dates (excluding holidays)
+        logger.debug(f"Getting meeting dates: {start_date} to {end_date}, weekday={config.day_of_week}")
         meeting_dates = self.holiday_service.get_meeting_dates_in_range(
             start_date, end_date, config.day_of_week
         )
-        
+        logger.info(f"Found {len(meeting_dates)} potential meeting dates: {meeting_dates[:5]}{'...' if len(meeting_dates) > 5 else ''}")
         if not meeting_dates:
-            return []
-        
+            logger.warning(f"No meeting dates found in range {start_date} to {end_date} for weekday {config.day_of_week}")
+            return {'generated_meetings': [], 'count': 0, 'start_date': start_date, 'end_date': end_date}
+
         # Generate meeting type sequence (alternating RU and JC)
         meeting_sequence = self._generate_meeting_sequence(meeting_dates, meeting_types)
-        
+
         generated_meetings = []
+        skipped_count = 0
+        logger.debug(f"Processing {len(meeting_sequence)} meeting slots")
         
         for meeting_date, meeting_type in meeting_sequence:
-            # Skip if meeting already exists
-            if MeetingInstance.objects.filter(date=meeting_date, meeting_type=meeting_type).exists():
+            # Check if meeting already exists
+            existing = MeetingInstance.objects.filter(date=meeting_date, meeting_type=meeting_type).exists()
+            if existing:
+                logger.debug(f"Skipping {meeting_date} ({meeting_type}) - already exists")
+                skipped_count += 1
                 continue
-            
-            # Create the meeting
+                
+            logger.info(f"Creating meeting: {meeting_date} ({meeting_type})")
             meeting = self._create_meeting_instance(meeting_date, meeting_type, config)
             generated_meetings.append(meeting)
             
-            # Auto-assign presenters if enabled
             if auto_assign_presenters:
                 self._assign_presenters(meeting, config)
-        
-        return generated_meetings
+                logger.debug(f"Assigned presenters to meeting {meeting_date}")
+
+        logger.info(f"Meeting generation complete: {len(generated_meetings)} created, {skipped_count} skipped (already exist)")
+        return {
+            'generated_meetings': generated_meetings,
+            'count': len(generated_meetings),
+            'start_date': start_date,
+            'end_date': end_date
+        }
     
     def _generate_meeting_sequence(
         self, 
@@ -74,6 +134,11 @@ class MeetingGenerationService:
         meeting_types: List[str]
     ) -> List[Tuple[date, str]]:
         """Generate sequence of meetings with alternating types"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.debug(f"_generate_meeting_sequence: {len(meeting_dates)} dates, types: {meeting_types}")
+        
         sequence = []
         
         # Start with Research Update, then alternate
@@ -83,7 +148,15 @@ class MeetingGenerationService:
             else:
                 # Alternate between types
                 type_index = i % len(meeting_types)
-                meeting_type = meeting_types[type_index]
+                try:
+                    meeting_type = meeting_types[type_index]
+                except (IndexError, TypeError, KeyError) as e:
+                    logger.error(f"ERROR accessing meeting_types[{type_index}]: {e}")
+                    logger.error(f"meeting_types: {meeting_types} (type: {type(meeting_types)})")
+                    logger.error(f"meeting_types items: {list(meeting_types.items()) if hasattr(meeting_types, 'items') else 'No items method'}")
+                    # Fallback to research_update if we can't access the type
+                    meeting_type = 'research_update'
+                    logger.warning(f"Fallback to meeting_type: {meeting_type}")
             
             sequence.append((meeting_date, meeting_type))
         

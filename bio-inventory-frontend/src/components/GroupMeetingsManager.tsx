@@ -6,18 +6,21 @@ import {
     CheckCircle, XCircle, ArrowUpDown, Eye, MoreHorizontal, X
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
+import { API_BASE_URL } from '../config/api.ts';
 import { 
     groupMeetingApi, 
     GroupMeeting, 
     Presenter, 
     MeetingConfiguration, 
     groupMeetingHelpers 
-} from '../services/groupMeetingApi.ts';
-import { scheduleApi, intelligentMeetingApi } from '../services/scheduleApi.ts';
+} from "../services/groupMeetingApi.ts";
+import { scheduleApi, intelligentMeetingApi } from "../services/scheduleApi.ts";
+import * as intelligentMeetingApiService from "../services/intelligentMeetingApi.ts";
 import SwapRequestModal, { SwapRequestData } from '../modals/SwapRequestModal.tsx';
 import PostponeMeetingModal, { PostponeData } from '../modals/PostponeMeetingModal.tsx';
 import MaterialsUploadModal, { MaterialsUploadData } from '../modals/MaterialsUploadModal.tsx';
 import RotationManagementModal, { RotationUpdateData } from '../modals/RotationManagementModal.tsx';
+import MeetingGenerationModal, { MeetingGenerationParams } from '../modals/MeetingGenerationModal.tsx';
 
 // Additional types for rotation lists and swap requests
 interface RotationList {
@@ -68,7 +71,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     // View controls
     const [viewMode, setViewMode] = useState<'quarter' | 'month' | 'list'>('quarter');
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [filterType, setFilterType] = useState<'all' | 'research_update' | 'journal_club'>('all');
+    const [filterType, setFilterType] = useState<'all' | 'lab_meeting' | 'journal_club'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [showPendingSwaps, setShowPendingSwaps] = useState(false);
     
@@ -78,24 +81,103 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     const [showPostponeModal, setShowPostponeModal] = useState(false);
     const [showMaterialsModal, setShowMaterialsModal] = useState(false);
     const [showRotationModal, setShowRotationModal] = useState(false);
+    const [showGenerationModal, setShowGenerationModal] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<GroupMeeting | null>(null);
     const [selectedConfig, setSelectedConfig] = useState<MeetingConfiguration | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Load data from API
+    // Data adapter to convert MeetingInstance to GroupMeeting format
+    const adaptMeetingInstanceToGroupMeeting = (meetingInstance: any): GroupMeeting => {
+        return {
+            id: meetingInstance.id,
+            title: `${meetingInstance.meeting_type?.replace('_', ' ')?.replace(/\b\w/g, (l: string) => l.toUpperCase())} - ${meetingInstance.date}`,
+            description: meetingInstance.description || '',
+            date: meetingInstance.date,
+            start_time: '10:00:00', // Default, could be from config
+            end_time: '11:00:00',   // Default, could be from config
+            location: 'Conference Room', // Default, could be from config
+            status: meetingInstance.status as 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'postponed',
+            meeting_type: meetingInstance.meeting_type === 'research_update' ? 'lab_meeting' : 'journal_club',
+            topic: meetingInstance.title || meetingInstance.meeting_type?.replace('_', ' ') || '',
+            presenter_ids: meetingInstance.presenters?.map((p: any) => p.user?.id || p.id) || [],
+            presenters: meetingInstance.presenters?.map((p: any) => ({
+                id: p.user?.id || p.id,
+                first_name: p.user?.first_name || p.first_name || '',
+                last_name: p.user?.last_name || p.last_name || '',
+                email: p.user?.email || p.email || '',
+                username: p.user?.username || p.username || '',
+                is_active: true,
+                date_joined: p.user?.date_joined || new Date().toISOString()
+            })) || [],
+            materials_url: undefined,
+            materials_file: undefined,
+            materials_deadline: undefined,
+            created_at: meetingInstance.created_at || new Date().toISOString(),
+            updated_at: meetingInstance.updated_at || new Date().toISOString(),
+            attendees_count: meetingInstance.attendees_count
+        };
+    };
+
     const loadData = useCallback(async () => {
         if (!token) return;
         
         setLoading(true);
         try {
-            const [meetingsData, presentersData, configurationsData] = await Promise.all([
-                groupMeetingApi.getMeetings(token),
-                groupMeetingApi.getActiveUsers(token),
+            console.log('🔄 Loading meetings data using intelligent meeting API...');
+            
+            // Use intelligent meeting API to get MeetingInstance data
+            const [meetingsResponse, configurationsData] = await Promise.all([
+                intelligentMeetingApiService.meetingInstanceApi.getMeetings(token, {
+                    ordering: '-date',
+                    page_size: 100
+                }),
                 groupMeetingApi.getConfigurations(token)
             ]);
 
-                setMeetings(meetingsData || []);
-            setPresenters(presentersData || []);
+            console.log('📥 Raw meeting response:', meetingsResponse);
+            console.log('📊 Configurations loaded:', configurationsData);
+
+            // Convert MeetingInstance data to GroupMeeting format
+            let meetingsData = [];
+            if (meetingsResponse && meetingsResponse.results && Array.isArray(meetingsResponse.results)) {
+                console.log('Data handler: paginated response detected.');
+                meetingsData = meetingsResponse.results;
+            } else if (Array.isArray(meetingsResponse)) {
+                console.log('Data handler: direct array response detected.');
+                meetingsData = meetingsResponse;
+            } else {
+                console.log('Data handler: response is not a paginated object or a direct array.');
+            }
+
+            console.log(`Pre-mapping: meetingsData contains ${meetingsData.length} items.`);
+            
+            const adaptedMeetings = meetingsData.map(adaptMeetingInstanceToGroupMeeting);
+            
+            console.log(`✅ Successfully loaded ${adaptedMeetings.length} meetings from intelligent API:`);
+            adaptedMeetings.forEach((meeting, index) => {
+                console.log(`  ${index + 1}. ${meeting.title} (${meeting.date}) - ${meeting.presenters?.length || 0} presenters`);
+            });
+
+            // Get all unique presenters from meetings
+            const allPresenters: any[] = [];
+            adaptedMeetings.forEach(meeting => {
+                meeting.presenters?.forEach(presenter => {
+                    if (!allPresenters.find(p => p.id === presenter.id)) {
+                        allPresenters.push(presenter);
+                    }
+                });
+            });
+
+            // Ensure meetings are sorted by date (most recent first)
+            const sortedMeetings = adaptedMeetings.sort((a, b) => {
+                const dateA = new Date(a.date);
+                const dateB = new Date(b.date);
+                return dateB.getTime() - dateA.getTime();
+            });
+            
+            setMeetings(sortedMeetings);
+            setPresenters(allPresenters);
             setConfigurations(configurationsData || []);
             setError(null);
         } catch (err) {
@@ -214,17 +296,8 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
             // Simulate API response
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Update local state
-            setMeetings(prev => prev.map(m => 
-                m.id === postponeData.meetingId 
-                    ? { 
-                        ...m, 
-                        date: postponeData.newDate,
-                        start_time: postponeData.newStartTime,
-                        end_time: postponeData.newEndTime
-                      }
-                    : m
-            ));
+            // Reload data to ensure consistency
+            await loadData();
         } catch (error) {
             console.error('Error postponing meeting:', error);
             throw error;
@@ -243,12 +316,8 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
             // Simulate file upload
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // Update local state
-            setMeetings(prev => prev.map(m => 
-                m.id === uploadData.meetingId 
-                    ? { ...m, is_materials_submitted: true }
-                    : m
-            ));
+            // Reload data to ensure consistency
+            await loadData();
         } catch (error) {
             console.error('Error uploading materials:', error);
             throw error;
@@ -261,17 +330,39 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
         if (!token) return;
         setIsSubmitting(true);
         try {
-            // In real implementation, this would update the rotation via API
-            console.log('Rotation updated:', rotationData);
-            
-            // Simulate API response
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Call the new rotation update API
+            const response = await fetch(`${API_BASE_URL}/api/schedule/rotation-systems/update_rotation/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Token ${token}`
+                },
+                body: JSON.stringify({
+                    rotationType: rotationData.rotationType,
+                    rotationList: rotationData.rotationList
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to update rotation');
+            }
+
+            const result = await response.json();
+            console.log('Rotation update successful:', {
+                type: result.type,
+                activeParticipants: result.active_participants,
+                inactiveParticipants: result.inactive_participants
+            });
             
             // Handle postponement actions
-            if (rotationData.postponementActions) {
+            if (rotationData.postponementActions && rotationData.postponementActions.length > 0) {
+                console.log(`Processing ${rotationData.postponementActions.length} postponement actions:`);
                 rotationData.postponementActions.forEach(action => {
-                    console.log(`Postponement action: ${action.action} for presenter ${action.presenterId}`);
+                    console.log(`- ${action.action} for presenter ${action.presenterId}: ${action.reason}`);
                 });
+            } else {
+                console.log('No postponement actions requested');
             }
         } catch (error) {
             console.error('Error updating rotation:', error);
@@ -281,27 +372,53 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
         }
     };
 
-    const handleAutoGenerateMeetings = async () => {
+    const handleAutoGenerateMeetings = () => {
+        setShowGenerationModal(true);
+    };
+
+    const handleMeetingGeneration = async (params: MeetingGenerationParams) => {
         if (!token) return;
         
         setLoading(true);
         try {
-            // Generate meetings for next 3 months
-            const today = new Date();
-            const startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1); // Start tomorrow
-            const endDate = new Date(today.getFullYear(), today.getMonth() + 3, today.getDate()); // 3 months from now
+            console.log('Generating meetings with params:', params);
             
-            const result = await intelligentMeetingApi.generateMeetings(token, {
-                start_date: startDate.toISOString().split('T')[0],
-                end_date: endDate.toISOString().split('T')[0],
-                meeting_types: ['research_update', 'journal_club'],
-                auto_assign_presenters: true
+            const result = await intelligentMeetingApiService.meetingInstanceApi.generateMeetings(token, {
+                start_date: params.start_date,
+                end_date: params.end_date,
+                meeting_types: params.meeting_types,
+                auto_assign_presenters: params.auto_assign_presenters
             });
             
             // Show success message
-            alert(`Success! Generated ${result.meetings?.length || 0} meetings for the next 3 months.\n\nMeetings have been created with automatic presenter assignments.`);
+            const res = result as any;
+            const meetingCount = res.count || res.generated_meetings?.length || 0;
+            console.log('Meeting generation result:', res);
             
-            // Reload data to show new meetings
+            let modeDescription = '';
+            switch (params.generation_mode) {
+                case 'months':
+                    modeDescription = `${params.months_ahead} months`;
+                    break;
+                case 'weeks':
+                    modeDescription = `${params.weeks_ahead} weeks`;
+                    break;
+                case 'count':
+                    modeDescription = `${params.meeting_count} meetings requested`;
+                    break;
+                case 'custom':
+                    modeDescription = `custom date range (${params.start_date} to ${params.end_date})`;
+                    break;
+            }
+            
+            const message = meetingCount > 0 
+                ? `Success! Generated ${meetingCount} meetings for ${modeDescription}.\n\n${params.auto_assign_presenters ? 'Presenters have been automatically assigned using fair rotation.' : 'No presenters assigned - you can assign them manually.'}`
+                : `No new meetings were generated for ${modeDescription}.\n\nThis may be because:\n• Meetings already exist for the selected dates\n• All dates fall on holidays\n• No meeting configuration is set up\n\nPlease check your configuration and try again.`;
+                
+            alert(message);
+            
+            // Close modal and reload data
+            setShowGenerationModal(false);
             await loadData();
             
         } catch (error) {
@@ -327,10 +444,8 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                 is_active: !config.is_active
             });
             
-            // Update local state
-            setConfigurations(prev => prev.map(c => 
-                c.id === config.id ? updatedConfig : c
-            ));
+            // Reload data to ensure consistency
+            await loadData();
             
             const action = updatedConfig.is_active ? 'activated' : 'deactivated';
             alert(`Successfully ${action} ${config.meeting_type.replace('_', ' ')} meetings configuration.`);
@@ -475,7 +590,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                             className="border border-gray-300 rounded-md px-3 py-2 text-sm"
                         >
                             <option value="all">All Types</option>
-                            <option value="research_update">Research Updates</option>
+                            <option value="lab_meeting">Research Updates</option>
                             <option value="journal_club">Journal Club</option>
                         </select>
 
@@ -531,6 +646,24 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                             <p className="text-sm font-medium text-gray-500">Active Presenters</p>
                             <p className="text-2xl font-semibold text-gray-900">
                                 {presenters.filter(p => p.is_active).length}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Debug Info Panel */}
+                <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+                    <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                            <Settings className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="ml-3">
+                            <p className="text-sm font-medium text-blue-700">Data Source</p>
+                            <p className="text-xs text-blue-600">
+                                Using Intelligent Meeting API
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                                {loading ? 'Loading...' : `${meetings.length} meetings loaded`}
                             </p>
                         </div>
                     </div>
@@ -773,6 +906,13 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                 meetings={meetings}
                 onUpdateRotation={handleRotationUpdate}
                 isSubmitting={isSubmitting}
+            />
+
+            <MeetingGenerationModal
+                isOpen={showGenerationModal}
+                onClose={() => setShowGenerationModal(false)}
+                onGenerate={handleMeetingGeneration}
+                isLoading={loading}
             />
         </div>
     );

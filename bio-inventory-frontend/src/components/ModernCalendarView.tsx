@@ -18,7 +18,7 @@ import {
   Search,
   Bell
 } from 'lucide-react';
-import { Schedule, scheduleHelpers } from '../services/scheduleApi.ts';
+import { Schedule, scheduleHelpers } from "../services/scheduleApi.ts";
 
 interface ModernCalendarViewProps {
   schedules: Schedule[];
@@ -47,44 +47,131 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
   const [calendarLayout, setCalendarLayout] = useState<'grid' | 'list'>('grid');
   const [showMiniCalendar, setShowMiniCalendar] = useState(true);
 
-  // Generate calendar days for month view with modern styling
+  // Generate calendar days for different views
   const calendarDays = useMemo(() => {
     const date = new Date(selectedDate);
     const year = date.getFullYear();
     const month = date.getMonth();
     
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    let days: Array<{
+      date: string;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      isSelected: boolean;
+      schedules: Schedule[];
+      dayNumber: number;
+      isWeekend: boolean;
+    }> = [];
     
-    const endDate = new Date(lastDay);
-    endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()));
-    
-    const days = [];
-    const currentDate = new Date(startDate);
     const today = new Date();
-    const selected = new Date(selectedDate);
+    const selected = new Date(selectedDate + 'T00:00:00');
     
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      const daySchedules = schedules.filter(s => s.date === dateStr);
+    if (viewMode === 'month') {
+      // Month view: full calendar grid
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      const startDate = new Date(firstDay);
+      startDate.setDate(startDate.getDate() - firstDay.getDay());
+      
+      const endDate = new Date(lastDay);
+      endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()));
+      
+      const currentDate = new Date(startDate);
+      
+      while (currentDate <= endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const daySchedules = schedules
+          .filter(s => s.date === dateStr)
+          .reduce((unique: Schedule[], schedule) => {
+            // Deduplicate by title, date, and start_time
+            const exists = unique.some(
+              existing => existing.title === schedule.title && 
+                         existing.date === schedule.date &&
+                         existing.start_time === schedule.start_time
+            );
+            if (!exists) {
+              unique.push(schedule);
+            }
+            return unique;
+          }, []);
+        
+        days.push({
+          date: dateStr,
+          isCurrentMonth: currentDate.getMonth() === month,
+          isToday: currentDate.toDateString() === today.toDateString(),
+          isSelected: currentDate.toDateString() === selected.toDateString(),
+          schedules: daySchedules,
+          dayNumber: currentDate.getDate(),
+          isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6
+        });
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    } else if (viewMode === 'week') {
+      // Week view: 7 days starting from Sunday
+      const startOfWeek = new Date(date.getTime());
+      startOfWeek.setDate(date.getDate() - date.getDay());
+      
+      for (let i = 0; i < 7; i++) {
+        const currentDate = new Date(startOfWeek.getTime());
+        currentDate.setDate(startOfWeek.getDate() + i);
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const daySchedules = schedules
+          .filter(s => s.date === dateStr)
+          .reduce((unique: Schedule[], schedule) => {
+            // Deduplicate by title, date, and start_time
+            const exists = unique.some(
+              existing => existing.title === schedule.title && 
+                         existing.date === schedule.date &&
+                         existing.start_time === schedule.start_time
+            );
+            if (!exists) {
+              unique.push(schedule);
+            }
+            return unique;
+          }, []);
+        
+        days.push({
+          date: dateStr,
+          isCurrentMonth: true,
+          isToday: currentDate.toDateString() === today.toDateString(),
+          isSelected: currentDate.toDateString() === selected.toDateString(),
+          schedules: daySchedules,
+          dayNumber: currentDate.getDate(),
+          isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6
+        });
+      }
+    } else if (viewMode === 'day') {
+      // Day view: just the selected day
+      const dateStr = date.toISOString().split('T')[0];
+      const daySchedules = schedules
+        .filter(s => s.date === dateStr)
+        .reduce((unique: Schedule[], schedule) => {
+          // Deduplicate by title, date, and start_time
+          const exists = unique.some(
+            existing => existing.title === schedule.title && 
+                       existing.date === schedule.date &&
+                       existing.start_time === schedule.start_time
+          );
+          if (!exists) {
+            unique.push(schedule);
+          }
+          return unique;
+        }, []);
       
       days.push({
         date: dateStr,
-        isCurrentMonth: currentDate.getMonth() === month,
-        isToday: currentDate.toDateString() === today.toDateString(),
-        isSelected: currentDate.toDateString() === selected.toDateString(),
+        isCurrentMonth: true,
+        isToday: date.toDateString() === today.toDateString(),
+        isSelected: true,
         schedules: daySchedules,
-        dayNumber: currentDate.getDate(),
-        isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6
+        dayNumber: date.getDate(),
+        isWeekend: date.getDay() === 0 || date.getDay() === 6
       });
-      
-      currentDate.setDate(currentDate.getDate() + 1);
     }
     
     return days;
-  }, [selectedDate, schedules]);
+  }, [selectedDate, schedules, viewMode]);
 
   const navigateDate = useCallback((direction: 'prev' | 'next') => {
     const date = new Date(selectedDate);
@@ -123,13 +210,11 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
   }, []);
 
   const getEventColor = (schedule: Schedule) => {
-    const statusColors = {
-      'scheduled': 'bg-blue-500 border-blue-600',
-      'in_progress': 'bg-yellow-500 border-yellow-600',
-      'completed': 'bg-green-500 border-green-600',
-      'cancelled': 'bg-red-500 border-red-600'
-    };
-    return statusColors[schedule.status as keyof typeof statusColors] || 'bg-gray-500 border-gray-600';
+    return scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status);
+  };
+
+  const getEventColorLight = (schedule: Schedule) => {
+    return scheduleHelpers.getEventColorLight(scheduleHelpers.getEventType(schedule), schedule.status);
   };
 
   if (loading) {
@@ -290,7 +375,9 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         <div key={schedule.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
                           <div className={`w-2 h-8 rounded-full ${getEventColor(schedule)}`} />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-gray-900 truncate">{schedule.title}</p>
+                            <p className="font-medium text-sm text-gray-900 truncate" title={`${schedule.title} (${scheduleHelpers.getEventType(schedule)})`}>
+                              {schedule.title}
+                            </p>
                             <p className="text-xs text-gray-500">{formatTime(schedule.start_time)}</p>
                           </div>
                         </div>
@@ -304,7 +391,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
         )}
 
         {/* Main Calendar Area */}
-        <div className="flex-1">
+        <div className="flex-1 max-h-[calc(100vh-200px)] overflow-y-auto">
+          {/* Month View */}
           {viewMode === 'month' && calendarLayout === 'grid' && (
             <div className="h-full">
               {/* Month Grid View */}
@@ -347,12 +435,12 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       {day.schedules.slice(0, 3).map((schedule) => (
                         <div
                           key={schedule.id}
-                          className={`text-xs p-1 rounded cursor-pointer truncate text-white transition-all duration-200 hover:shadow-sm ${getEventColor(schedule)}`}
+                          className={`text-xs p-1 rounded cursor-pointer truncate border-l-2 transition-all duration-200 hover:shadow-sm ${getEventColorLight(schedule)}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onEditEvent?.(schedule);
                           }}
-                          title={`${schedule.title} - ${formatTime(schedule.start_time)}`}
+                          title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
                         >
                           {formatTime(schedule.start_time)} {schedule.title}
                         </div>
@@ -376,6 +464,193 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Week View */}
+          {viewMode === 'week' && (
+            <div className="h-full flex min-h-[1200px]">
+              {/* Time Column */}
+              <div className="w-20 border-r border-gray-100 bg-gray-50">
+                <div className="h-16"></div> {/* Header spacer */}
+                {Array.from({ length: 24 }, (_, i) => (
+                  <div key={i} className="h-16 px-3 py-2 text-sm text-gray-500 border-b border-gray-100">
+                    {i.toString().padStart(2, '0')}:00
+                  </div>
+                ))}
+              </div>
+              
+              {/* Week Days */}
+              <div className="flex-1">
+                {/* Day Headers */}
+                <div className="grid grid-cols-7 border-b border-gray-100">
+                  {calendarDays.slice(0, 7).map((day) => (
+                    <div key={`header-${day.date}`} className="h-16 p-3 bg-gray-50 border-r border-gray-100 last:border-r-0 text-center">
+                      <div className={`text-sm font-medium ${day.isToday ? 'text-primary-700' : 'text-gray-900'}`}>
+                        {formatDate(day.date).dayName}
+                      </div>
+                      <div className={`text-lg font-bold ${day.isToday ? 'text-primary-700' : 'text-gray-600'}`}>
+                        {day.dayNumber}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Day Columns */}
+                <div className="grid grid-cols-7 h-full relative">
+                  {calendarDays.slice(0, 7).map((day) => (
+                    <div key={`column-${day.date}`} className="relative border-r border-gray-100 last:border-r-0">
+                      {/* Time Grid */}
+                      {Array.from({ length: 24 }, (_, i) => (
+                        <div 
+                          key={i} 
+                          className="h-16 border-b border-gray-100 hover:bg-primary-50 cursor-pointer"
+                          onDoubleClick={() => onCreateEvent?.(day.date, `${i.toString().padStart(2, '0')}:00`)}
+                        ></div>
+                      ))}
+                      
+                      {/* Events */}
+                      {day.schedules.map((schedule) => {
+                        const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
+                        const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
+                        const duration = endHour - startHour;
+                        return (
+                          <div
+                            key={schedule.id}
+                            className={`absolute left-1 right-1 rounded-lg p-2 cursor-pointer text-white shadow-sm border-l-4 transition-all duration-200 hover:shadow-md ${getEventColor(schedule)}`}
+                            style={{
+                              top: startHour * 64,
+                              height: Math.max(duration * 64, 48),
+                              zIndex: 10
+                            }}
+                            onClick={() => onEditEvent?.(schedule)}
+                            title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
+                          >
+                            <div className="font-medium text-sm truncate">{schedule.title}</div>
+                            <div className="text-xs opacity-90 truncate">
+                              {formatTime(schedule.start_time)}
+                              {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                            </div>
+                            {schedule.location && (
+                              <div className="text-xs opacity-80 truncate mt-1">
+                                📍 {schedule.location}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Day View */}
+          {viewMode === 'day' && (
+            <div className="h-full flex min-h-[1200px]">
+              {/* Time Column */}
+              <div className="w-24 border-r border-gray-100 bg-gray-50">
+                {Array.from({ length: 24 }, (_, i) => (
+                  <div key={i} className="h-16 px-4 py-2 text-sm text-gray-500 border-b border-gray-100">
+                    {i.toString().padStart(2, '0')}:00
+                  </div>
+                ))}
+              </div>
+              
+              {/* Day Content */}
+              <div className="flex-1 relative">
+                {/* Time Grid */}
+                {Array.from({ length: 24 }, (_, i) => (
+                  <div 
+                    key={i} 
+                    className="h-16 border-b border-gray-100 cursor-pointer hover:bg-primary-50"
+                    onDoubleClick={() => onCreateEvent?.(selectedDate, `${i.toString().padStart(2, '0')}:00`)}
+                  ></div>
+                ))}
+                
+                {/* Events */}
+                {schedules
+                  .filter(s => s.date === selectedDate)
+                  .reduce((unique: Schedule[], schedule) => {
+                    // Deduplicate by title, date, and start_time
+                    const exists = unique.some(
+                      existing => existing.title === schedule.title && 
+                                 existing.date === schedule.date &&
+                                 existing.start_time === schedule.start_time
+                    );
+                    if (!exists) {
+                      unique.push(schedule);
+                    }
+                    return unique;
+                  }, [])
+                  .map((schedule) => {
+                  const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
+                  const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
+                  const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
+                  const endMinute = schedule.end_time ? parseInt(schedule.end_time.split(':')[1]) : 0;
+                  
+                  const startPosition = startHour * 64 + (startMinute / 60) * 64;
+                  const endPosition = endHour * 64 + (endMinute / 60) * 64;
+                  const height = Math.max(endPosition - startPosition, 48);
+                  
+                  return (
+                    <div
+                      key={schedule.id}
+                      className={`absolute left-4 right-4 rounded-xl p-4 cursor-pointer text-white shadow-lg border-l-4 transition-all duration-200 hover:shadow-xl ${getEventColor(schedule)}`}
+                      style={{
+                        top: startPosition,
+                        height: height,
+                        zIndex: 10
+                      }}
+                      onClick={() => onEditEvent?.(schedule)}
+                      title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-base truncate">{schedule.title}</div>
+                          <div className="text-sm opacity-90 mt-1">
+                            {formatTime(schedule.start_time)}
+                            {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                          </div>
+                          {schedule.location && (
+                            <div className="flex items-center gap-1 text-sm opacity-80 mt-2">
+                              <MapPin className="w-3 h-3" />
+                              <span className="truncate">{schedule.location}</span>
+                            </div>
+                          )}
+                          {schedule.description && (
+                            <div className="text-sm opacity-75 mt-2 line-clamp-2">
+                              {schedule.description}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-1 ml-2 opacity-0 hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditEvent?.(schedule);
+                            }}
+                            className="p-1 hover:bg-white hover:bg-opacity-20 rounded"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteEvent?.(schedule.id);
+                            }}
+                            className="p-1 hover:bg-white hover:bg-opacity-20 rounded text-red-300"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

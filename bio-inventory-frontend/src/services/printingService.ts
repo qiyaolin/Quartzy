@@ -55,7 +55,7 @@ class PrintingService {
    */
   async queuePrintJob(data: CreatePrintJobRequest): Promise<PrintJob> {
     try {
-      const response = await fetch(buildApiUrl('/printing/api/queue-job/'), {
+      const response = await fetch(buildApiUrl('/api/printing/api/queue-job/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,8 +81,8 @@ class PrintingService {
   async getPrintJobs(status?: string): Promise<PrintJob[]> {
     try {
       const url = status 
-        ? buildApiUrl(`/printing/api/jobs/?status=${encodeURIComponent(status)}`)
-        : buildApiUrl('/printing/api/jobs/');
+        ? buildApiUrl(`/api/printing/api/jobs/?status=${encodeURIComponent(status)}`)
+        : buildApiUrl('/api/printing/api/jobs/');
         
       const response = await fetch(url, {
         headers: {
@@ -107,7 +107,7 @@ class PrintingService {
    */
   async getPrintJob(jobId: number): Promise<PrintJob> {
     try {
-      const response = await fetch(buildApiUrl(`/printing/api/jobs/${jobId}/`), {
+      const response = await fetch(buildApiUrl(`/api/printing/api/jobs/${jobId}/`), {
         headers: {
           'Authorization': `Token ${this.getToken()}`
         }
@@ -129,7 +129,7 @@ class PrintingService {
    */
   async retryPrintJob(jobId: number): Promise<PrintJob> {
     try {
-      const response = await fetch(buildApiUrl(`/printing/api/jobs/${jobId}/retry/`), {
+      const response = await fetch(buildApiUrl(`/api/printing/api/jobs/${jobId}/retry/`), {
         method: 'POST',
         headers: {
           'Authorization': `Token ${this.getToken()}`
@@ -152,7 +152,7 @@ class PrintingService {
    */
   async getPrintStats(): Promise<PrintJobStats> {
     try {
-      const response = await fetch(buildApiUrl('/printing/api/stats/'), {
+      const response = await fetch(buildApiUrl('/api/printing/api/stats/'), {
         headers: {
           'Authorization': `Token ${this.getToken()}`
         }

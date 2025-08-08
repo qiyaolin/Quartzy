@@ -18,6 +18,7 @@ export interface GroupMeeting {
     materials_file?: string;
     materials_deadline?: string;
     is_materials_submitted?: boolean;
+    attendees_count?: number;
     created_at: string;
     updated_at: string;
 }
@@ -317,6 +318,33 @@ export const groupMeetingApi = {
         
         const data = await response.json();
         return data.presenter_ids;
+    },
+
+    // Auto-generate recurring task instances for multiple months
+    generateTaskInstances: async (token: string, taskId: number, months: number): Promise<any> => {
+        const response = await fetch(buildApiUrl(`/api/tasks/generate/`), {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                template_ids: [taskId],
+                periods: Array.from({length: months}, (_, i) => {
+                    const date = new Date();
+                    date.setMonth(date.getMonth() + i);
+                    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                }),
+                preview_only: false
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to generate task instances: ${response.statusText}`);
+        }
+        
+        return response.json();
     }
 };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ArrowUpDown, Calendar, User, Clock, MessageSquare } from 'lucide-react';
-import { GroupMeeting, Presenter } from '../services/groupMeetingApi.ts';
+import { GroupMeeting, Presenter } from "../services/groupMeetingApi.ts";
 
 interface SwapRequestModalProps {
   isOpen: boolean;

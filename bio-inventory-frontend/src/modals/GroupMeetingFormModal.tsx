@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { X, Calendar, Clock, MapPin, FileText, User, Link, Upload, Users } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
-import { ScheduleFormData, scheduleHelpers } from '../services/scheduleApi.ts';
+import { ScheduleFormData, scheduleHelpers } from "../services/scheduleApi.ts";
 
 interface GroupMeetingFormData extends ScheduleFormData {
   topic: string;

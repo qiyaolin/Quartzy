@@ -45,7 +45,7 @@ const UserFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
             delete submitData.confirm_password;
         }
 
-        const url = isEditMode ? buildApiUrl(`/api/users/${initialData.id}/`) : buildApiUrl(API_ENDPOINTS.USERS);
+        const url = isEditMode ? buildApiUrl(`/api/users/${initialData.id}/`) : buildApiUrl(API_ENDPOINTS.USERS_ADMIN);
         const method = isEditMode ? 'PUT' : 'POST';
         
         try {

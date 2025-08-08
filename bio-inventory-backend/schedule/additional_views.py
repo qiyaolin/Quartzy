@@ -2,7 +2,8 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth.models import User
 from django.db.models import Q, Count, Sum, Avg
 from django.db.models.functions import Extract
@@ -323,7 +324,7 @@ class GenerateMeetingsView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            from .services import MeetingGenerationService
+            from .services.meeting_generation import MeetingGenerationService
             
             data = serializer.validated_data
             service = MeetingGenerationService()
@@ -1508,3 +1509,62 @@ class AdminTaskDashboardView(APIView):
                 'pending_swaps_count': pending_swaps.count(),
             }
         })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def group_meetings_api(request):
+    """Group meetings API endpoint that returns MeetingInstance data"""
+    try:
+        # Get meetings with ordering and limit support
+        ordering = request.GET.get('ordering', '-date')
+        limit = request.GET.get('limit', '100')
+        
+        try:
+            limit = int(limit)
+        except (ValueError, TypeError):
+            limit = 100
+            
+        # Query meetings with related event data
+        queryset = MeetingInstance.objects.select_related('event').prefetch_related('presenters__user')
+        
+        # Apply ordering
+        if ordering:
+            queryset = queryset.order_by(ordering)
+            
+        # Apply limit
+        queryset = queryset[:limit]
+        
+        # Serialize the data
+        meetings_data = []
+        for meeting in queryset:
+            # Get the main presenter
+            main_presenter = meeting.presenters.first()
+            
+            meetings_data.append({
+                'id': meeting.id,
+                'title': meeting.event.title if meeting.event else f"{meeting.get_meeting_type_display()} - {meeting.date}",
+                'date': meeting.date.isoformat() if meeting.date else timezone.now().date().isoformat(),
+                'start_time': meeting.event.start_time.strftime('%H:%M') if meeting.event and meeting.event.start_time else '10:00',
+                'end_time': meeting.event.end_time.strftime('%H:%M') if meeting.event and meeting.event.end_time else '11:00',
+                'location': getattr(meeting.event, 'location', '') if meeting.event else '',
+                'description': meeting.event.description if meeting.event else meeting.notes or '',
+                'presenter': {
+                    'id': main_presenter.user.id,
+                    'username': main_presenter.user.username,
+                    'first_name': main_presenter.user.first_name,
+                    'last_name': main_presenter.user.last_name,
+                } if main_presenter and main_presenter.user else None,
+                'status': meeting.status or 'scheduled',
+                'meeting_type': meeting.meeting_type or 'research_update',
+                'created_at': meeting.created_at.isoformat() if meeting.created_at else timezone.now().isoformat(),
+                'updated_at': meeting.updated_at.isoformat() if meeting.updated_at else timezone.now().isoformat(),
+            })
+        
+        return Response(meetings_data)
+        
+    except Exception as e:
+        # Return empty meetings list if anything fails
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in group_meetings_api: {str(e)}")
+        return Response([])

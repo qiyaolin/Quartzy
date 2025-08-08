@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, RotateCcw, AlertTriangle, Users } from 'lucide-react';
-import { GroupMeeting } from '../services/groupMeetingApi.ts';
+import { GroupMeeting } from "../services/groupMeetingApi.ts";
 
 interface PostponeMeetingModalProps {
   isOpen: boolean;

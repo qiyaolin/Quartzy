@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, Package, AlertCircle } from 'lucide-react';
-import { printingService } from '../services/printingService.ts';
+import { printingService } from "../services/printingService.ts";
 import { useNotification } from '../contexts/NotificationContext.tsx';
 
 interface PrintBarcodeModalProps {

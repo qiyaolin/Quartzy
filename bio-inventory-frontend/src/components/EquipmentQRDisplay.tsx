@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { QrCode, Download, Printer, MapPin, Clock, User, X } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
-import { equipmentApi, Equipment } from '../services/scheduleApi.ts';
+import { equipmentApi, Equipment } from "../services/scheduleApi.ts";
 
 interface EquipmentQRDisplayProps {
     equipment: Equipment;

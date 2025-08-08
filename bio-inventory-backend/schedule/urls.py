@@ -10,7 +10,7 @@ router = DefaultRouter()
 router.register(r'events', views.EventViewSet, basename='events')
 router.register(r'equipment', views.EquipmentViewSet, basename='equipment')
 router.register(r'bookings', views.BookingViewSet, basename='bookings')
-router.register(r'group-meetings', views.GroupMeetingViewSet, basename='group-meetings')
+# router.register(r'group-meetings', views.GroupMeetingViewSet, basename='group-meetings')  # Disabled to use manual override
 router.register(r'presenter-rotations', views.MeetingPresenterRotationViewSet, basename='presenter-rotations')
 router.register(r'recurring-tasks', views.RecurringTaskViewSet, basename='recurring-tasks')
 router.register(r'task-instances', views.TaskInstanceViewSet, basename='task-instances')
@@ -27,7 +27,7 @@ router.register(r'task-swap-requests', views.TaskSwapRequestViewSet, basename='t
 router.register(r'meeting-configuration', views.MeetingConfigurationViewSet, basename='meeting-configuration')
 router.register(r'meetings', views.MeetingInstanceViewSet, basename='meetings')
 router.register(r'presenters', views.PresenterViewSet, basename='presenters')
-router.register(r'rotation-system', views.RotationSystemViewSet, basename='rotation-system')
+router.register(r'rotation-systems', views.RotationSystemViewSet, basename='rotation-systems')
 router.register(r'queue-entries', views.QueueEntryViewSet, basename='queue-entries')
 router.register(r'swap-requests', views.SwapRequestViewSet, basename='swap-requests')
 router.register(r'presentation-history', views.PresentationHistoryViewSet, basename='presentation-history')
@@ -43,6 +43,9 @@ urlpatterns = [
     
     # Additional API views that aren't ViewSets
     path('qr-scan/', views.QRCodeScanView.as_view(), name='qr-scan'),
+    
+    # Override group-meetings to return MeetingInstance data
+    path('group-meetings/', additional_views.group_meetings_api, name='group-meetings-override'),
     path('calendar-events/', views.CalendarEventsView.as_view(), name='calendar-events'),
     path('equipment/available/', views.AvailableEquipmentView.as_view(), name='available-equipment'),
     path('equipment/<int:equipment_id>/checkin/', views.EquipmentCheckinView.as_view(), name='equipment-checkin'),

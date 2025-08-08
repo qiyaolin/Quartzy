@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, MapPin, FileText } from 'lucide-react';
-import { ScheduleFormData, scheduleHelpers } from '../services/scheduleApi.ts';
+import { ScheduleFormData, scheduleHelpers } from "../services/scheduleApi.ts";
 
 interface ScheduleFormModalProps {
   isOpen: boolean;
