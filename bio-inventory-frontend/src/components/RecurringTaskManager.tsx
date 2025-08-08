@@ -10,7 +10,9 @@ import {
     RecurringTask, 
     User as TaskUser 
 } from "../services/groupMeetingApi.ts";
+import { buildApiUrl } from '../config/api.ts';
 import EditTaskModal, { EditTaskData } from '../modals/EditTaskModal.tsx';
+import AutoGenerateModal, { AutoGenerateConfig } from '../modals/AutoGenerateModal.tsx';
 
 interface RecurringTaskManagerProps {
     onCreateTask?: () => void;
@@ -29,6 +31,8 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
     const [showEditModal, setShowEditModal] = useState(false);
     const [selectedTask, setSelectedTask] = useState<RecurringTask | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);
+    const [isAutoGenerating, setIsAutoGenerating] = useState(false);
 
     // Load data
     const loadData = useCallback(async () => {
@@ -152,37 +156,42 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
     };
 
     const handleAutoGenerateTasks = async () => {
-        if (!token || tasks.length === 0) return;
+        setShowAutoGenerateModal(true);
+    };
 
-        const monthsStr = prompt('How many months of tasks would you like to generate?', '3');
-        if (!monthsStr) return;
+    const handleAutoGenerate = async (config: AutoGenerateConfig) => {
+        if (!token) return;
 
-        const months = parseInt(monthsStr);
-        if (isNaN(months) || months < 1 || months > 12) {
-            alert('Please enter a valid number of months (1-12)');
-            return;
-        }
-
-        const activeTasks = tasks.filter(t => t.is_active);
-        if (activeTasks.length === 0) {
-            alert('No active tasks available for generation');
-            return;
-        }
-
+        setIsAutoGenerating(true);
         try {
             setError(null);
-            const results = [];
             
-            for (const task of activeTasks) {
-                const result = await groupMeetingApi.generateTaskInstances(token, task.id, months);
-                results.push({
-                    task: task.title,
-                    ...result
-                });
+            // Call the enhanced API with the configuration
+            const response = await fetch(buildApiUrl('/api/tasks/generate-with-rotation/'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    start_date: config.startDate,
+                    end_date: config.endDate,
+                    task_ids: config.selectedTaskIds,
+                    user_ids: config.selectedUserIds,
+                    rotation_settings: config.rotationSettings
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Failed to generate tasks: ${response.statusText}`);
             }
 
-            const totalGenerated = results.reduce((sum, r) => sum + (r.generated_tasks || 0), 0);
-            alert(`Successfully generated ${totalGenerated} task instances for ${months} months!`);
+            const result = await response.json();
+            const totalGenerated = result.total_tasks_generated || 0;
+            const assignmentsCreated = result.assignments_created || 0;
+
+            alert(`Successfully generated ${totalGenerated} task instances with ${assignmentsCreated} assignments!`);
             
             // Refresh task data
             await loadData();
@@ -190,6 +199,9 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
             console.error('Error auto-generating tasks:', error);
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             setError(`Failed to auto-generate tasks: ${errorMessage}`);
+            throw error; // Re-throw to be handled by the modal
+        } finally {
+            setIsAutoGenerating(false);
         }
     };
 
@@ -401,6 +413,16 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                 task={selectedTask}
                 onSubmit={handleEditSubmit}
                 isSubmitting={isSubmitting}
+            />
+
+            {/* Auto Generate Modal */}
+            <AutoGenerateModal
+                isOpen={showAutoGenerateModal}
+                onClose={() => setShowAutoGenerateModal(false)}
+                tasks={tasks}
+                users={users}
+                onGenerate={handleAutoGenerate}
+                isSubmitting={isAutoGenerating}
             />
         </div>
     );

@@ -2,10 +2,12 @@ import React, { useState, useEffect, useContext } from 'react';
 import {
     Calendar, Clock, Users, AlertTriangle, CheckCircle, 
     Play, Pause, RefreshCw, Bell, ArrowRight, BookOpen,
-    ClipboardList, Monitor, MapPin, Timer, TrendingUp
+    ClipboardList, Monitor, MapPin, Timer, TrendingUp, X, Plus
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { buildApiUrl } from '../config/api.ts';
+import ScheduleDetailModal from '../modals/ScheduleDetailModal.tsx';
+import { Schedule } from '../services/scheduleApi.ts';
 
 interface TodayEvent {
     id: number;
@@ -94,13 +96,29 @@ interface UnifiedScheduleDashboardProps {
     onCompleteTask?: (taskId: number) => void;
     onNavigateToAction?: (actionUrl: string) => void;
     onRefresh?: () => void;
+    // Phase 1 enhancements - new action props
+    onEditEvent?: (schedule: Schedule) => void;
+    onDeleteEvent?: (scheduleId: number) => void;
+    onUploadMeetingMaterials?: (meetingId: number) => void;
+    onViewTaskDetails?: (taskId: number) => void;
+    onRequestTaskSwap?: (taskId: number) => void;
+    onCancelBooking?: (bookingId: number) => void;
+    onBookNewEquipment?: () => void;
 }
 
 const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     onQuickBookEquipment,
     onCompleteTask,
     onNavigateToAction,
-    onRefresh
+    onRefresh,
+    // Phase 1 enhancement props
+    onEditEvent,
+    onDeleteEvent,
+    onUploadMeetingMaterials,
+    onViewTaskDetails,
+    onRequestTaskSwap,
+    onCancelBooking,
+    onBookNewEquipment
 }) => {
     const authContext = useContext(AuthContext);
     if (!authContext) {
@@ -112,6 +130,8 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [selectedEvent, setSelectedEvent] = useState<Schedule | null>(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
 
     const fetchDashboardData = async () => {
         try {
@@ -208,6 +228,34 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
         }
     };
 
+    // Helper function to convert TodayEvent to Schedule format for modal
+    const convertEventToSchedule = (event: TodayEvent): Schedule => {
+        return {
+            id: event.id,
+            title: event.title,
+            description: event.description,
+            date: new Date().toISOString().split('T')[0], // Today's date
+            start_time: event.start_time,
+            end_time: event.end_time,
+            status: event.status || 'scheduled',
+            location: '', // Not available in TodayEvent
+            equipment: event.equipment_name ? { name: event.equipment_name } : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        } as Schedule;
+    };
+
+    const handleEventClick = (event: TodayEvent) => {
+        const schedule = convertEventToSchedule(event);
+        setSelectedEvent(schedule);
+        setShowDetailModal(true);
+    };
+
+    const handleCloseModal = () => {
+        setShowDetailModal(false);
+        setSelectedEvent(null);
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -302,6 +350,124 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                 </div>
             </div>
 
+            {/* Focus Section - Intelligent Prioritization */}
+            {(() => {
+                const now = new Date();
+                const nextEvent = today_events
+                    .filter(event => {
+                        const eventTime = new Date(`${now.toDateString()} ${event.start_time}`);
+                        return eventTime > now && (eventTime.getTime() - now.getTime()) <= 30 * 60 * 1000; // Next 30 minutes
+                    })
+                    .sort((a, b) => a.start_time.localeCompare(b.start_time))[0];
+                
+                const overdueTasks = my_tasks.filter(task => task.is_overdue);
+                const highPriorityActions = pending_actions.filter(action => action.urgency === 'high');
+                
+                const focusItems = [];
+                if (nextEvent) focusItems.push({ type: 'event', data: nextEvent });
+                if (overdueTasks.length > 0) focusItems.push({ type: 'overdue', data: overdueTasks[0] });
+                if (highPriorityActions.length > 0) focusItems.push({ type: 'action', data: highPriorityActions[0] });
+                
+                return focusItems.length > 0 ? (
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-6 shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                                <TrendingUp className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-gray-900">Focus Now</h3>
+                                <p className="text-sm text-gray-600">Your most important items right now</p>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            {focusItems.map((item, index) => {
+                                if (item.type === 'event') {
+                                    const event = item.data as TodayEvent;
+                                    return (
+                                        <div key={`event-${index}`} className="bg-white rounded-lg p-4 border border-blue-100">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-red-100 rounded-lg">
+                                                        <Clock className="w-4 h-4 text-red-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-medium text-gray-900">{event.title}</h4>
+                                                        <p className="text-sm text-red-600 font-medium">Starting soon - {formatTime(event.start_time)}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleEventClick(event)}
+                                                    className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                                                >
+                                                    View Details
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                } else if (item.type === 'overdue') {
+                                    const task = item.data as MyTask;
+                                    return (
+                                        <div key={`task-${index}`} className="bg-white rounded-lg p-4 border border-red-200">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-red-100 rounded-lg">
+                                                        <AlertTriangle className="w-4 h-4 text-red-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-medium text-gray-900">{task.template_name}</h4>
+                                                        <p className="text-sm text-red-600 font-medium">Overdue - Due {formatDate(task.execution_end_date)}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    {task.can_complete && (
+                                                        <button
+                                                            onClick={() => onCompleteTask?.(task.id)}
+                                                            className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                                                        >
+                                                            Complete
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => onViewTaskDetails?.(task.id)}
+                                                        className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded hover:bg-blue-200 transition-colors"
+                                                    >
+                                                        Details
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                } else if (item.type === 'action') {
+                                    const action = item.data as PendingAction;
+                                    return (
+                                        <div key={`action-${index}`} className="bg-white rounded-lg p-4 border border-orange-200">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2 bg-orange-100 rounded-lg">
+                                                        <Bell className="w-4 h-4 text-orange-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-medium text-gray-900">{action.title}</h4>
+                                                        <p className="text-sm text-orange-600 font-medium">High priority action required</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => onNavigateToAction?.(action.action_url)}
+                                                    className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700 transition-colors"
+                                                >
+                                                    Take Action
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })}
+                        </div>
+                    </div>
+                ) : null;
+            })()}
+
             {/* Pending Actions - High Priority */}
             {pending_actions.length > 0 && (
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -367,7 +533,10 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             {today_events.map((event) => (
                                 <div 
                                     key={event.id}
-                                    className={`border rounded-lg p-3 ${event.is_mine ? 'bg-blue-50 border-blue-200' : 'border-gray-200'}`}
+                                    onClick={() => handleEventClick(event)}
+                                    className={`border rounded-lg p-3 cursor-pointer hover:shadow-md transition-all duration-200 ${
+                                        event.is_mine ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' : 'border-gray-200 hover:bg-gray-50'
+                                    }`}
                                 >
                                     <div className="flex items-start gap-3">
                                         {getEventTypeIcon(event.event_type)}
@@ -421,7 +590,10 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             {my_tasks.map((task) => (
                                 <div 
                                     key={task.id}
-                                    className={`border rounded-lg p-3 ${task.is_overdue ? 'bg-red-50 border-red-200' : 'border-gray-200'}`}
+                                    onClick={() => onViewTaskDetails?.(task.id)}
+                                    className={`border rounded-lg p-3 cursor-pointer hover:shadow-md transition-all duration-200 ${
+                                        task.is_overdue ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'border-gray-200 hover:bg-gray-50'
+                                    }`}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex-1">
@@ -446,15 +618,30 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                                                 <p className="text-sm text-red-600 font-medium">Overdue!</p>
                                             )}
                                         </div>
-                                        {task.can_complete && (
+                                        <div className="flex items-center gap-2">
+                                            {task.can_complete && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onCompleteTask?.(task.id);
+                                                    }}
+                                                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                                                >
+                                                    <CheckCircle className="w-3 h-3" />
+                                                    Complete
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => onCompleteTask?.(task.id)}
-                                                className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onRequestTaskSwap?.(task.id);
+                                                }}
+                                                className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded hover:bg-blue-200 transition-colors"
                                             >
-                                                <CheckCircle className="w-3 h-3" />
-                                                Complete
+                                                <ArrowRight className="w-3 h-3" />
+                                                Swap
                                             </button>
-                                        )}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -516,6 +703,17 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                                                 </div>
                                             )}
                                         </div>
+                                        <div className="flex flex-col gap-2">
+                                            {meeting.materials_required && meeting.is_presenter && !meeting.materials_submitted && (
+                                                <button
+                                                    onClick={() => onUploadMeetingMaterials?.(meeting.id)}
+                                                    className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 text-sm rounded hover:bg-orange-200 transition-colors"
+                                                >
+                                                    <BookOpen className="w-3 h-3" />
+                                                    Upload Materials
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -525,9 +723,18 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
 
                 {/* Equipment Bookings */}
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Monitor className="w-5 h-5 text-orange-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">My Equipment Bookings</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Monitor className="w-5 h-5 text-orange-600" />
+                            <h3 className="text-lg font-semibold text-gray-900">My Equipment Bookings</h3>
+                        </div>
+                        <button
+                            onClick={() => onBookNewEquipment?.()}
+                            className="flex items-center gap-1 px-3 py-2 bg-orange-100 text-orange-700 text-sm rounded hover:bg-orange-200 transition-colors"
+                        >
+                            <Plus className="w-3 h-3" />
+                            Book Equipment
+                        </button>
                     </div>
                     {equipment_bookings.length === 0 ? (
                         <div className="text-center py-8">
@@ -575,6 +782,15 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                                                 </span>
                                             )}
                                         </div>
+                                        <div className="flex flex-col gap-2">
+                                            <button
+                                                onClick={() => onCancelBooking?.(booking.id)}
+                                                className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 text-sm rounded hover:bg-red-200 transition-colors"
+                                            >
+                                                <X className="w-3 h-3" />
+                                                Cancel
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -587,6 +803,25 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
             <div className="text-center text-sm text-gray-500">
                 Last updated: {new Date(dashboardData.last_updated).toLocaleString()}
             </div>
+
+            {/* Schedule Detail Modal */}
+            <ScheduleDetailModal
+                isOpen={showDetailModal}
+                onClose={handleCloseModal}
+                schedule={selectedEvent}
+                onEdit={(schedule) => {
+                    onEditEvent?.(schedule);
+                    handleCloseModal();
+                }}
+                onDelete={(scheduleId) => {
+                    onDeleteEvent?.(scheduleId);
+                    handleCloseModal();
+                }}
+                onMarkComplete={(scheduleId) => {
+                    onCompleteTask?.(scheduleId);
+                    handleCloseModal();
+                }}
+            />
         </div>
     );
 };

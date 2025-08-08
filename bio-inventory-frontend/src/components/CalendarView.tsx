@@ -266,7 +266,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       {/* Calendar Content */}
-      <div className="relative max-h-[calc(100vh-200px)] overflow-y-auto">
+      <div className="relative">
         {/* Month View */}
         {viewMode === 'month' && (
           <div className="grid grid-cols-7">

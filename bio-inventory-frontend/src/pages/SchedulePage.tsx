@@ -210,40 +210,6 @@ const SchedulePage: React.FC = () => {
     }, [token, activeTab, fetchSchedules, fetchEquipment, fetchAllData]);
 
     // Equipment handlers
-    const handleBookEquipment = async (equipment: Equipment) => {
-        try {
-            const bookingData = {
-                equipment_id: equipment.id,
-                duration_minutes: 60, // Default 1 hour
-                auto_checkin: equipment.requires_qr_checkin ? false : true // Auto check-in for non-QR equipment
-            };
-            
-            const result = await equipmentApi.quickBookEquipment(token, bookingData);
-            console.log('Equipment booked successfully:', result);
-            
-            // Refresh equipment data
-            await fetchEquipment();
-            
-            // Show success feedback
-            setLastAction({
-                type: 'Equipment Booked',
-                message: `Successfully booked ${equipment.name} for 1 hour!`,
-                timestamp: Date.now()
-            });
-            
-            // Auto-hide after 3 seconds
-            setTimeout(() => setLastAction(null), 3000);
-        } catch (error) {
-            console.error('Failed to book equipment:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            setLastAction({
-                type: 'Booking Failed',
-                message: `Failed to book equipment: ${errorMessage}`,
-                timestamp: Date.now()
-            });
-            setTimeout(() => setLastAction(null), 5000);
-        }
-    };
 
     const handleEditEquipment = async (equipment: Equipment) => {
         const newName = prompt('Enter new equipment name:', equipment.name);
@@ -506,6 +472,72 @@ const SchedulePage: React.FC = () => {
                         setActiveTab(tab as TabType);
                     }}
                     onRefresh={fetchAllData}
+                    // Phase 1 enhancement handlers for mobile
+                    onEditEvent={(schedule) => {
+                        console.log('Edit event (mobile):', schedule);
+                        setLastAction({
+                            type: 'Edit Event',
+                            message: 'Opening event editor',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 2000);
+                    }}
+                    onDeleteEvent={(scheduleId) => {
+                        console.log('Delete event (mobile):', scheduleId);
+                        fetchAllData();
+                        setLastAction({
+                            type: 'Event Deleted',
+                            message: 'Event has been deleted',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 3000);
+                    }}
+                    onUploadMeetingMaterials={(meetingId) => {
+                        console.log('Upload materials for meeting (mobile):', meetingId);
+                        setLastAction({
+                            type: 'Upload Materials',
+                            message: 'Opening material upload dialog',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 2000);
+                    }}
+                    onViewTaskDetails={(taskId) => {
+                        console.log('View task details (mobile):', taskId);
+                        setLastAction({
+                            type: 'View Details',
+                            message: 'Opening task details',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 2000);
+                    }}
+                    onRequestTaskSwap={(taskId) => {
+                        console.log('Request task swap (mobile):', taskId);
+                        setLastAction({
+                            type: 'Task Swap',
+                            message: 'Swap request initiated',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 2000);
+                    }}
+                    onCancelBooking={(bookingId) => {
+                        console.log('Cancel booking (mobile):', bookingId);
+                        fetchAllData();
+                        setLastAction({
+                            type: 'Booking Cancelled',
+                            message: 'Equipment booking cancelled',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 3000);
+                    }}
+                    onBookNewEquipment={() => {
+                        console.log('Book new equipment (mobile)');
+                        setLastAction({
+                            type: 'Book Equipment',
+                            message: 'Opening equipment booking',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => setLastAction(null), 2000);
+                    }}
                 />
                 
                 {/* Mobile Toast Notifications */}
@@ -751,11 +783,86 @@ const SchedulePage: React.FC = () => {
                             onCompleteTask={(taskId) => {
                                 console.log('Complete task:', taskId);
                                 fetchAllData();
+                                setLastAction({
+                                    type: 'Task Completed',
+                                    message: 'Task marked as complete',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 3000);
                             }}
                             onNavigateToAction={(actionUrl) => {
                                 console.log('Navigate to action:', actionUrl);
                             }}
                             onRefresh={fetchAllData}
+                            // Phase 1 enhancement handlers
+                            onEditEvent={(schedule) => {
+                                console.log('Edit event:', schedule);
+                                // Could open edit modal here
+                                setLastAction({
+                                    type: 'Edit Event',
+                                    message: 'Opening event editor',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 2000);
+                            }}
+                            onDeleteEvent={(scheduleId) => {
+                                console.log('Delete event:', scheduleId);
+                                fetchAllData();
+                                setLastAction({
+                                    type: 'Event Deleted',
+                                    message: 'Event has been deleted',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 3000);
+                            }}
+                            onUploadMeetingMaterials={(meetingId) => {
+                                console.log('Upload materials for meeting:', meetingId);
+                                setLastAction({
+                                    type: 'Upload Materials',
+                                    message: 'Opening material upload dialog',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 2000);
+                            }}
+                            onViewTaskDetails={(taskId) => {
+                                console.log('View task details:', taskId);
+                                setActiveTab('tasks');
+                                setLastAction({
+                                    type: 'View Details',
+                                    message: 'Switching to task details',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 2000);
+                            }}
+                            onRequestTaskSwap={(taskId) => {
+                                console.log('Request task swap:', taskId);
+                                setLastAction({
+                                    type: 'Task Swap',
+                                    message: 'Swap request initiated',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 2000);
+                            }}
+                            onCancelBooking={(bookingId) => {
+                                console.log('Cancel booking:', bookingId);
+                                fetchAllData();
+                                setLastAction({
+                                    type: 'Booking Cancelled',
+                                    message: 'Equipment booking cancelled',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 3000);
+                            }}
+                            onBookNewEquipment={() => {
+                                console.log('Book new equipment');
+                                setActiveTab('equipment');
+                                setLastAction({
+                                    type: 'Book Equipment',
+                                    message: 'Opening equipment booking',
+                                    timestamp: Date.now()
+                                });
+                                setTimeout(() => setLastAction(null), 2000);
+                            }}
                         />
                         <EnhancedQuickActions 
                             availableEquipment={availableEquipment}
@@ -821,7 +928,6 @@ const SchedulePage: React.FC = () => {
                     <EquipmentManagement 
                         onShowQRCode={handleShowQRCode}
                         onQRScan={handleOpenQRScanner}
-                        onBookEquipment={handleBookEquipment}
                         onEditEquipment={handleEditEquipment}
                     />
                 )}

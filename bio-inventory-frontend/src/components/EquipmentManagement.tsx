@@ -3,28 +3,23 @@ import {
   Monitor, 
   Plus, 
   Search, 
-  Filter, 
   QrCode, 
   MapPin, 
-  Clock, 
   User, 
-  CheckCircle, 
-  AlertCircle,
   Calendar,
-  Settings,
+  Clock,
   Edit3,
-  Trash2,
   BookOpen,
   Timer,
   X
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { Equipment, equipmentApi, Booking } from "../services/scheduleApi.ts";
+import QuickBookModal from './QuickBookModal.tsx';
 
 interface EquipmentManagementProps {
   onShowQRCode?: (equipment: Equipment) => void;
   onQRScan?: (mode: 'checkin' | 'checkout') => void;
-  onBookEquipment?: (equipment: Equipment) => void;
   onEditEquipment?: (equipment: Equipment) => void;
 }
 
@@ -39,7 +34,6 @@ interface EquipmentFormData {
 const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   onShowQRCode,
   onQRScan,
-  onBookEquipment,
   onEditEquipment
 }) => {
   const authContext = useContext(AuthContext);
@@ -54,9 +48,10 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [sortBy, setSortBy] = useState<'name' | 'location' | 'status' | 'usage'>('name');
-  const [showFilters, setShowFilters] = useState(false);
+  // Booking modal state
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedEquipmentForBooking, setSelectedEquipmentForBooking] = useState<Equipment | null>(null);
+  const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<EquipmentFormData>({
@@ -68,13 +63,6 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Quick actions state
-  const [quickActions, setQuickActions] = useState({
-    showAvailableOnly: false,
-    showBookableOnly: false,
-    showQROnly: false
-  });
 
   // Fetch equipment data
   const fetchEquipment = useCallback(async () => {
@@ -258,6 +246,52 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     return new Date(dateTimeString).toLocaleString();
   };
 
+  // Handle equipment booking with modal
+  const handleBookEquipment = useCallback((equipment: Equipment) => {
+    setSelectedEquipmentForBooking(equipment);
+    setIsBookingModalOpen(true);
+  }, []);
+
+  // Handle booking modal submission
+  const handleBookingSubmit = useCallback(async (bookingData: any) => {
+    if (!token || !selectedEquipmentForBooking) return;
+    
+    setIsSubmittingBooking(true);
+    try {
+      // Call the equipment booking API
+      const response = await fetch('/api/schedule/quick-actions/quick_book_equipment/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(bookingData)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to book equipment');
+      }
+
+      // Close modal and refresh data
+      setIsBookingModalOpen(false);
+      setSelectedEquipmentForBooking(null);
+      fetchEquipment(); // Refresh equipment list
+      
+      if (selectedEquipment?.id === selectedEquipmentForBooking.id) {
+        fetchBookings(selectedEquipmentForBooking.id); // Refresh bookings if same equipment selected
+      }
+      
+      console.log('Equipment booked successfully:', data);
+    } catch (error) {
+      console.error('Error booking equipment:', error);
+      // You could add toast notification here
+    } finally {
+      setIsSubmittingBooking(false);
+    }
+  }, [token, selectedEquipmentForBooking, selectedEquipment, fetchEquipment, fetchBookings]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -436,7 +470,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onBookEquipment?.(eq);
+                              handleBookEquipment(eq);
                             }}
                             className="p-2 text-gray-400 hover:text-green-600 transition-colors"
                             title="Book Equipment"
@@ -511,7 +545,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
                   
                   {selectedEquipment.is_bookable && (
                     <button
-                      onClick={() => onBookEquipment?.(selectedEquipment)}
+                      onClick={() => handleBookEquipment(selectedEquipment)}
                       className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-primary-600 text-white rounded-md text-sm font-medium hover:bg-primary-700"
                     >
                       <Calendar className="w-4 h-4 mr-2" />
@@ -695,6 +729,19 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Equipment Booking Modal */}
+      {isBookingModalOpen && selectedEquipmentForBooking && (
+        <QuickBookModal
+          equipment={selectedEquipmentForBooking}
+          isSubmitting={isSubmittingBooking}
+          onClose={() => {
+            setIsBookingModalOpen(false);
+            setSelectedEquipmentForBooking(null);
+          }}
+          onSubmit={handleBookingSubmit}
+        />
       )}
     </div>
   );

@@ -345,6 +345,39 @@ export const groupMeetingApi = {
         }
         
         return response.json();
+    },
+
+    // Enhanced auto-generation with rotation and user selection
+    generateTasksWithRotation: async (token: string, config: {
+        start_date: string;
+        end_date: string;
+        task_ids: number[];
+        user_ids: number[];
+        rotation_settings: {
+            avoidConsecutive: boolean;
+            maxAssignmentsPerPeriod: number;
+            balanceWorkload: boolean;
+        };
+    }): Promise<{
+        total_tasks_generated: number;
+        assignments_created: number;
+        rotation_summary: any[];
+    }> => {
+        const response = await fetch(buildApiUrl('/api/tasks/generate-with-rotation/'), {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to generate tasks with rotation: ${response.statusText}`);
+        }
+        
+        return response.json();
     }
 };
 

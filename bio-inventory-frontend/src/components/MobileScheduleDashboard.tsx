@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { buildApiUrl } from '../config/api.ts';
+import ScheduleDetailModal from '../modals/ScheduleDetailModal.tsx';
+import { Schedule } from '../services/scheduleApi.ts';
 
 interface TodayEvent {
     id: number;
@@ -60,6 +62,14 @@ interface MobileScheduleDashboardProps {
     onNavigateToAction?: (actionUrl: string) => void;
     onNavigateToTab?: (tab: string) => void;
     onRefresh?: () => void;
+    // Phase 1 enhancements - new action props
+    onEditEvent?: (schedule: Schedule) => void;
+    onDeleteEvent?: (scheduleId: number) => void;
+    onUploadMeetingMaterials?: (meetingId: number) => void;
+    onViewTaskDetails?: (taskId: number) => void;
+    onRequestTaskSwap?: (taskId: number) => void;
+    onCancelBooking?: (bookingId: number) => void;
+    onBookNewEquipment?: () => void;
 }
 
 const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
@@ -68,7 +78,15 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
     onCompleteTask,
     onNavigateToAction,
     onNavigateToTab,
-    onRefresh
+    onRefresh,
+    // Phase 1 enhancement props
+    onEditEvent,
+    onDeleteEvent,
+    onUploadMeetingMaterials,
+    onViewTaskDetails,
+    onRequestTaskSwap,
+    onCancelBooking,
+    onBookNewEquipment
 }) => {
     const authContext = useContext(AuthContext);
     if (!authContext) {
@@ -84,6 +102,8 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
     const [showMobileMenu, setShowMobileMenu] = useState(false);
     const [showActionSheet, setShowActionSheet] = useState(false);
     const [hapticFeedback, setHapticFeedback] = useState(true);
+    const [selectedEvent, setSelectedEvent] = useState<Schedule | null>(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
 
     const quickActions: QuickAction[] = useMemo(() => [
         {
@@ -218,6 +238,34 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
             case 'task': return <ClipboardList className="w-4 h-4" />;
             default: return <Calendar className="w-4 h-4" />;
         }
+    };
+
+    // Helper function to convert TodayEvent to Schedule format for modal
+    const convertEventToSchedule = (event: TodayEvent): Schedule => {
+        return {
+            id: event.id,
+            title: event.title,
+            description: event.description,
+            date: new Date().toISOString().split('T')[0], // Today's date
+            start_time: event.start_time,
+            end_time: event.end_time,
+            status: event.status || 'scheduled',
+            location: '', // Not available in TodayEvent
+            equipment: event.equipment_name ? { name: event.equipment_name } : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        } as Schedule;
+    };
+
+    const handleEventClick = (event: TodayEvent) => {
+        const schedule = convertEventToSchedule(event);
+        setSelectedEvent(schedule);
+        setShowDetailModal(true);
+    };
+
+    const handleCloseModal = () => {
+        setShowDetailModal(false);
+        setSelectedEvent(null);
     };
 
     if (loading) {
@@ -449,7 +497,11 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                             </div>
                         ) : (
                             todayEvents.map((event) => (
-                                <div key={event.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div 
+                                    key={event.id} 
+                                    onClick={() => handleEventClick(event)}
+                                    className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200 active:scale-95"
+                                >
                                     <div className={`h-2 ${
                                         event.is_mine ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-gray-400 to-gray-500'
                                     }`} />
@@ -534,6 +586,25 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Schedule Detail Modal */}
+            <ScheduleDetailModal
+                isOpen={showDetailModal}
+                onClose={handleCloseModal}
+                schedule={selectedEvent}
+                onEdit={(schedule) => {
+                    onEditEvent?.(schedule);
+                    handleCloseModal();
+                }}
+                onDelete={(scheduleId) => {
+                    onDeleteEvent?.(scheduleId);
+                    handleCloseModal();
+                }}
+                onMarkComplete={(scheduleId) => {
+                    onCompleteTask?.(scheduleId);
+                    handleCloseModal();
+                }}
+            />
         </div>
     );
 };

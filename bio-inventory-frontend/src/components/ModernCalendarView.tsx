@@ -391,7 +391,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
         )}
 
         {/* Main Calendar Area */}
-        <div className="flex-1 max-h-[calc(100vh-200px)] overflow-y-auto">
+        <div className="flex-1">
           {/* Month View */}
           {viewMode === 'month' && calendarLayout === 'grid' && (
             <div className="h-full">
