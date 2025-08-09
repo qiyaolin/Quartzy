@@ -139,7 +139,8 @@ const MyScheduleView: React.FC<MyScheduleViewProps> = ({ schedules, loading, for
             )}
 
             {/* Today's Schedule */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="card">
+                <div className="card-body p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Today's Schedule</h3>
                 
                 {/* Today's Events */}
@@ -230,9 +231,11 @@ const MyScheduleView: React.FC<MyScheduleViewProps> = ({ schedules, loading, for
                     </div>
                 )}
             </div>
+            </div>
 
             {/* Upcoming Events */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="card">
+                <div className="card-body p-6">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Upcoming Events</h3>
                 
                 {upcomingSchedules.length === 0 && upcomingBookings.length === 0 ? (
@@ -332,6 +335,7 @@ const MyScheduleView: React.FC<MyScheduleViewProps> = ({ schedules, loading, for
                             })}
                     </div>
                 )}
+            </div>
             </div>
         </div>
     );

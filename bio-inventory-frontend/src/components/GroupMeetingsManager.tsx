@@ -49,11 +49,13 @@ interface SwapRequest {
 interface GroupMeetingsManagerProps {
     onCreateMeeting?: () => void;
     onEditMeeting?: (meeting: GroupMeeting) => void;
+    isAdmin?: boolean;
 }
 
 const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     onCreateMeeting,
-    onEditMeeting
+    onEditMeeting,
+    isAdmin = false
 }) => {
     const authContext = useContext(AuthContext);
     const { token } = authContext || {};
@@ -503,21 +505,25 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setShowRotationModal(true)}
-                            className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                        >
-                            <RotateCcw className="w-4 h-4 mr-2" />
-                            Manage Rotation
-                        </button>
+                        {isAdmin && (
+                            <button
+                                onClick={() => setShowRotationModal(true)}
+                                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                            >
+                                <RotateCcw className="w-4 h-4 mr-2" />
+                                Manage Rotation
+                            </button>
+                        )}
                         
-                        <button
-                            onClick={() => setShowConfigModal(true)}
-                            className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                        >
-                            <Settings className="w-4 h-4 mr-2" />
-                            Settings
-                        </button>
+                        {isAdmin && (
+                            <button
+                                onClick={() => setShowConfigModal(true)}
+                                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                            >
+                                <Settings className="w-4 h-4 mr-2" />
+                                Settings
+                            </button>
+                        )}
                         
                         {onCreateMeeting && (
                             <button

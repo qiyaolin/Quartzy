@@ -4,7 +4,7 @@ import {
   Clock, User, CheckCircle, AlertTriangle, Send, Eye,
   Archive, Link, Trash2, RefreshCw, BookOpen, Globe
 } from 'lucide-react';
-import { AuthContext } from './AuthContext';
+import { AuthContext } from './AuthContext.tsx';
 import {
   PaperSubmission,
   MeetingInstance,
@@ -13,7 +13,7 @@ import {
 import {
   journalClubApi,
   meetingInstanceApi
-} from '../services/intelligentMeetingApi';
+} from '../services/intelligentMeetingApi.ts';
 
 /**
  * Journal Club Hub Component

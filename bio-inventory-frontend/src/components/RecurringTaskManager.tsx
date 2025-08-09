@@ -16,10 +16,12 @@ import AutoGenerateModal, { AutoGenerateConfig } from '../modals/AutoGenerateMod
 
 interface RecurringTaskManagerProps {
     onCreateTask?: () => void;
+    isAdmin?: boolean;
 }
 
 const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
-    onCreateTask
+    onCreateTask,
+    isAdmin = false
 }) => {
     const authContext = useContext(AuthContext);
     const { token } = authContext || {};
@@ -266,14 +268,16 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <button
-                            onClick={handleAutoGenerateTasks}
-                            disabled={tasks.length === 0}
-                            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <Settings className="w-4 h-4 mr-2" />
-                            Auto-Generate
-                        </button>
+                        {isAdmin && (
+                            <button
+                                onClick={handleAutoGenerateTasks}
+                                disabled={tasks.length === 0}
+                                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <Settings className="w-4 h-4 mr-2" />
+                                Auto-Generate
+                            </button>
+                        )}
                         {onCreateTask && (
                             <button
                                 onClick={onCreateTask}
@@ -400,6 +404,7 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                                 getTaskTypeColor={getTaskTypeColor}
                                 getFrequencyColor={getFrequencyColor}
                                 isTaskDue={isTaskDue}
+                                isAdmin={isAdmin}
                             />
                         ))}
                     </div>
@@ -437,6 +442,7 @@ interface TaskCardProps {
     getTaskTypeColor: (type: string) => string;
     getFrequencyColor: (frequency: string) => string;
     isTaskDue: (date: string) => boolean;
+    isAdmin?: boolean;
 }
 
 const TaskCard: React.FC<TaskCardProps> = ({
@@ -446,7 +452,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
     getTaskIcon,
     getTaskTypeColor,
     getFrequencyColor,
-    isTaskDue
+    isTaskDue,
+    isAdmin = false
 }) => {
     const [showActions, setShowActions] = useState(false);
     const isDue = isTaskDue(task.next_due_date);
@@ -487,22 +494,33 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-500 mb-3">
                         <div className="flex items-center gap-1">
                             <MapPin className="w-4 h-4" />
-                            <span>{task.location}</span>
+                            <span>{task.location?.trim() || '—'}</span>
                         </div>
                         
                         <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            <span>{task.estimated_duration_hours}h estimated</span>
+                            <span>{typeof task.estimated_duration_hours === 'number' ? `${task.estimated_duration_hours}h estimated` : '—'}</span>
                         </div>
                         
                         <div className="flex items-center gap-1">
                             <Users className="w-4 h-4" />
-                            <span>{task.assignee_count} assignee{task.assignee_count > 1 ? 's' : ''}</span>
+                            <span>
+                                {(() => {
+                                    const count = typeof task.assignee_count === 'number' ? task.assignee_count : (task.assignee_group?.length || 0);
+                                    return count > 0 ? `${count} assignee${count > 1 ? 's' : ''}` : 'assignee';
+                                })()}
+                            </span>
                         </div>
                         
                         <div className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            <span>Due: {new Date(task.next_due_date).toLocaleDateString()}</span>
+                            <span>
+                                {(() => {
+                                    const d = task.next_due_date ? new Date(task.next_due_date) : null;
+                                    const valid = d && !Number.isNaN(d.getTime());
+                                    return `Due: ${valid ? d!.toLocaleDateString() : 'TBD'}`;
+                                })()}
+                            </span>
                         </div>
                     </div>
 
@@ -561,27 +579,31 @@ const TaskCard: React.FC<TaskCardProps> = ({
                                     Assign Now
                                 </button>
                                 
-                                <button
-                                    onClick={() => {
-                                        console.log('Edit task:', task.id);
-                                        setShowActions(false);
-                                    }}
-                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                >
-                                    <Edit3 className="w-4 h-4 inline mr-2" />
-                                    Edit Task
-                                </button>
-                                
-                                <button
-                                    onClick={() => {
-                                        console.log('Configure task:', task.id);
-                                        setShowActions(false);
-                                    }}
-                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                >
-                                    <Settings className="w-4 h-4 inline mr-2" />
-                                    Configure
-                                </button>
+                                {isAdmin && (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                console.log('Edit task:', task.id);
+                                                setShowActions(false);
+                                            }}
+                                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        >
+                                            <Edit3 className="w-4 h-4 inline mr-2" />
+                                            Edit Task
+                                        </button>
+                                        
+                                        <button
+                                            onClick={() => {
+                                                console.log('Configure task:', task.id);
+                                                setShowActions(false);
+                                            }}
+                                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        >
+                                            <Settings className="w-4 h-4 inline mr-2" />
+                                            Configure
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
                     )}

@@ -83,11 +83,12 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
         const daySchedules = schedules
           .filter(s => s.date === dateStr)
           .reduce((unique: Schedule[], schedule) => {
-            // Deduplicate by title, date, and start_time
+            // Deduplicate by unique id first, then by title, date, and start_time as fallback
             const exists = unique.some(
-              existing => existing.title === schedule.title && 
-                         existing.date === schedule.date &&
-                         existing.start_time === schedule.start_time
+              existing => existing.id === schedule.id ||
+                         (existing.title === schedule.title && 
+                          existing.date === schedule.date &&
+                          existing.start_time === schedule.start_time)
             );
             if (!exists) {
               unique.push(schedule);
@@ -119,11 +120,12 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
         const daySchedules = schedules
           .filter(s => s.date === dateStr)
           .reduce((unique: Schedule[], schedule) => {
-            // Deduplicate by title, date, and start_time
+            // Deduplicate by unique id first, then by title, date, and start_time as fallback
             const exists = unique.some(
-              existing => existing.title === schedule.title && 
-                         existing.date === schedule.date &&
-                         existing.start_time === schedule.start_time
+              existing => existing.id === schedule.id ||
+                         (existing.title === schedule.title && 
+                          existing.date === schedule.date &&
+                          existing.start_time === schedule.start_time)
             );
             if (!exists) {
               unique.push(schedule);
@@ -226,7 +228,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+    <div className="card overflow-hidden">
       {/* Modern Header */}
       <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -266,17 +268,13 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
             <div className="flex items-center bg-white bg-opacity-20 rounded-xl p-1">
               <button
                 onClick={() => setCalendarLayout('grid')}
-                className={`p-2 rounded-lg transition-all duration-200 ${
-                  calendarLayout === 'grid' ? 'bg-white bg-opacity-30' : 'hover:bg-white hover:bg-opacity-20'
-                }`}
+                className={`btn btn-xs ${calendarLayout === 'grid' ? 'btn-ghost bg-white/30 text-white' : 'btn-ghost text-white hover:bg-white/20'}`}
               >
                 <Grid3X3 className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setCalendarLayout('list')}
-                className={`p-2 rounded-lg transition-all duration-200 ${
-                  calendarLayout === 'list' ? 'bg-white bg-opacity-30' : 'hover:bg-white hover:bg-opacity-20'
-                }`}
+                className={`btn btn-xs ${calendarLayout === 'list' ? 'btn-ghost bg-white/30 text-white' : 'btn-ghost text-white hover:bg-white/20'}`}
               >
                 <List className="w-4 h-4" />
               </button>
@@ -288,11 +286,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                 <button
                   key={mode}
                   onClick={() => onViewModeChange(mode)}
-                  className={`px-4 py-2 text-sm font-medium capitalize rounded-lg transition-all duration-200 ${
-                    viewMode === mode
-                      ? 'bg-white text-primary-700 shadow-sm'
-                      : 'hover:bg-white hover:bg-opacity-20'
-                  }`}
+                  className={`btn btn-xs capitalize ${viewMode === mode ? 'text-primary-700 bg-white' : 'btn-ghost text-white hover:bg-white/20'}`}
                 >
                   {mode}
                 </button>
@@ -302,7 +296,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
             {/* Quick Create Button */}
             <button
               onClick={() => onCreateEvent?.(selectedDate)}
-              className="flex items-center gap-2 bg-white text-primary-700 px-4 py-2 rounded-xl font-medium hover:bg-opacity-90 transition-all duration-200 shadow-sm"
+              className="btn btn-sm bg-white text-primary-700 hover:bg-white/90"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Event</span>
@@ -318,7 +312,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
           <div className="w-80 border-r border-gray-100 bg-gray-50">
             <div className="p-6 space-y-6">
               {/* Mini Calendar */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="card p-4">
                 <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
                   Quick Navigation
@@ -359,7 +353,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
               </div>
 
               {/* Today's Summary */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <div className="card p-4">
                 <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <Zap className="w-4 h-4 text-yellow-500" />
                   Today's Overview
@@ -391,7 +385,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
         )}
 
         {/* Main Calendar Area */}
-        <div className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           {/* Month View */}
           {viewMode === 'month' && calendarLayout === 'grid' && (
             <div className="h-full">
@@ -435,7 +429,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       {day.schedules.slice(0, 3).map((schedule) => (
                         <div
                           key={schedule.id}
-                          className={`text-xs p-1 rounded cursor-pointer truncate border-l-2 transition-all duration-200 hover:shadow-sm ${getEventColorLight(schedule)}`}
+                          className={`text-xs p-1 rounded cursor-pointer truncate border-l-2 transition-all duration-200 hover:shadow-sm modern-calendar-event ${getEventColorLight(schedule)}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             onEditEvent?.(schedule);
@@ -470,7 +464,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
           {/* Week View */}
           {viewMode === 'week' && (
-            <div className="h-full flex min-h-[1200px]">
+            <div className="h-full flex" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
               {/* Time Column */}
               <div className="w-20 border-r border-gray-100 bg-gray-50">
                 <div className="h-16"></div> {/* Header spacer */}
@@ -518,7 +512,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         return (
                           <div
                             key={schedule.id}
-                            className={`absolute left-1 right-1 rounded-lg p-2 cursor-pointer text-white shadow-sm border-l-4 transition-all duration-200 hover:shadow-md ${getEventColor(schedule)}`}
+                            className={`absolute left-1 right-1 rounded-lg p-2 cursor-pointer text-white shadow-sm border-l-4 transition-all duration-200 hover:shadow-md modern-calendar-event ${getEventColor(schedule)}`}
                             style={{
                               top: startHour * 64,
                               height: Math.max(duration * 64, 48),
@@ -549,7 +543,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
           {/* Day View */}
           {viewMode === 'day' && (
-            <div className="h-full flex min-h-[1200px]">
+            <div className="h-full flex" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
               {/* Time Column */}
               <div className="w-24 border-r border-gray-100 bg-gray-50">
                 {Array.from({ length: 24 }, (_, i) => (
@@ -598,7 +592,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   return (
                     <div
                       key={schedule.id}
-                      className={`absolute left-4 right-4 rounded-xl p-4 cursor-pointer text-white shadow-lg border-l-4 transition-all duration-200 hover:shadow-xl ${getEventColor(schedule)}`}
+                      className={`absolute left-4 right-4 rounded-xl p-4 cursor-pointer text-white shadow-lg border-l-4 transition-all duration-200 hover:shadow-xl modern-calendar-event ${getEventColor(schedule)}`}
                       style={{
                         top: startPosition,
                         height: height,
@@ -661,7 +655,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
       {onCreateEvent && (
         <button
           onClick={() => onCreateEvent()}
-          className="md:hidden fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center z-50"
+          className="md:hidden fixed bottom-6 right-6 w-16 h-16 gradient-primary text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center z-50"
         >
           <Plus className="w-8 h-8" />
         </button>

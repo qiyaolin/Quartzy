@@ -29,6 +29,8 @@ urlpatterns = [
     
     # Recurring tasks endpoints
     path('api/recurring-tasks/', api_compatibility.recurring_tasks_api, name='api-recurring-tasks'),
+    # Also expose namespaced variant for frontend fallbacks
+    path('api/schedule/recurring-tasks/', api_compatibility.recurring_tasks_api, name='api-schedule-recurring-tasks'),
     
     # Fixed notifications endpoint
     path('api/notifications/summary/', api_compatibility.notifications_summary_api, name='api-notifications-summary'),

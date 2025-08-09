@@ -26,6 +26,8 @@ interface ScheduleDetailModalProps {
   onEdit?: (schedule: Schedule) => void;
   onDelete?: (scheduleId: number) => void;
   onMarkComplete?: (scheduleId: number) => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
@@ -34,7 +36,9 @@ const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
   schedule,
   onEdit,
   onDelete,
-  onMarkComplete
+  onMarkComplete,
+  canEdit = true,
+  canDelete = true
 }) => {
   if (!isOpen || !schedule) return null;
 
@@ -260,7 +264,7 @@ const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
             </div>
             
             <div className="flex items-center gap-2">
-              {onEdit && (
+              {onEdit && canEdit && (
                 <button
                   onClick={() => onEdit(schedule)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
@@ -270,7 +274,7 @@ const ScheduleDetailModal: React.FC<ScheduleDetailModalProps> = ({
                 </button>
               )}
               
-              {onDelete && (
+              {onDelete && canDelete && (
                 <button
                   onClick={() => onDelete(schedule.id)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"

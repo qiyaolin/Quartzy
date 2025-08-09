@@ -327,12 +327,58 @@ def meeting_configurations_api(request):
     return Response([])
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def recurring_tasks_api(request):
-    """Recurring tasks API endpoint"""
-    # Return empty tasks list
-    return Response([])
+    """Recurring tasks API endpoint (compatibility layer)
+    - GET: return real RecurringTask list using serializer
+    - POST: create RecurringTask with request.user as creator, attach assignee_group
+    """
+    from .models import RecurringTask
+    from .serializers import RecurringTaskSerializer
+    from django.contrib.auth.models import User
+
+    if request.method == 'GET':
+        queryset = (
+            RecurringTask.objects.select_related('created_by')
+            .prefetch_related('assignee_group')
+            .all()
+        )
+        serializer = RecurringTaskSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    # POST
+    try:
+        payload = request.data or {}
+        title = payload.get('title')
+        cron_schedule = payload.get('cron_schedule')
+        description = payload.get('description', '')
+        is_active = bool(payload.get('is_active', True))
+
+        if not title:
+            return Response({'title': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+        if not cron_schedule:
+            return Response({'cron_schedule': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create the recurring task
+        task = RecurringTask.objects.create(
+            title=title,
+            description=description,
+            cron_schedule=cron_schedule,
+            is_active=is_active,
+            created_by=request.user,
+        )
+
+        # Attach assignee group if provided (accept both assignee_group and assignee_group_ids)
+        assignee_ids = payload.get('assignee_group') or payload.get('assignee_group_ids') or []
+        if isinstance(assignee_ids, list) and assignee_ids:
+            users = User.objects.filter(id__in=assignee_ids)
+            task.assignee_group.add(*users)
+
+        serializer = RecurringTaskSerializer(task)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({'error': f'Failed to create task: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])

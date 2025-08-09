@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { Equipment, equipmentApi, Booking } from "../services/scheduleApi.ts";
+import { buildApiUrl } from "../config/api.ts";
 import QuickBookModal from './QuickBookModal.tsx';
 
 interface EquipmentManagementProps {
   onShowQRCode?: (equipment: Equipment) => void;
   onQRScan?: (mode: 'checkin' | 'checkout') => void;
   onEditEquipment?: (equipment: Equipment) => void;
+  isAdmin?: boolean;
 }
 
 interface EquipmentFormData {
@@ -34,7 +36,8 @@ interface EquipmentFormData {
 const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   onShowQRCode,
   onQRScan,
-  onEditEquipment
+  onEditEquipment,
+  isAdmin = false
 }) => {
   const authContext = useContext(AuthContext);
   const { token } = authContext || {};
@@ -258,8 +261,8 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     
     setIsSubmittingBooking(true);
     try {
-      // Call the equipment booking API
-      const response = await fetch('/api/schedule/quick-actions/quick_book_equipment/', {
+      // Call the equipment booking API (use absolute API base URL)
+      const response = await fetch(buildApiUrl('api/schedule/quick-actions/quick_book_equipment/'), {
         method: 'POST',
         headers: {
           'Authorization': `Token ${token}`,
@@ -267,11 +270,13 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         },
         body: JSON.stringify(bookingData)
       });
-
-      const data = await response.json();
+      // Guard against non-JSON responses (e.g., HTML error pages)
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json') ? await response.json() : await response.text();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to book equipment');
+        const errorMsg = typeof data === 'string' ? data : (data.error || 'Failed to book equipment');
+        throw new Error(errorMsg);
       }
 
       // Close modal and refresh data
@@ -324,13 +329,15 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
             <QrCode className="w-4 h-4 mr-2" />
             Quick Check Out
           </button>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Equipment
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Equipment
+            </button>
+          )}
         </div>
       </div>
 
@@ -479,16 +486,18 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
                           </button>
                         )}
                         
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditEquipment?.(eq);
-                          }}
-                          className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                          title="Edit Equipment"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
+                        {isAdmin && onEditEquipment && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditEquipment(eq);
+                            }}
+                            className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                            title="Edit Equipment"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

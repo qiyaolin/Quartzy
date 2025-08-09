@@ -186,19 +186,24 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
     const secondaryActions = quickActions.filter(action => action.priority !== 'high');
 
     const fetchDashboardData = async () => {
-        try {
-            const response = await fetch(
-                buildApiUrl('schedule/unified-dashboard/overview/'),
-                { headers: { 'Authorization': `Token ${token}` } }
-            );
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch dashboard data');
+        const tryFetch = async (endpoint: string) => {
+            const res = await fetch(buildApiUrl(endpoint), { headers: { 'Authorization': `Token ${token}` } });
+            if (!res.ok) return { ok: false as const, data: null, statusText: res.statusText, res };
+            const contentType = res.headers.get('content-type') || '';
+            const parsed = contentType.includes('application/json') ? await res.json() : await res.text();
+            if (typeof parsed === 'string') {
+                try { return { ok: true as const, data: JSON.parse(parsed) }; } catch { return { ok: false as const, data: null, statusText: 'Invalid JSON response', res }; }
             }
-
-            const data = await response.json();
-            setTodayEvents(data.today_events || []);
-            setUserStats(data.stats || null);
+            return { ok: true as const, data: parsed };
+        };
+        try {
+            let result = await tryFetch('schedule/unified-dashboard/overview/');
+            if (!result.ok) {
+                result = await tryFetch('api/schedule/unified-dashboard/overview/');
+            }
+            if (!result.ok || !result.data) throw new Error(result.statusText || 'Failed to fetch dashboard data');
+            setTodayEvents((result.data as any).today_events || []);
+            setUserStats((result.data as any).stats || null);
         } catch (err) {
             console.error('Dashboard data fetch error:', err);
         }
@@ -224,11 +229,10 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
     }, [token]);
 
     const formatTime = (timeString: string) => {
-        return new Date(timeString).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
+        const isClockOnly = /^\d{2}:\d{2}(:\d{2})?$/.test(timeString);
+        const d = isClockOnly ? new Date(`1970-01-01T${timeString}`) : new Date(timeString);
+        if (Number.isNaN(d.getTime())) return timeString;
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     };
 
     const getEventTypeIcon = (eventType: string) => {
@@ -295,13 +299,13 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                         <button
                             onClick={handleRefresh}
                             disabled={refreshing}
-                            className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+                            className="btn btn-ghost btn-xs"
                         >
                             <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
                         </button>
                         <button
                             onClick={() => setShowMobileMenu(!showMobileMenu)}
-                            className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+                            className="btn btn-ghost btn-xs"
                         >
                             {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                         </button>
@@ -340,11 +344,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                         <button
                             key={tab.id}
                             onClick={() => setActiveSection(tab.id as any)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                                activeSection === tab.id
-                                    ? 'bg-primary-100 text-primary-700'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                            }`}
+                            className={`btn btn-xs ${activeSection === tab.id ? 'btn-primary' : 'btn-ghost'}`}
                         >
                             <tab.icon className="w-4 h-4" />
                             {tab.label}
@@ -360,7 +360,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                     <>
                         {/* Quick Stats Cards */}
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                            <div className="card p-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-blue-100 rounded-lg">
                                         <BookOpen className="w-5 h-5 text-blue-600" />
@@ -374,7 +374,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                            <div className="card p-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-green-100 rounded-lg">
                                         <CheckCircle className="w-5 h-5 text-green-600" />
@@ -388,7 +388,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                            <div className="card p-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-purple-100 rounded-lg">
                                         <Timer className="w-5 h-5 text-purple-600" />
@@ -402,7 +402,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                            <div className="card p-4">
                                 <div className="flex items-center gap-3">
                                     <div className="p-2 bg-orange-100 rounded-lg">
                                         <Calendar className="w-5 h-5 text-orange-600" />
@@ -418,8 +418,8 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                         </div>
 
                         {/* Today's Schedule Preview */}
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                            <div className="p-4 border-b border-gray-100">
+                        <div className="card">
+                            <div className="card-header">
                                 <div className="flex items-center justify-between">
                                     <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                                         <Calendar className="w-5 h-5 text-blue-600" />
@@ -427,21 +427,21 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                     </h3>
                                     <button
                                         onClick={() => setActiveSection('today')}
-                                        className="text-primary-600 text-sm font-medium"
+                                        className="btn btn-ghost btn-xs text-primary-600"
                                     >
                                         View All
                                     </button>
                                 </div>
                             </div>
-                            <div className="p-4">
-                                {todayEvents.length === 0 ? (
+                            <div className="card-body p-4">
+                                {todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).length === 0 ? (
                                     <div className="text-center py-8">
                                         <Calendar className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                                         <p className="text-gray-500">No events scheduled for today</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {todayEvents.slice(0, 3).map((event) => (
+                                        {todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).slice(0, 3).map((event) => (
                                             <div 
                                                 key={event.id}
                                                 className="flex items-center gap-3 p-3 rounded-lg bg-gray-50"
@@ -483,29 +483,29 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                 {/* Today Section */}
                 {activeSection === 'today' && (
                     <div className="space-y-4">
-                        {todayEvents.length === 0 ? (
-                            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center">
+                        {todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).length === 0 ? (
+                            <div className="card p-8 text-center">
                                 <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No events today</h3>
                                 <p className="text-gray-600">Enjoy your free day or create a new event!</p>
                                 <button
                                     onClick={() => onNavigateToTab?.('calendar')}
-                                    className="mt-4 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                                    className="mt-4 btn btn-primary btn-sm"
                                 >
                                     Add Event
                                 </button>
                             </div>
                         ) : (
-                            todayEvents.map((event) => (
+                            todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).map((event) => (
                                 <div 
                                     key={event.id} 
                                     onClick={() => handleEventClick(event)}
-                                    className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200 active:scale-95"
+                                    className="card overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200 active:scale-95"
                                 >
                                     <div className={`h-2 ${
                                         event.is_mine ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-gray-400 to-gray-500'
                                     }`} />
-                                    <div className="p-4">
+                                    <div className="card-body p-4">
                                         <div className="flex items-start gap-3">
                                             <div className={`p-2 rounded-lg ${
                                                 event.is_mine ? 'bg-blue-100' : 'bg-gray-100'
@@ -563,7 +563,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                 <button
                                     key={action.id}
                                     onClick={action.onClick}
-                                    className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 hover:shadow-md hover:border-primary-200 transition-all duration-200 text-left relative group"
+                                    className="card p-4 hover:shadow-md hover:border-primary-200 transition-all duration-200 text-left relative group"
                                 >
                                     <div className="flex items-start gap-3">
                                         <div className={`p-3 rounded-xl ${action.bgColor}`}>
@@ -592,6 +592,8 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                 isOpen={showDetailModal}
                 onClose={handleCloseModal}
                 schedule={selectedEvent}
+                canEdit={Boolean((selectedEvent as any)?.is_mine)}
+                canDelete={Boolean((selectedEvent as any)?.is_mine)}
                 onEdit={(schedule) => {
                     onEditEvent?.(schedule);
                     handleCloseModal();

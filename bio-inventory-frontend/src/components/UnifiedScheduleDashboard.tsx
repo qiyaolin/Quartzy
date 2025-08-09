@@ -134,20 +134,30 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     const [showDetailModal, setShowDetailModal] = useState(false);
 
     const fetchDashboardData = async () => {
-        try {
-            const response = await fetch(
-                buildApiUrl('schedule/unified-dashboard/overview/'),
-                {
-                    headers: { 'Authorization': `Token ${token}` }
+        const tryFetch = async (endpoint: string) => {
+            const res = await fetch(buildApiUrl(endpoint), {
+                headers: { 'Authorization': `Token ${token}` }
+            });
+            if (!res.ok) return { ok: false as const, data: null, statusText: res.statusText, res };
+            const contentType = res.headers.get('content-type') || '';
+            const parsed = contentType.includes('application/json') ? await res.json() : await res.text();
+            if (typeof parsed === 'string') {
+                try { return { ok: true as const, data: JSON.parse(parsed) }; } catch {
+                    return { ok: false as const, data: null, statusText: 'Invalid JSON response', res };
                 }
-            );
-
-            if (!response.ok) {
-                throw new Error(`Failed to fetch dashboard data: ${response.statusText}`);
             }
-
-            const data = await response.json();
-            setDashboardData(data);
+            return { ok: true as const, data: parsed };
+        };
+        try {
+            // Try compatibility endpoint first, then API endpoint
+            let result = await tryFetch('schedule/unified-dashboard/overview/');
+            if (!result.ok) {
+                result = await tryFetch('api/schedule/unified-dashboard/overview/');
+            }
+            if (!result.ok || !result.data) {
+                throw new Error(`Failed to fetch dashboard data: ${result.statusText || 'Unknown error'}`);
+            }
+            setDashboardData(result.data as DashboardData);
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load dashboard');
@@ -186,11 +196,11 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     }, [token]);
 
     const formatTime = (timeString: string) => {
-        return new Date(timeString).toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
+        // Support ISO datetime or plain HH:MM(:SS)
+        const isClockOnly = /^\d{2}:\d{2}(:\d{2})?$/.test(timeString);
+        const d = isClockOnly ? new Date(`1970-01-01T${timeString}`) : new Date(timeString);
+        if (Number.isNaN(d.getTime())) return timeString;
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     };
 
     const formatDate = (dateString: string) => {
@@ -229,7 +239,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     };
 
     // Helper function to convert TodayEvent to Schedule format for modal
-    const convertEventToSchedule = (event: TodayEvent): Schedule => {
+    const convertEventToSchedule = (event: TodayEvent): Schedule & { is_mine?: boolean } => {
         return {
             id: event.id,
             title: event.title,
@@ -241,8 +251,9 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
             location: '', // Not available in TodayEvent
             equipment: event.equipment_name ? { name: event.equipment_name } : null,
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-        } as Schedule;
+            updated_at: new Date().toISOString(),
+            is_mine: event.is_mine // Preserve ownership information
+        } as Schedule & { is_mine?: boolean };
     };
 
     const handleEventClick = (event: TodayEvent) => {
@@ -289,7 +300,8 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     return (
         <div className="space-y-6">
             {/* Header with Stats and Refresh */}
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="card">
+                <div className="card-body p-6">
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h2 className="text-xl font-bold text-gray-900">Laboratory Schedule Dashboard</h2>
@@ -298,7 +310,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                     <button
                         onClick={handleRefresh}
                         disabled={refreshing}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                        className="btn btn-primary btn-sm disabled:opacity-50"
                     >
                         <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                         Refresh
@@ -307,7 +319,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
 
                 {/* Quick Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="bg-blue-50 p-3 rounded-lg">
+                    <div className="card p-3 bg-blue-50">
                         <div className="flex items-center gap-2">
                             <BookOpen className="w-4 h-4 text-blue-600" />
                             <span className="text-sm text-blue-700">Presentations</span>
@@ -315,7 +327,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         <p className="text-lg font-bold text-blue-900">{stats.presentations_total}</p>
                         <p className="text-xs text-blue-600">total</p>
                     </div>
-                    <div className="bg-green-50 p-3 rounded-lg">
+                    <div className="card p-3 bg-green-50">
                         <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
                             <span className="text-sm text-green-700">Tasks</span>
@@ -323,7 +335,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         <p className="text-lg font-bold text-green-900">{stats.tasks_completed_this_year}</p>
                         <p className="text-xs text-green-600">completed</p>
                     </div>
-                    <div className="bg-purple-50 p-3 rounded-lg">
+                    <div className="card p-3 bg-purple-50">
                         <div className="flex items-center gap-2">
                             <Timer className="w-4 h-4 text-purple-600" />
                             <span className="text-sm text-purple-700">Equipment</span>
@@ -331,7 +343,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         <p className="text-lg font-bold text-purple-900">{stats.equipment_hours_this_month}h</p>
                         <p className="text-xs text-purple-600">this month</p>
                     </div>
-                    <div className="bg-orange-50 p-3 rounded-lg">
+                    <div className="card p-3 bg-orange-50">
                         <div className="flex items-center gap-2">
                             <Calendar className="w-4 h-4 text-orange-600" />
                             <span className="text-sm text-orange-700">Bookings</span>
@@ -339,7 +351,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         <p className="text-lg font-bold text-orange-900">{stats.active_bookings}</p>
                         <p className="text-xs text-orange-600">active</p>
                     </div>
-                    <div className="bg-yellow-50 p-3 rounded-lg">
+                    <div className="card p-3 bg-yellow-50">
                         <div className="flex items-center gap-2">
                             <Bell className="w-4 h-4 text-yellow-600" />
                             <span className="text-sm text-yellow-700">Pending</span>
@@ -347,6 +359,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         <p className="text-lg font-bold text-yellow-900">{pending_actions.length}</p>
                         <p className="text-xs text-yellow-600">actions</p>
                     </div>
+                </div>
                 </div>
             </div>
 
@@ -518,7 +531,8 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Today's Events */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <div className="card">
+                        <div className="card-body p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Calendar className="w-5 h-5 text-blue-600" />
                         <h3 className="text-lg font-semibold text-gray-900">Today's Schedule</h3>
@@ -530,7 +544,9 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {today_events.map((event) => (
+                            {today_events
+                              .filter((e) => (e.status ? e.status !== 'cancelled' : true))
+                              .map((event) => (
                                 <div 
                                     key={event.id}
                                     onClick={() => handleEventClick(event)}
@@ -572,10 +588,12 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             ))}
                         </div>
                     )}
-                </div>
+                        </div>
+                    </div>
 
                 {/* My Tasks */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    <div className="card">
+                        <div className="card-body p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <ClipboardList className="w-5 h-5 text-green-600" />
                         <h3 className="text-lg font-semibold text-gray-900">My Tasks</h3>
@@ -625,7 +643,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                                                         e.stopPropagation();
                                                         onCompleteTask?.(task.id);
                                                     }}
-                                                    className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                                                        className="btn btn-success btn-xs"
                                                 >
                                                     <CheckCircle className="w-3 h-3" />
                                                     Complete
@@ -636,7 +654,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                                                     e.stopPropagation();
                                                     onRequestTaskSwap?.(task.id);
                                                 }}
-                                                className="flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded hover:bg-blue-200 transition-colors"
+                                                    className="btn btn-outline btn-xs"
                                             >
                                                 <ArrowRight className="w-3 h-3" />
                                                 Swap
@@ -647,12 +665,14 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             ))}
                         </div>
                     )}
-                </div>
+                        </div>
+                    </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Upcoming Meetings */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="card">
+                    <div className="card-body p-6">
                     <div className="flex items-center gap-2 mb-4">
                         <Users className="w-5 h-5 text-purple-600" />
                         <h3 className="text-lg font-semibold text-gray-900">Upcoming Meetings</h3>
@@ -707,7 +727,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                                             {meeting.materials_required && meeting.is_presenter && !meeting.materials_submitted && (
                                                 <button
                                                     onClick={() => onUploadMeetingMaterials?.(meeting.id)}
-                                                    className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 text-sm rounded hover:bg-orange-200 transition-colors"
+                                                    className="btn btn-outline btn-xs"
                                                 >
                                                     <BookOpen className="w-3 h-3" />
                                                     Upload Materials
@@ -719,10 +739,12 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             ))}
                         </div>
                     )}
+                    </div>
                 </div>
 
                 {/* Equipment Bookings */}
-                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div className="card">
+                    <div className="card-body p-6">
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <Monitor className="w-5 h-5 text-orange-600" />
@@ -730,7 +752,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         </div>
                         <button
                             onClick={() => onBookNewEquipment?.()}
-                            className="flex items-center gap-1 px-3 py-2 bg-orange-100 text-orange-700 text-sm rounded hover:bg-orange-200 transition-colors"
+                            className="btn btn-outline btn-xs"
                         >
                             <Plus className="w-3 h-3" />
                             Book Equipment
@@ -785,7 +807,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                                         <div className="flex flex-col gap-2">
                                             <button
                                                 onClick={() => onCancelBooking?.(booking.id)}
-                                                className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 text-sm rounded hover:bg-red-200 transition-colors"
+                                                className="btn btn-danger btn-xs"
                                             >
                                                 <X className="w-3 h-3" />
                                                 Cancel
@@ -796,6 +818,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             ))}
                         </div>
                     )}
+                    </div>
                 </div>
             </div>
 
@@ -809,6 +832,8 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                 isOpen={showDetailModal}
                 onClose={handleCloseModal}
                 schedule={selectedEvent}
+                canEdit={Boolean((selectedEvent as any)?.is_mine)}
+                canDelete={Boolean((selectedEvent as any)?.is_mine)}
                 onEdit={(schedule) => {
                     onEditEvent?.(schedule);
                     handleCloseModal();

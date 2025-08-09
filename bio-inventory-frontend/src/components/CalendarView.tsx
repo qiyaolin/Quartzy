@@ -73,11 +73,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       const daySchedules = schedules
         .filter(s => s.date === dateStr)
         .reduce((unique: Schedule[], schedule) => {
-          // Deduplicate by title, date, and start_time
+          // Deduplicate by unique id first, then by title, date, and start_time as fallback
           const exists = unique.some(
-            existing => existing.title === schedule.title && 
-                       existing.date === schedule.date &&
-                       existing.start_time === schedule.start_time
+            existing => existing.id === schedule.id ||
+                       (existing.title === schedule.title && 
+                        existing.date === schedule.date &&
+                        existing.start_time === schedule.start_time)
           );
           if (!exists) {
             unique.push(schedule);
@@ -116,11 +117,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       const daySchedules = schedules
         .filter(s => s.date === dateStr)
         .reduce((unique: Schedule[], schedule) => {
-          // Deduplicate by title, date, and start_time
+          // Deduplicate by unique id first, then by title, date, and start_time as fallback
           const exists = unique.some(
-            existing => existing.title === schedule.title && 
-                       existing.date === schedule.date &&
-                       existing.start_time === schedule.start_time
+            existing => existing.id === schedule.id ||
+                       (existing.title === schedule.title && 
+                        existing.date === schedule.date &&
+                        existing.start_time === schedule.start_time)
           );
           if (!exists) {
             unique.push(schedule);
@@ -397,7 +399,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             </div>
             
             {/* Day Content */}
-            <div className="flex-1 relative min-h-[1200px]">
+            <div className="flex-1 relative overflow-y-auto" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
               {/* Time Grid */}
               {timeSlots.filter((_, index) => index % 4 === 0).map((time) => (
                 <div 

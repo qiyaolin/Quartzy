@@ -102,7 +102,21 @@ class EventViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset()
         calendar_events = []
         
+        # 检查是否显示已取消的预约
+        show_all = request.query_params.get('show_all')
+        
         for event in queryset:
+            # 如果是booking类型的事件，检查booking是否存在以及状态
+            if event.event_type == 'booking':
+                try:
+                    booking = event.booking
+                    # 跳过已取消的预约，除非明确请求显示所有状态
+                    if booking.status == 'cancelled' and not show_all:
+                        continue
+                except Booking.DoesNotExist:
+                    # 如果Event记录了booking类型但没有对应的booking对象，跳过
+                    continue
+            
             event_data = {
                 'id': event.id,
                 'title': event.title,
@@ -455,6 +469,11 @@ class BookingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Booking.objects.select_related('event', 'user', 'equipment')
         
+        # 默认排除已取消的预约，除非明确请求显示所有状态
+        show_all = self.request.query_params.get('show_all')
+        if not show_all:
+            queryset = queryset.exclude(status='cancelled')
+        
         # 按用户过滤
         user_id = self.request.query_params.get('user_id')
         if user_id:
@@ -513,6 +532,14 @@ class BookingViewSet(viewsets.ModelViewSet):
         
         booking.status = 'cancelled'
         booking.save()
+        
+        # Also mark or delete the associated Event to prevent it from appearing in calendar views
+        if hasattr(booking, 'event') and booking.event:
+            # Option 1: Delete the event entirely (recommended for cancelled bookings)
+            booking.event.delete()
+            # Option 2: Alternative - just mark the event with cancelled status
+            # booking.event.status = 'cancelled'
+            # booking.event.save()
         
         # Notify waiting queue if applicable
         if hasattr(booking.equipment, 'waiting_queue') and booking.equipment.waiting_queue.exists():

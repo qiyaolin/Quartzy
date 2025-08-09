@@ -60,18 +60,22 @@ export interface RecurringTask {
     id: number;
     title: string;
     description: string;
-    task_type: 'cell_culture_room_cleaning' | 'cell_culture_incubator_cleaning';
-    frequency: 'monthly' | 'quarterly';
-    assignee_count: number; // 2 for room cleaning, 1 for incubator
-    location: string;
-    estimated_duration_hours: number;
-    auto_assign: boolean;
+    // Backend-compatible fields
+    cron_schedule?: string;
+    assignee_group?: User[]; // returned by backend serializer
+    is_active?: boolean;
+    // Legacy/UI fields (optional)
+    task_type?: 'cell_culture_room_cleaning' | 'cell_culture_incubator_cleaning';
+    frequency?: 'monthly' | 'quarterly';
+    assignee_count?: number; // derived from assignee_group if missing
+    location?: string;
+    estimated_duration_hours?: number;
+    auto_assign?: boolean;
     last_assigned_date?: string;
     last_assigned_user_ids?: number[];
-    next_due_date: string;
-    is_active: boolean;
-    created_at: string;
-    updated_at: string;
+    next_due_date?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 export interface User {
@@ -244,25 +248,46 @@ export const groupMeetingApi = {
         }
         
         const data = await response.json();
-        return data.results || data;
+        const tasks: RecurringTask[] = (data.results || data) as RecurringTask[];
+        // Normalize: derive assignee_count from assignee_group when missing
+        return tasks.map((t) => ({
+            ...t,
+            assignee_count: typeof t.assignee_count === 'number' 
+                ? t.assignee_count 
+                : Array.isArray(t.assignee_group) 
+                    ? t.assignee_group.length 
+                    : 0,
+        }));
     },
 
     createRecurringTask: async (token: string, taskData: Partial<RecurringTask>): Promise<RecurringTask> => {
-        const response = await fetch(buildApiUrl('/api/recurring-tasks/'), {
-            method: 'POST',
-            headers: {
-                'Authorization': `Token ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(taskData)
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.detail || `Failed to create recurring task: ${response.statusText}`);
+        const postJson = async (url: string) => {
+            const res = await fetch(buildApiUrl(url), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(taskData)
+            });
+            if (!res.ok) {
+                const contentType = res.headers.get('content-type') || '';
+                const errBody = contentType.includes('application/json') ? await res.json().catch(() => ({})) : await res.text();
+                const pick = (obj: any) => obj?.detail || obj?.error || obj?.message || obj?.title || res.statusText;
+                const message = typeof errBody === 'string' ? errBody : pick(errBody);
+                throw new Error(message + (res.status === 405 ? ' (405)' : ''));
+            }
+            return res.json();
+        };
+        try {
+            return await postJson('/api/recurring-tasks/');
+        } catch (e: any) {
+            if (typeof e?.message === 'string' && (e.message.includes('405') || /Method\s+"POST"\s+not\s+allowed/i.test(e.message))) {
+                // Fallback to schedule namespaced endpoint
+                return await postJson('/api/schedule/recurring-tasks/');
+            }
+            throw e;
         }
-        
-        return response.json();
     },
 
     assignRecurringTask: async (token: string, taskId: number, userIds: number[]): Promise<any> => {
