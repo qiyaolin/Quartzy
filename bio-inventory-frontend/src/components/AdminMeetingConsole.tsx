@@ -5,6 +5,7 @@ import {
   Download, Eye, Edit3, Trash2, Filter, Search
 } from 'lucide-react';
 import { AuthContext } from './AuthContext';
+import { getCurrentDateET, formatDateForInput, formatDateTimeET } from '../utils/timezone.ts';
 import {
   MeetingConfiguration,
   MeetingInstance,
@@ -71,8 +72,8 @@ const AdminMeetingConsole: React.FC<AdminMeetingConsoleProps> = ({ className = '
   });
 
   const [generationSettings, setGenerationSettings] = useState<MeetingGenerationSettings>({
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 3 months ahead
+    startDate: getCurrentDateET(),
+    endDate: formatDateForInput(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)), // 3 months ahead
     skipHolidays: true,
     alternatingPattern: true,
     generatePresenterAssignments: true,
@@ -103,7 +104,7 @@ const AdminMeetingConsole: React.FC<AdminMeetingConsoleProps> = ({ className = '
         adminDashboardApi.getAdminStats(token),
         meetingConfigurationApi.getConfiguration(token),
         meetingInstanceApi.getMeetings(token, { 
-          dateFrom: new Date().toISOString().split('T')[0],
+          dateFrom: getCurrentDateET(),
           status: 'scheduled'
         }),
         swapRequestApi.getSwapRequests(token, { status: 'pending' }),
@@ -646,7 +647,7 @@ const AdminMeetingConsole: React.FC<AdminMeetingConsoleProps> = ({ className = '
                         {request.type === 'swap' ? 'Swap Request' : 'Postpone Request'}
                       </span>
                       <span className="text-sm text-gray-500">
-                        {new Date(request.createdAt).toLocaleDateString()}
+                        {formatDateTimeET(request.createdAt)}
                       </span>
                     </div>
                     

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
+import { formatDateET, isTodayET, formatDateForInput } from '../utils/timezone.ts';
 import { 
   Calendar, 
   Clock, 
@@ -69,7 +70,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     const selected = new Date(selectedDate + 'T00:00:00');
     
     while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateStr = formatDateET(currentDate);
       const daySchedules = schedules
         .filter(s => s.date === dateStr)
         .reduce((unique: Schedule[], schedule) => {
@@ -89,8 +90,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       days.push({
         date: dateStr,
         isCurrentMonth: currentDate.getMonth() === month,
-        isToday: currentDate.toDateString() === today.toDateString(),
-        isSelected: currentDate.toDateString() === selected.toDateString(),
+        isToday: isTodayET(currentDate),
+        isSelected: formatDateET(currentDate) === selectedDate,
         schedules: daySchedules
       });
       

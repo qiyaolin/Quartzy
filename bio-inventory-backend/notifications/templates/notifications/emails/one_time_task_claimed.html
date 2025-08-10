@@ -1,0 +1,14 @@
+{% extends "notifications/emails/base_email.html" %}
+{% block title %}Task Claimed{% endblock %}
+{% block header_title %}Your One-time Task Was Claimed{% endblock %}
+{% block content %}
+  <h2>Task Claimed</h2>
+  <p>Your one-time task has been claimed by a member.</p>
+  <div class="highlight">
+    <h3>{{ task.name }}</h3>
+    <p><strong>Claimer:</strong> {{ claimer_name }}</p>
+  </div>
+  <a class="button" href="{{ view_url }}" target="_blank">View Task</a>
+{% endblock %}
+
+

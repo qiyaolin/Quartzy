@@ -56,4 +56,17 @@ urlpatterns = [
     path('tasks/generate/', views.TaskGenerationView.as_view(), name='task-generation'),
     path('tasks/statistics/', views.TaskStatisticsView.as_view(), name='task-statistics'),
     path('tasks/initialize-queues/', views.InitializeRotationQueuesView.as_view(), name='initialize-rotation-queues'),
+    
+    # =============================================================================
+    # TASK SYSTEM COMPATIBILITY ENDPOINTS
+    # Bridge legacy frontend APIs to enhanced backend models
+    # =============================================================================
+    
+    # Recurring Tasks Compatibility - Maps /api/recurring-tasks/ to TaskTemplate system
+    path('recurring-tasks/', additional_views.RecurringTaskCompatibilityView.as_view(), name='recurring-tasks-compatibility'),
+    path('recurring-tasks/<int:task_id>/assign/', additional_views.TaskAssignmentCompatibilityView.as_view(), name='recurring-tasks-assign'),
+    
+    # One-Time Tasks Compatibility - Maps /api/one-time-tasks/ to PeriodicTaskInstance system
+    path('one-time-tasks/', additional_views.OneTimeTaskCompatibilityView.as_view(), name='one-time-tasks-compatibility'),
+    path('one-time-tasks/<int:task_id>/claim/', additional_views.OneTimeTaskClaimView.as_view(), name='one-time-tasks-claim'),
 ]

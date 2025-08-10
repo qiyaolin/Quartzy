@@ -1288,8 +1288,8 @@ export const intelligentMeetingApi = {
     if (search) queryParams.append('search', search);
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('api/schedule/users/')}?${queryParams.toString()}`
-      : buildApiUrl('api/schedule/users/');
+      ? `${buildApiUrl('/api/users/active/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/users/active/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }
@@ -1315,7 +1315,7 @@ export const intelligentMeetingApi = {
       postpone_count: number;
     };
   }> => {
-    const response = await fetch(buildApiUrl(`api/schedule/users/${userId}/`), {
+    const response = await fetch(buildApiUrl(`/api/users/${userId}/`), {
       headers: { 'Authorization': `Token ${token}` }
     });
     

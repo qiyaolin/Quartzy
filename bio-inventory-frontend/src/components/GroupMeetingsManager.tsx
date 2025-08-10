@@ -154,7 +154,24 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
 
             console.log(`Pre-mapping: meetingsData contains ${meetingsData.length} items.`);
             
-            const adaptedMeetings = meetingsData.map(adaptMeetingInstanceToGroupMeeting);
+            const adaptedMeetings = meetingsData.map((mi: any) => {
+                const gm = adaptMeetingInstanceToGroupMeeting(mi);
+                // 标记主 presenter（取第一个），并保留 presenter 模型记录ID用于后续交换
+                if (mi.presenters && mi.presenters.length > 0) {
+                    const first = mi.presenters[0];
+                    gm.presenter = {
+                        id: first.user?.id || first.id,
+                        presenter_record_id: first.id,
+                        username: first.user?.username || first.username || '',
+                        first_name: first.user?.first_name || first.first_name || '',
+                        last_name: first.user?.last_name || first.last_name || '',
+                        email: first.user?.email || first.email || '',
+                        is_active: true,
+                        total_presentations: 0
+                    } as any;
+                }
+                return gm;
+            });
             
             console.log(`✅ Successfully loaded ${adaptedMeetings.length} meetings from intelligent API:`);
             adaptedMeetings.forEach((meeting, index) => {
@@ -269,19 +286,28 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
         if (!token) return;
         setIsSubmitting(true);
         try {
-            // In real implementation, this would call the API
-            console.log('Swap request submitted:', swapData);
-            
-            // Simulate API response
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Update local state
-            const meeting = meetings.find(m => m.id === swapData.meetingId);
-            if (meeting) {
-                console.log(`Swap request submitted for ${meeting.title}`);
+            // 组会交换：创建 SwapRequest（请求类型 'swap' 或找替补），最少需要原 presenter 与原因
+            // 若选择了特定 presenter 交换，则需要目标 presenter 的 presenter_record_id
+            const payload: any = {
+                request_type: 'swap',
+                original_presentation_id: selectedMeeting?.presenter?.presenter_record_id,
+                reason: swapData.reason,
+            };
+            if (swapData.swapType === 'swap_with_specific' && swapData.targetPresenterId) {
+                // 找到目标 presenter 的 presenter_record_id（通过 meetings 数据中 presenters 映射）
+                const all = meetings.flatMap(m => (m as any).presenters || []);
+                const target = all.find((p: any) => (p.id === swapData.targetPresenterId) || (p.user?.id === swapData.targetPresenterId));
+                if (target) {
+                    payload.target_presentation_id = target.presenter_record_id || target.id;
+                }
             }
+            // 调用智能会议 API 创建请求
+            await intelligentMeetingApiService.swapRequestApi.createSwapRequest(token, payload);
+            alert('Swap request submitted successfully.');
+            setShowSwapModal(false);
         } catch (error) {
             console.error('Error submitting swap request:', error);
+            alert(error instanceof Error ? error.message : 'Failed to submit swap request');
             throw error;
         } finally {
             setIsSubmitting(false);
@@ -1036,6 +1062,12 @@ const MeetingCard: React.FC<MeetingCardProps> = ({
                                         </span>
                                     ))}
                                 </span>
+                            </div>
+                        )}
+                        {meeting.presenter && (
+                            <div className="flex items-center gap-1">
+                                <User className="w-4 h-4 text-purple-600" />
+                                <span className="text-purple-700">Main: {meeting.presenter.first_name} {meeting.presenter.last_name}</span>
                             </div>
                         )}
                         

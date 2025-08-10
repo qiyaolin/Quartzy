@@ -970,6 +970,35 @@ class PeriodicTaskInstance(models.Model):
         """Check if user can mark this task as complete"""
         return user.id in self.current_assignees
     
+    def can_be_claimed(self, user):
+        """Check if a user can claim this task"""
+        if self.status != 'scheduled' and self.status != 'pending':
+            return False
+        if self.template.task_type != 'one_time':
+            return False
+        if len(self.current_assignees) >= self.template.max_people:
+            return False
+        if user.id in self.current_assignees:
+            return False  # Already assigned
+        return True
+    
+    def claim_task(self, user):
+        """Claim task for a user"""
+        if not self.can_be_claimed(user):
+            raise ValueError("Task cannot be claimed by this user")
+        
+        current_assignees = list(self.current_assignees)
+        if user.id not in current_assignees:
+            current_assignees.append(user.id)
+            self.current_assignees = current_assignees
+        
+        if self.status == 'scheduled':
+            self.status = 'pending'
+        if len(current_assignees) >= self.template.min_people and self.status == 'pending':
+            self.status = 'in_progress'
+        
+        self.save()
+    
     def mark_completed(self, user, **kwargs):
         """Mark task as completed"""
         if not self.can_be_completed_by(user):

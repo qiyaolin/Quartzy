@@ -26,7 +26,11 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-(ke1aekx@qekmk_og@bbl
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# Allow production host by default to avoid host header rejections on GAE
+ALLOWED_HOSTS = os.environ.get(
+    'ALLOWED_HOSTS',
+    'localhost,127.0.0.1,lab-inventory-467021.nn.r.appspot.com'
+).split(',')
 
 # Security settings for production
 if not DEBUG:
@@ -151,7 +155,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/New_York'
 
 USE_I18N = True
 
@@ -184,23 +188,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS Configuration
-if DEBUG:
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
-else:
-    # Production CORS settings - Firebase Hosting and App Engine URLs
-    cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', 'https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com,https://lab-inventory-467021.nn.r.appspot.com')
-    CORS_ALLOWED_ORIGINS = cors_origins.split(',') if cors_origins else [
-        "https://lab-inventory-467021.web.app",
-        "https://lab-inventory-467021.firebaseapp.com",
-        "https://lab-inventory-467021.nn.r.appspot.com"
-    ]
-
+# CORS Configuration (allow both local dev and production hosts)
+cors_origins_env = os.environ.get(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com'
+)
+CORS_ALLOWED_ORIGINS = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # DRF Token Auth config
@@ -232,7 +225,8 @@ EMAIL_SUBJECT_PREFIX = os.environ.get('EMAIL_SUBJECT_PREFIX', '[Hayer Lab Invent
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '60'))
 
 # Frontend URL for email links
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+# Default to production hosting URL if not set
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://lab-inventory-467021.web.app')
 
 # Remove auto-create superuser code from settings.py
 # This should be handled by a startup script or management command instead

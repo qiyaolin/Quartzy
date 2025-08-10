@@ -2,6 +2,8 @@ from django.contrib import admin
 from .models import (
     Event, Equipment, Booking, GroupMeeting, MeetingPresenterRotation, 
     RecurringTask, TaskInstance, EquipmentUsageLog, WaitingQueueEntry,
+    # Periodic Task Management Models (enhanced system)
+    TaskTemplate, PeriodicTaskInstance,
     # Intelligent Meeting Management Models
     MeetingConfiguration, MeetingInstance, Presenter, RotationSystem,
     QueueEntry, SwapRequest, PresentationHistory
@@ -94,6 +96,26 @@ class WaitingQueueEntryAdmin(admin.ModelAdmin):
     search_fields = ['equipment__name', 'user__username']
     raw_id_fields = ['equipment', 'user', 'time_slot']
     ordering = ['equipment', 'position']
+
+
+# ===============================================
+# Enhanced Periodic Task Management Admin
+# ===============================================
+
+@admin.register(TaskTemplate)
+class TaskTemplateAdmin(admin.ModelAdmin):
+    list_display = ['name', 'task_type', 'category', 'frequency', 'interval', 'priority', 'is_active']
+    list_filter = ['task_type', 'category', 'frequency', 'priority', 'is_active']
+    search_fields = ['name', 'description']
+    ordering = ['name']
+
+
+@admin.register(PeriodicTaskInstance)
+class PeriodicTaskInstanceAdmin(admin.ModelAdmin):
+    list_display = ['template_name', 'scheduled_period', 'status', 'execution_start_date', 'execution_end_date', 'completed_at']
+    list_filter = ['status', 'execution_start_date', 'execution_end_date', 'completed_at']
+    search_fields = ['template_name']
+    ordering = ['-execution_start_date']
 
 
 # ===============================================

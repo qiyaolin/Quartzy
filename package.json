@@ -1,0 +1,14 @@
+{
+  "name": "bio-inventory-debug",
+  "version": "1.0.0",
+  "description": "Debug script for bio-inventory frontend issues",
+  "main": "playwright-debug-script.js",
+  "scripts": {
+    "debug": "node playwright-debug-script.js",
+    "test:schedule": "node -e \"require('./playwright-debug-script.js').debugFrontendIssues()\"",
+    "install-playwright": "npm install playwright"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}

@@ -610,7 +610,7 @@ export const adminDashboardApi = {
 
   // Get all users for management
   getUsers: async (token: string): Promise<User[]> => {
-    const response = await fetch(buildApiUrl('schedule/users/'), {
+    const response = await fetch(buildApiUrl('/api/users/active/'), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -628,7 +628,7 @@ export const adminDashboardApi = {
     userId: number,
     isActive: boolean
   ): Promise<User> => {
-    const response = await fetch(buildApiUrl(`schedule/users/${userId}/`), {
+    const response = await fetch(buildApiUrl(`/api/users/${userId}/`), {
       method: 'PATCH',
       headers: {
         'Authorization': `Token ${token}`,

@@ -1,0 +1,33 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}New One-time Task Available{% endblock %}
+
+{% block header_title %}One-time Task{% endblock %}
+
+{% block content %}
+<h2>New One-time Task: {{ task.name }}</h2>
+
+<p>Hello,</p>
+
+<p>A new one-time task <strong>{{ task.name }}</strong> has been created and is available to claim.</p>
+
+{% if task.description %}
+<div class="highlight">
+  <h3>Description</h3>
+  <p>{{ task.description }}</p>
+  {% if task.deadline %}
+  <p><strong>Deadline:</strong> {{ task.deadline }}</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if claim_url %}
+<a href="{{ claim_url }}" class="button">Claim Task</a>
+{% endif %}
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}
+
+
+

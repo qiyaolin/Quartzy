@@ -98,6 +98,9 @@ def schedules_api(request):
         return Response(events)
     
     elif request.method == 'POST':
+        # Only admins can create events via compatibility endpoint
+        if not request.user.is_staff:
+            return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
         # Create actual Event instance
         data = request.data
         
@@ -348,6 +351,9 @@ def recurring_tasks_api(request):
         return Response(serializer.data)
 
     # POST
+    # Only admins can create recurring tasks via compatibility endpoint
+    if not request.user.is_staff:
+        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
     try:
         payload = request.data or {}
         title = payload.get('title')
@@ -444,7 +450,7 @@ def unified_dashboard_overview_api(request):
                 'active_bookings': 0,
                 'pending_swap_requests': 0
             },
-            'last_updated': timezone.now()
+            'last_updated': timezone.now().isoformat()
         }
         
         return Response(minimal_dashboard)

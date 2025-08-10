@@ -1,0 +1,42 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}New Task Assignment{% endblock %}
+
+{% block header_title %}Task Assignment{% endblock %}
+
+{% block content %}
+<h2>You have been assigned a task</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>You have been assigned to the task <strong>{{ task.template_name|default:task.name }}</strong>.</p>
+
+<div class="highlight">
+  <h3>Task Details</h3>
+  <p><strong>Task:</strong> {{ task.template_name|default:task.name }}</p>
+  <p><strong>Period/Window:</strong>
+    {% if task.execution_start_date and task.execution_end_date %}
+      {{ task.execution_start_date }} - {{ task.execution_end_date }}
+    {% else %}
+      {{ scheduled_period|default:"N/A" }}
+    {% endif %}
+  </p>
+  {% if task.description %}
+  <p><strong>Description:</strong> {{ task.description }}</p>
+  {% endif %}
+</div>
+
+{% if partner_names %}
+<p><strong>Partners:</strong> {{ partner_names }}</p>
+{% endif %}
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">Open Task</a>
+{% endif %}
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}
+
+
+

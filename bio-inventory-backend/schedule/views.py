@@ -1039,482 +1039,6 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
         })
 
 
-class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
-    """Periodic task instance management API"""
-    queryset = PeriodicTaskInstance.objects.all()
-    serializer_class = PeriodicTaskInstanceSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def create(self, request, *args, **kwargs):
-        """Compatibility: accept nested template payload for one-time tasks.
-        Allows POST to /schedule/periodic-tasks/ with body:
-        {
-          "template": { name, description, task_type, category, min_people, max_people, default_people, estimated_hours, priority },
-          "execution_start_date": "YYYY-MM-DD",
-          "execution_end_date": "YYYY-MM-DD",
-          "current_assignees": [userId,...],
-          "status": "pending" | ...
-        }
-        """
-        data = request.data or {}
-        template_payload = data.get('template')
-        if isinstance(template_payload, dict):
-            from datetime import datetime
-            from django.utils import timezone as dj_timezone
-            name = template_payload.get('name') or 'One-time Task'
-            description = template_payload.get('description', '')
-            task_type = template_payload.get('task_type', 'one_time')
-            category = template_payload.get('category', 'custom')
-            min_people = int(template_payload.get('min_people', 1) or 1)
-            max_people = int(template_payload.get('max_people', max(1, min_people)) or max(1, min_people))
-            default_people = int(template_payload.get('default_people', min_people) or min_people)
-            estimated_hours = template_payload.get('estimated_hours')
-            priority = template_payload.get('priority', 'medium')
-
-            # Parse dates
-            start_date_str = data.get('execution_start_date') or data.get('start_date')
-            end_date_str = data.get('execution_end_date') or data.get('end_date') or start_date_str
-            try:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else dj_timezone.now().date()
-            except Exception:
-                start_date = dj_timezone.now().date()
-            try:
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else start_date
-            except Exception:
-                end_date = start_date
-
-            # Create minimal template compatible with serializer constraints
-            template = TaskTemplate.objects.create(
-                name=name,
-                description=description,
-                task_type='one_time' if task_type != 'recurring' else 'one_time',
-                category=category,
-                frequency=None,
-                interval=1,
-                start_date=start_date,
-                end_date=end_date,
-                min_people=min_people,
-                max_people=max_people,
-                default_people=default_people,
-                estimated_hours=estimated_hours,
-                window_type='fixed',
-                fixed_start_day=start_date.day,
-                fixed_end_day=end_date.day,
-                priority=priority,
-                is_active=True,
-                created_by=request.user,
-            )
-
-            # Build assignees
-            assignees = data.get('current_assignees') or []
-            if not isinstance(assignees, list):
-                assignees = []
-
-            # Create task instance
-            task = PeriodicTaskInstance.objects.create(
-                template=template,
-                template_name=template.name,
-                scheduled_period=f"{start_date.strftime('%Y-%m')}",
-                execution_start_date=start_date,
-                execution_end_date=end_date,
-                status=data.get('status', 'scheduled'),
-                original_assignees=list(assignees),
-                current_assignees=list(assignees),
-                assignment_metadata={'created_via': 'legacy_compat'}
-            )
-            return Response(self.get_serializer(task).data, status=status.HTTP_201_CREATED)
-
-        # Default behavior
-        return super().create(request, *args, **kwargs)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.sync_service = None
-        if GoogleCalendarService and CalendarSyncService and getattr(settings, 'GOOGLE_CALENDAR_ENABLED', False):
-            try:
-                gcal_service = GoogleCalendarService()
-                self.sync_service = CalendarSyncService(gcal_service)
-            except Exception as e:
-                logging.warning(f"Failed to initialize Google Calendar sync: {e}")
-                self.sync_service = None
-    
-    def get_queryset(self):
-        queryset = PeriodicTaskInstance.objects.select_related(
-            'template', 'completed_by'
-        )
-        
-        # Filter by status
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        
-        # Filter by period
-        period = self.request.query_params.get('period')
-        if period:
-            queryset = queryset.filter(scheduled_period=period)
-        
-        # Filter by assignee
-        assignee_id = self.request.query_params.get('assignee')
-        if assignee_id:
-            queryset = queryset.filter(current_assignees__contains=[int(assignee_id)])
-        
-        # Filter overdue tasks
-        overdue_only = self.request.query_params.get('overdue_only')
-        if overdue_only and overdue_only.lower() == 'true':
-            from datetime import date
-            queryset = queryset.filter(
-                status__in=['scheduled', 'pending', 'in_progress'],
-                execution_end_date__lt=date.today()
-            )
-        
-        return queryset.order_by('-scheduled_period', 'execution_start_date')
-    
-    @action(detail=False, methods=['get'])
-    def my_tasks(self, request):
-        """Get current user's tasks"""
-        user_tasks = self.get_queryset().filter(
-            current_assignees__contains=[request.user.id]
-        )
-        
-        # Separate by status
-        current_tasks = user_tasks.filter(
-            status__in=['scheduled', 'pending', 'in_progress']
-        ).order_by('execution_start_date')
-        
-        completed_tasks = user_tasks.filter(
-            status='completed'
-        ).order_by('-completed_at')[:10]
-        
-        overdue_tasks = user_tasks.filter(
-            status__in=['scheduled', 'pending', 'in_progress']
-        ).filter(execution_end_date__lt=timezone.now().date())
-        
-        return Response({
-            'current_tasks': self.get_serializer(current_tasks, many=True).data,
-            'completed_tasks': self.get_serializer(completed_tasks, many=True).data,
-            'overdue_tasks': self.get_serializer(overdue_tasks, many=True).data,
-            'counts': {
-                'current': current_tasks.count(),
-                'completed': completed_tasks.count(),
-                'overdue': overdue_tasks.count()
-            }
-        })
-    
-    @action(detail=True, methods=['post'])
-    def mark_completed(self, request, pk=None):
-        """Mark task as completed"""
-        task = self.get_object()
-        
-        if not task.can_be_completed_by(request.user):
-            return Response({
-                'error': 'You are not assigned to this task'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        # Validate completion data
-        serializer = TaskCompletionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # Mark as completed
-            old_status = task.status
-            task.mark_completed(request.user, **serializer.validated_data)
-            
-            # Add status change record
-            task.add_status_change(old_status, 'completed', request.user)
-            
-            # Update queue member statistics
-            if hasattr(task.template, 'rotation_queue'):
-                queue_member = task.template.rotation_queue.queue_members.filter(
-                    user=request.user
-                ).first()
-                if queue_member:
-                    completion_hours = serializer.validated_data.get('completion_duration')
-                    if completion_hours:
-                        completion_hours = completion_hours / 60.0  # Convert to hours
-                    queue_member.update_completion_stats(completion_hours)
-            
-            return Response({
-                'message': 'Task marked as completed successfully',
-                'task': self.get_serializer(task).data
-            })
-            
-        except ValueError as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def start_task(self, request, pk=None):
-        """Start working on task"""
-        task = self.get_object()
-        
-        if not task.can_be_completed_by(request.user):
-            return Response({
-                'error': 'You are not assigned to this task'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        if task.status != 'pending':
-            return Response({
-                'error': 'Task is not in pending status'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        old_status = task.status
-        task.status = 'in_progress'
-        task.save()
-        
-        # Add status change record
-        task.add_status_change(old_status, 'in_progress', request.user)
-        
-        return Response({
-            'message': 'Task started successfully',
-            'task': self.get_serializer(task).data
-        })
-    
-    @action(detail=True, methods=['post'])
-    def cancel_task(self, request, pk=None):
-        """Cancel periodic task"""
-        task = self.get_object()
-        
-        # Check permissions - only assignees or admins can cancel
-        if not task.can_be_completed_by(request.user) and not request.user.is_staff:
-            return Response({
-                'error': 'You are not authorized to cancel this task'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        if task.status in ['completed', 'cancelled']:
-            return Response({
-                'error': f'Task is already {task.status} and cannot be cancelled'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        reason = request.data.get('reason', 'No reason provided')
-        
-        old_status = task.status
-        task.status = 'cancelled'
-        task.save()
-        
-        # Add status change record
-        task.add_status_change(old_status, 'cancelled', request.user, reason)
-        
-        return Response({
-            'message': 'Task cancelled successfully',
-            'task': self.get_serializer(task).data
-        })
-    
-    @action(detail=False, methods=['post'])
-    def batch_generate(self, request):
-        """Batch generate periodic tasks"""
-        serializer = BatchTaskGenerationSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        periods = serializer.validated_data['periods']
-        template_ids = serializer.validated_data.get('template_ids')
-        preview_only = serializer.validated_data.get('preview_only', True)
-        
-        # Get templates
-        if template_ids:
-            templates = TaskTemplate.objects.filter(id__in=template_ids, is_active=True)
-        else:
-            templates = TaskTemplate.objects.filter(is_active=True)
-        
-        generated_tasks = []
-        errors = []
-        
-        for template in templates:
-            for period in periods:
-                if template.should_generate_for_period(period):
-                    try:
-                        start_date, end_date = template.get_execution_window(period)
-                        
-                        # Check if task already exists
-                        existing_task = PeriodicTaskInstance.objects.filter(
-                            template=template,
-                            scheduled_period=period
-                        ).first()
-                        
-                        if existing_task:
-                            errors.append(f"Task already exists: {template.name} - {period}")
-                            continue
-                        
-                        # Get assignees
-                        try:
-                            if hasattr(template, 'rotation_queue'):
-                                selected_members = template.rotation_queue.assign_members_for_period(period)
-                                assignee_ids = [member.user.id for member in selected_members]
-                                primary_assignee = selected_members[0].user.id if selected_members else None
-                            else:
-                                assignee_ids = []
-                                primary_assignee = None
-                                errors.append(f"No rotation queue for template: {template.name}")
-                                continue
-                        except ValueError as e:
-                            errors.append(f"Assignment error for {template.name} - {period}: {str(e)}")
-                            continue
-                        
-                        if not preview_only:
-                            # Create task instance
-                            task_instance = PeriodicTaskInstance.objects.create(
-                                template=template,
-                                template_name=template.name,
-                                scheduled_period=period,
-                                execution_start_date=start_date,
-                                execution_end_date=end_date,
-                                original_assignees=assignee_ids,
-                                current_assignees=assignee_ids,
-                                assignment_metadata={
-                                    'primary_assignee': primary_assignee,
-                                    'assigned_at': timezone.now().isoformat()
-                                }
-                            )
-                            generated_tasks.append(task_instance)
-                        else:
-                            # Create preview object
-                            preview_task = {
-                                'template_name': template.name,
-                                'period': period,
-                                'execution_window': f"{start_date} to {end_date}",
-                                'assignees': [
-                                    User.objects.get(id=user_id).username 
-                                    for user_id in assignee_ids
-                                ]
-                            }
-                            generated_tasks.append(preview_task)
-                        
-                    except Exception as e:
-                        errors.append(f"Error generating {template.name} - {period}: {str(e)}")
-        
-        if preview_only:
-            return Response({
-                'message': f'Preview: {len(generated_tasks)} tasks would be generated',
-                'preview_tasks': generated_tasks,
-                'errors': errors
-            })
-        else:
-            serialized_tasks = self.get_serializer(generated_tasks, many=True)
-            return Response({
-                'message': f'Successfully generated {len(generated_tasks)} tasks',
-                'generated_tasks': serialized_tasks.data,
-                'errors': errors
-            })
-    
-    @action(detail=False, methods=['get'])
-    def statistics(self, request):
-        """Get periodic task statistics"""
-        from django.db.models import Count, Avg, Q
-        from datetime import date
-        
-        queryset = self.get_queryset()
-        
-        # Filter by date range if provided
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
-        
-        if start_date:
-            queryset = queryset.filter(execution_start_date__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(execution_end_date__lte=end_date)
-        
-        # Overall statistics
-        total_tasks = queryset.count()
-        completed_tasks = queryset.filter(status='completed').count()
-        overdue_tasks = queryset.filter(
-            status__in=['scheduled', 'pending', 'in_progress'],
-            execution_end_date__lt=date.today()
-        ).count()
-        
-        completion_rate = (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0
-        
-        avg_completion_time = queryset.filter(
-            completion_duration__isnull=False
-        ).aggregate(avg_time=Avg('completion_duration'))['avg_time'] or 0
-        
-        # User statistics
-        from django.contrib.auth.models import User
-        user_stats = []
-        for user in User.objects.filter(is_active=True):
-            user_tasks = queryset.filter(current_assignees__contains=[user.id])
-            user_completed = user_tasks.filter(status='completed').count()
-            user_total = user_tasks.count()
-            
-            if user_total > 0:
-                user_stats.append({
-                    'user_id': user.id,
-                    'username': user.username,
-                    'total_tasks': user_total,
-                    'completed_tasks': user_completed,
-                    'completion_rate': (user_completed / user_total * 100)
-                })
-        
-        # Template statistics
-        template_stats = []
-        for template in TaskTemplate.objects.filter(is_active=True):
-            template_tasks = queryset.filter(template=template)
-            template_completed = template_tasks.filter(status='completed').count()
-            template_total = template_tasks.count()
-            
-            template_stats.append({
-                'template_id': template.id,
-                'template_name': template.name,
-                'total_tasks': template_total,
-                'completed_tasks': template_completed,
-                'completion_rate': (template_completed / template_total * 100) if template_total > 0 else 0
-            })
-        
-        stats = TaskStatisticsSerializer({
-            'total_tasks': total_tasks,
-            'completed_tasks': completed_tasks,
-            'overdue_tasks': overdue_tasks,
-            'completion_rate': completion_rate,
-            'average_completion_time': avg_completion_time,
-            'user_statistics': user_stats,
-            'template_statistics': template_stats
-        })
-        
-        return Response(stats.data)
-    
-    def perform_create(self, serializer):
-        """Handle task creation with Google Calendar sync"""
-        task = serializer.save()
-        
-        # Sync to Google Calendar if enabled and task syncing is enabled
-        if (self.sync_service and 
-            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
-            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
-            try:
-                self.sync_service.sync_task_to_google(task)
-                logging.info(f"Task {task.id} synced to Google Calendar")
-            except Exception as e:
-                logging.error(f"Failed to sync task {task.id} to Google Calendar: {e}")
-    
-    def perform_update(self, serializer):
-        """Handle task updates with Google Calendar sync"""
-        task = serializer.save()
-        
-        # Sync to Google Calendar if enabled and task syncing is enabled
-        if (self.sync_service and 
-            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
-            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
-            try:
-                self.sync_service.sync_task_to_google(task, force_update=True)
-                logging.info(f"Task {task.id} updated in Google Calendar")
-            except Exception as e:
-                logging.error(f"Failed to update task {task.id} in Google Calendar: {e}")
-    
-    def perform_destroy(self, instance):
-        """Handle task deletion with Google Calendar sync"""
-        # Remove from Google Calendar if enabled and task syncing is enabled
-        if (self.sync_service and 
-            getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
-            getattr(settings, 'GOOGLE_CALENDAR_SYNC_TASKS', False)):
-            try:
-                self.sync_service.remove_task_from_google(instance)
-                logging.info(f"Task {instance.id} removed from Google Calendar")
-            except Exception as e:
-                logging.error(f"Failed to remove task {instance.id} from Google Calendar: {e}")
-        
-        instance.delete()
-
 
 class TaskRotationQueueViewSet(viewsets.ModelViewSet):
     """Task rotation queue management API"""
@@ -2870,6 +2394,15 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
                 logging.warning(f"Failed to initialize Google Calendar sync: {e}")
                 self.sync_service = None
     
+    def _filter_tasks_by_user(self, queryset, user_id):
+        """Helper method to filter tasks by user assignment (SQLite compatible)"""
+        tasks_with_user = []
+        for task in queryset:
+            current_assignees = task.current_assignees or []
+            if user_id in current_assignees:
+                tasks_with_user.append(task.id)
+        return queryset.filter(id__in=tasks_with_user)
+    
     def get_queryset(self):
         """Filter task instances"""
         queryset = PeriodicTaskInstance.objects.select_related(
@@ -2891,7 +2424,7 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
         if assignee_id:
             try:
                 assignee_id = int(assignee_id)
-                queryset = queryset.filter(current_assignees__contains=[assignee_id])
+                queryset = self._filter_tasks_by_user(queryset, assignee_id)
             except (ValueError, TypeError):
                 pass
         
@@ -2903,7 +2436,7 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
         # Get user's tasks only
         my_tasks = self.request.query_params.get('my_tasks')
         if my_tasks and my_tasks.lower() == 'true':
-            queryset = queryset.filter(current_assignees__contains=[self.request.user.id])
+            queryset = self._filter_tasks_by_user(queryset, self.request.user.id)
         
         return queryset.order_by('-scheduled_period', 'execution_start_date')
     
@@ -2913,22 +2446,24 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
         user_id = request.user.id
         
         # Current tasks (pending, in_progress)
-        current_tasks = self.get_queryset().filter(
-            current_assignees__contains=[user_id],
-            status__in=['pending', 'in_progress']
+        current_tasks = self._filter_tasks_by_user(
+            self.get_queryset().filter(status__in=['pending', 'in_progress']),
+            user_id
         ).order_by('execution_end_date')
         
         # Upcoming tasks
-        upcoming_tasks = self.get_queryset().filter(
-            current_assignees__contains=[user_id],
-            status='scheduled',
-            execution_start_date__gt=date.today()
+        upcoming_tasks = self._filter_tasks_by_user(
+            self.get_queryset().filter(
+                status='scheduled',
+                execution_start_date__gt=date.today()
+            ),
+            user_id
         ).order_by('execution_start_date')[:5]
         
         # Recently completed tasks
-        completed_tasks = self.get_queryset().filter(
-            current_assignees__contains=[user_id],
-            status='completed'
+        completed_tasks = self._filter_tasks_by_user(
+            self.get_queryset().filter(status='completed'),
+            user_id
         ).order_by('-completed_at')[:10]
         
         return Response({
@@ -2940,8 +2475,9 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
     
     def _get_user_statistics(self, user_id):
         """Get user task statistics"""
-        all_tasks = PeriodicTaskInstance.objects.filter(
-            current_assignees__contains=[user_id]
+        all_tasks = self._filter_tasks_by_user(
+            PeriodicTaskInstance.objects.all(),
+            user_id
         )
         
         total_tasks = all_tasks.count()
@@ -3006,6 +2542,29 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
             member.update_completion_stats(duration_hours)
         except (TaskRotationQueue.DoesNotExist, QueueMember.DoesNotExist):
             pass
+    
+    @action(detail=True, methods=['post'])
+    def claim(self, request, pk=None):
+        """Claim a one-time task"""
+        task = self.get_object()
+        
+        if not task.can_be_claimed(request.user):
+            return Response(
+                {'error': 'Task cannot be claimed. It may already be full, not a one-time task, or you are already assigned.'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            task.claim_task(request.user)
+            return Response({
+                'message': 'Task claimed successfully',
+                'task': self.get_serializer(task).data
+            })
+        except ValueError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     @action(detail=True, methods=['post'])
     def update_assignees(self, request, pk=None):
@@ -3134,13 +2693,22 @@ class TaskSwapRequestViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Create swap request"""
-        task_instance = serializer.validated_data.get('task_instance')
+        # Get task instance from request data (since it's read-only in serializer)
+        task_instance_id = self.request.data.get('task_instance_id') or self.request.data.get('task_instance')
+        if not task_instance_id:
+            raise serializers.ValidationError("task_instance_id is required")
+        
+        try:
+            task_instance = PeriodicTaskInstance.objects.get(id=task_instance_id)
+        except PeriodicTaskInstance.DoesNotExist:
+            raise serializers.ValidationError("Task instance not found")
         
         # Verify user is assigned to this task
         if self.request.user.id not in task_instance.current_assignees:
             raise serializers.ValidationError("You are not assigned to this task")
         
-        serializer.save(from_user=self.request.user)
+        # Save with the task_instance and from_user
+        serializer.save(from_user=self.request.user, task_instance=task_instance)
     
     @action(detail=False, methods=['post'])
     def create_swap(self, request):
@@ -3476,8 +3044,9 @@ class TaskStatisticsView(APIView):
         # User statistics
         user_stats = []
         for user in User.objects.filter(is_active=True).exclude(username__in=['admin', 'print_server']):
-            user_tasks = PeriodicTaskInstance.objects.filter(
-                current_assignees__contains=[user.id]
+            user_tasks = self._filter_tasks_by_user(
+                PeriodicTaskInstance.objects.all(),
+                user.id
             )
             user_completed = user_tasks.filter(status='completed')
             
@@ -3582,6 +3151,15 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
     Optimizes user experience by reducing navigation complexity.
     """
     permission_classes = [permissions.IsAuthenticated]
+    
+    def _filter_tasks_by_user(self, queryset, user_id):
+        """Helper method to filter tasks by user assignment (SQLite compatible)"""
+        tasks_with_user = []
+        for task in queryset:
+            current_assignees = task.current_assignees or []
+            if user_id in current_assignees:
+                tasks_with_user.append(task.id)
+        return queryset.filter(id__in=tasks_with_user)
 
     @action(detail=False, methods=['get'])
     def overview(self, request):
@@ -3705,10 +3283,17 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
 
     def _get_my_tasks(self, user):
         """Get user's assigned tasks"""
-        task_instances = PeriodicTaskInstance.objects.filter(
-            current_assignees__contains=[user.id],
+        # Get all task instances and filter in Python since SQLite doesn't support JSONField contains lookup
+        all_tasks = PeriodicTaskInstance.objects.filter(
             status__in=['scheduled', 'pending', 'in_progress']
         ).select_related('template').order_by('execution_end_date')
+        
+        # Filter tasks assigned to user in Python
+        task_instances = []
+        for task in all_tasks:
+            current_assignees = task.current_assignees or []
+            if user.id in current_assignees:
+                task_instances.append(task)
 
         my_tasks = []
         for task in task_instances:
@@ -3840,11 +3425,12 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
         ).count()
 
         # Count completed tasks for the current user
-        # Use JSON list containment which works on Postgres and modern SQLite backends
-        tasks_completed = PeriodicTaskInstance.objects.filter(
-            current_assignees__contains=[user.id],
-            status='completed',
-            completed_at__year=this_year
+        tasks_completed = self._filter_tasks_by_user(
+            PeriodicTaskInstance.objects.filter(
+                status='completed',
+                completed_at__year=this_year
+            ),
+            user.id
         ).count()
 
         usage_logs = EquipmentUsageLog.objects.filter(

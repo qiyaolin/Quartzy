@@ -1,0 +1,38 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Task Reminder{% endblock %}
+
+{% block header_title %}Task Reminder{% endblock %}
+
+{% block content %}
+<h2>Reminder: {{ task.template_name|default:task.name }}</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>This is a reminder for your assigned task <strong>{{ task.template_name|default:task.name }}</strong>.</p>
+
+<div class="highlight">
+  <h3>Execution Window</h3>
+  <p>
+    {% if task.execution_start_date and task.execution_end_date %}
+      {{ task.execution_start_date }} - {{ task.execution_end_date }}
+    {% else %}
+      {{ scheduled_period|default:"N/A" }}
+    {% endif %}
+  </p>
+</div>
+
+{% if days_remaining %}
+<p><strong>Days remaining:</strong> {{ days_remaining }}</p>
+{% endif %}
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">View Task</a>
+{% endif %}
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}
+
+
+

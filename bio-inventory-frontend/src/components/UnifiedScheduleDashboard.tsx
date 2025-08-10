@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { buildApiUrl } from '../config/api.ts';
+import { groupMeetingApi, type OneTimeTask } from '../services/groupMeetingApi.ts';
 import ScheduleDetailModal from '../modals/ScheduleDetailModal.tsx';
 import { Schedule } from '../services/scheduleApi.ts';
 
@@ -132,6 +133,8 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     const [refreshing, setRefreshing] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<Schedule | null>(null);
     const [showDetailModal, setShowDetailModal] = useState(false);
+    const [availableOneTimeTasks, setAvailableOneTimeTasks] = useState<OneTimeTask[]>([]);
+    const [claimingTaskId, setClaimingTaskId] = useState<number | null>(null);
 
     const fetchDashboardData = async () => {
         const tryFetch = async (endpoint: string) => {
@@ -149,10 +152,10 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
             return { ok: true as const, data: parsed };
         };
         try {
-            // Try compatibility endpoint first, then API endpoint
-            let result = await tryFetch('schedule/unified-dashboard/overview/');
+            // Prefer API endpoint (better CORS), fallback to compatibility endpoint
+            let result = await tryFetch('api/schedule/unified-dashboard/overview/');
             if (!result.ok) {
-                result = await tryFetch('api/schedule/unified-dashboard/overview/');
+                result = await tryFetch('schedule/unified-dashboard/overview/');
             }
             if (!result.ok || !result.data) {
                 throw new Error(`Failed to fetch dashboard data: ${result.statusText || 'Unknown error'}`);
@@ -162,6 +165,32 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load dashboard');
             console.error('Dashboard data fetch error:', err);
+        }
+    };
+
+    const fetchAvailableOneTimeTasks = async () => {
+        try {
+            const tasks = await groupMeetingApi.getOneTimeTasks(token);
+            // Only tasks that are unclaimed and available
+            const filtered = (tasks || []).filter(t => (t.status === 'scheduled' || t.status === 'pending') && (t.current_assignees?.length || 0) === 0);
+            setAvailableOneTimeTasks(filtered);
+        } catch (e) {
+            // Non-fatal for dashboard
+            console.warn('Failed to fetch one-time tasks:', e);
+        }
+    };
+
+    const handleClaimOneTime = async (taskId: number) => {
+        try {
+            setClaimingTaskId(taskId);
+            await groupMeetingApi.claimOneTimeTask(token, taskId);
+            await Promise.all([fetchDashboardData(), fetchAvailableOneTimeTasks()]);
+            onRefresh?.();
+        } catch (e) {
+            console.error('Claim one-time task failed:', e);
+            alert(e instanceof Error ? e.message : 'Failed to claim task');
+        } finally {
+            setClaimingTaskId(null);
         }
     };
 
@@ -175,7 +204,10 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
-            await fetchDashboardData();
+            await Promise.all([
+                fetchDashboardData(),
+                fetchAvailableOneTimeTasks()
+            ]);
             setLoading(false);
         };
 
@@ -190,6 +222,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
 
         const interval = setInterval(() => {
             fetchDashboardData();
+            fetchAvailableOneTimeTasks();
         }, 5 * 60 * 1000);
 
         return () => clearInterval(interval);
@@ -668,6 +701,39 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                         </div>
                     </div>
             </div>
+
+            {/* Available One-Time Tasks (Claim) */}
+            {availableOneTimeTasks.length > 0 && (
+                <div className="card">
+                    <div className="card-body p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <ClipboardList className="w-5 h-5 text-blue-600" />
+                            <h3 className="text-lg font-semibold text-gray-900">Available One-Time Tasks</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {availableOneTimeTasks.map((t) => (
+                                <div key={t.id} className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <h4 className="font-medium text-gray-900 truncate">{t.template_name}</h4>
+                                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{t.status}</span>
+                                    </div>
+                                    <div className="text-xs text-gray-600 mb-3">Due: {new Date(t.execution_end_date).toLocaleDateString()}</div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">Assignee: {(t.current_assignees?.length || 0) > 0 ? 'Taken' : 'Unclaimed'}</span>
+                                        <button
+                                            onClick={() => handleClaimOneTime(t.id)}
+                                            disabled={(t.current_assignees?.length || 0) > 0 || claimingTaskId === t.id}
+                                            className="btn btn-primary btn-xs disabled:opacity-50"
+                                        >
+                                            {claimingTaskId === t.id ? 'Claiming...' : 'Claim'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Upcoming Meetings */}

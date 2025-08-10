@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
     Calendar, Clock, Users, MapPin, Plus, Edit3, Settings, 
     Repeat, CheckCircle, AlertCircle, User, Trash2, MoreHorizontal,
-    Beaker, TestTube, Brush
+    Beaker, TestTube, Brush, ArrowLeftRight
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { 
@@ -12,6 +12,8 @@ import {
 } from "../services/groupMeetingApi.ts";
 import { buildApiUrl } from '../config/api.ts';
 import EditTaskModal, { EditTaskData } from '../modals/EditTaskModal.tsx';
+import AssignUsersModal from '../modals/AssignUsersModal.tsx';
+import { OneTimeTask } from '../services/groupMeetingApi.ts';
 import AutoGenerateModal, { AutoGenerateConfig } from '../modals/AutoGenerateModal.tsx';
 
 interface RecurringTaskManagerProps {
@@ -28,6 +30,7 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
 
     const [tasks, setTasks] = useState<RecurringTask[]>([]);
     const [users, setUsers] = useState<TaskUser[]>([]);
+    const [oneTimeTasks, setOneTimeTasks] = useState<OneTimeTask[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -35,6 +38,8 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);
     const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+    const [showAssignModal, setShowAssignModal] = useState(false);
+    const [assigningTask, setAssigningTask] = useState<RecurringTask | null>(null);
 
     // Load data
     const loadData = useCallback(async () => {
@@ -42,13 +47,15 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
         
         setLoading(true);
         try {
-            const [tasksData, usersData] = await Promise.all([
+            const [tasksData, usersData, oneTime] = await Promise.all([
                 groupMeetingApi.getRecurringTasks(token),
-                groupMeetingApi.getActiveUsers(token)
+                groupMeetingApi.getActiveUsers(token),
+                groupMeetingApi.getOneTimeTasks(token)
             ]);
 
             setTasks(tasksData || []);
             setUsers((usersData || []).filter(u => u.username !== 'admin' && u.username !== 'print_server'));
+            setOneTimeTasks(oneTime || []);
             setError(null);
         } catch (err) {
             console.error('Error loading recurring tasks:', err);
@@ -56,35 +63,100 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
             setError(`Failed to load recurring tasks: ${errorMessage}. Please check your connection and try again.`);
             setTasks([]);
             setUsers([]);
+            setOneTimeTasks([]);
         } finally {
             setLoading(false);
         }
     }, [token]);
 
+    const handleClaimOneTime = async (taskId: number) => {
+        if (!token) return;
+        try {
+            const updated = await groupMeetingApi.claimOneTimeTask(token, taskId);
+            setOneTimeTasks(prev => prev.map(t => t.id === taskId ? updated : t));
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to claim task';
+            alert(`Claim failed: ${msg}`);
+        }
+    };
+
+    const handleCompleteOneTime = async (taskId: number) => {
+        if (!token) return;
+        try {
+            await fetch(buildApiUrl(`/api/tasks/one-time/${taskId}/complete/`), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ completion_notes: 'Task completed via dashboard' })
+            });
+            
+            setOneTimeTasks(prev => prev.map(t => 
+                t.id === taskId ? { ...t, status: 'completed' as const } : t
+            ));
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to complete task';
+            alert(`Complete failed: ${msg}`);
+        }
+    };
+
+    const handleSwapOneTime = async (task: OneTimeTask) => {
+        if (!token || !authContext?.user) return;
+        
+        const reason = prompt('Please provide a reason for the swap request:');
+        if (!reason || reason.trim() === '') {
+            alert('Swap request cancelled - reason is required.');
+            return;
+        }
+        
+        try {
+            const response = await fetch(buildApiUrl('/api/tasks/swap-request/'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    task_id: task.id,
+                    reason: reason.trim(),
+                    priority: 'normal'
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to submit swap request');
+            }
+            
+            alert('Swap request submitted successfully! An admin will review your request.');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Failed to submit swap request';
+            alert(`Swap request failed: ${msg}`);
+        }
+    };
+
     useEffect(() => {
         loadData();
     }, [loadData]);
 
-    const handleAssignTask = async (task: RecurringTask) => {
-        if (!token) return;
+    const openAssignTask = (task: RecurringTask) => {
+        setAssigningTask(task);
+        setShowAssignModal(true);
+    };
 
+    const handleAssignUsers = async (userIds: number[]) => {
+        if (!token || !assigningTask) return;
         try {
-            // Auto-select users based on task requirements
-            const eligibleUsers = users.filter(u => u.is_active);
-            const selectedUserIds = autoSelectUsers(eligibleUsers, task);
-
-            await groupMeetingApi.assignRecurringTask(token, task.id, selectedUserIds);
-            
-            // Update local state
+            await groupMeetingApi.assignRecurringTask(token, assigningTask.id, userIds);
             setTasks(prev => prev.map(t => 
-                t.id === task.id 
-                    ? { ...t, last_assigned_user_ids: selectedUserIds, last_assigned_date: new Date().toISOString() }
+                t.id === assigningTask.id 
+                    ? { ...t, last_assigned_user_ids: userIds, last_assigned_date: new Date().toISOString() }
                     : t
             ));
-
-        } catch (error) {
-            console.error('Failed to assign task:', error);
-            setError('Failed to assign task. Please try again.');
+        } catch (err) {
+            console.error('Failed to assign users:', err);
+            const msg = err instanceof Error ? err.message : 'Failed to assign users';
+            throw new Error(msg);
         }
     };
 
@@ -264,7 +336,7 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900">Recurring Tasks</h2>
-                        <p className="text-gray-600">Automated task management with intelligent user assignment</p>
+                        <p className="text-gray-600">Manage recurring tasks in three steps: 1) Configure task, 2) Select participants, 3) Auto-generate monthly assignments.</p>
                     </div>
                     
                     <div className="flex items-center gap-3">
@@ -291,15 +363,16 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                 </div>
 
                 {/* Task Overview */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-green-800 mb-2">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 text-blue-800 mb-2">
                         <Repeat className="w-5 h-5" />
-                        <span className="font-medium">Automated Task Management</span>
+                        <span className="font-medium">Workflow Guide</span>
                     </div>
-                    <p className="text-sm text-green-700">
-                        System automatically creates and assigns maintenance tasks to team members in rotation.
-                        Tasks are auto-generated based on frequency and assigned to eligible users excluding admin and print_server.
-                    </p>
+                    <ol className="list-decimal pl-5 text-sm text-blue-800 space-y-1">
+                        <li>Use “Edit Task” to set frequency, window（例如“每月最后一周”）与预计时长。</li>
+                        <li>点击 “Select Participants” 打开人员选择器，保存后作为该任务的指定名单。</li>
+                        <li>管理员点击 “Auto-Generate” 生成当月/未来周期的任务实例；工作日 11:00 ET 自动提醒，周末不提醒。</li>
+                    </ol>
                 </div>
             </div>
 
@@ -399,13 +472,95 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                                 key={task.id}
                                 task={task}
                                 assignedUsers={getAssignedUsers(task)}
-                                onAssign={() => handleAssignTask(task)}
+                                onAssign={() => openAssignTask(task)}
                                 getTaskIcon={getTaskIcon}
                                 getTaskTypeColor={getTaskTypeColor}
                                 getFrequencyColor={getFrequencyColor}
                                 isTaskDue={isTaskDue}
                                 isAdmin={isAdmin}
                             />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* 批量操作条 */}
+            {tasks.length > 0 && (
+                <div className="bg-white rounded-lg border border-gray-200 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div className="text-sm text-gray-600">
+                        批量操作：可同时对多个任务进行参与人员选择与任务实例生成
+                    </div>
+                    {isAdmin && (
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={handleAutoGenerateTasks}
+                                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                            >
+                                <Settings className="w-4 h-4 mr-2" />
+                                Bulk Generate
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* One-time Tasks Quick Panel */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-medium text-gray-900">One-time Tasks</h3>
+                    <span className="text-sm text-gray-500">便捷接取，一人先到先得</span>
+                </div>
+                {oneTimeTasks.length === 0 ? (
+                    <div className="text-sm text-gray-500">No one-time tasks available</div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {oneTimeTasks.map(ot => (
+                            <div key={ot.id} className="border border-gray-200 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="font-medium text-gray-900 truncate">{ot.template_name}</div>
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{ot.status}</span>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">Deadline: {new Date(ot.execution_end_date).toLocaleDateString()}</div>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <div className="text-xs text-gray-500">Assignee: {ot.current_assignees?.length > 0 ? 'Taken' : 'Unclaimed'}</div>
+                                    <div className="flex gap-2">
+                                        {ot.current_assignees?.length === 0 && ot.status === 'scheduled' ? (
+                                            <button
+                                                onClick={() => handleClaimOneTime(ot.id)}
+                                                className="text-sm px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+                                            >
+                                                Claim
+                                            </button>
+                                        ) : (
+                                            <>
+                                                {authContext?.user && ot.current_assignees?.includes(authContext.user.id) && (ot.status === 'in_progress' || ot.status === 'scheduled') && (
+                                                    <button
+                                                        onClick={() => handleCompleteOneTime(ot.id)}
+                                                        className="text-sm px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                                                        title="Complete Task"
+                                                    >
+                                                        <CheckCircle className="w-3 h-3" />
+                                                    </button>
+                                                )}
+                                                {authContext?.user && ot.current_assignees?.includes(authContext.user.id) && ot.status !== 'completed' && (
+                                                    <button
+                                                        onClick={() => handleSwapOneTime(ot)}
+                                                        className="text-sm px-2 py-1 rounded bg-yellow-600 text-white hover:bg-yellow-700"
+                                                        title="Request Swap"
+                                                    >
+                                                        <ArrowLeftRight className="w-3 h-3" />
+                                                    </button>
+                                                )}
+                                                {ot.current_assignees?.length > 0 && (
+                                                    <span className="text-sm px-3 py-1 rounded bg-gray-200 text-gray-700">
+                                                        {ot.status === 'completed' ? 'Completed' : 'Claimed'}
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         ))}
                     </div>
                 )}
@@ -429,6 +584,17 @@ const RecurringTaskManager: React.FC<RecurringTaskManagerProps> = ({
                 onGenerate={handleAutoGenerate}
                 isSubmitting={isAutoGenerating}
             />
+
+            {/* Assign Users Modal */}
+            <AssignUsersModal
+                isOpen={showAssignModal}
+                onClose={() => setShowAssignModal(false)}
+                users={users}
+                initialSelectedIds={assigningTask?.last_assigned_user_ids || []}
+                onSubmit={handleAssignUsers}
+                isSubmitting={false}
+            />
+
         </div>
     );
 };
@@ -525,22 +691,34 @@ const TaskCard: React.FC<TaskCardProps> = ({
                     </div>
 
                     {/* Current Assignment */}
-                    {assignedUsers.length > 0 && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                            <h4 className="text-sm font-medium text-blue-900 mb-2">Current Assignment</h4>
-                            <div className="flex items-center gap-2">
-                                <Users className="w-4 h-4 text-blue-600" />
-                                <span className="text-sm text-blue-700">
-                                    {assignedUsers.map(u => `${u.first_name} ${u.last_name}`).join(', ')}
+                    {/* Participants Preview */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                        <h4 className="text-sm font-medium text-blue-900 mb-2">Participants</h4>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <Users className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm text-blue-700">
+                                {(() => {
+                                    const count = typeof task.assignee_count === 'number' ? task.assignee_count : (task.assignee_group?.length || 0);
+                                    return `${count || 0} selected`;
+                                })()}
+                            </span>
+                            {/* 名单预览（使用 last_assigned_user_ids 作为近似，若需要可改为 assignee_group 名单） */}
+                            {assignedUsers.length > 0 && (
+                                <span className="text-sm text-blue-700 truncate">
+                                    {assignedUsers.slice(0, 5).map(u => (u.first_name || u.last_name ? `${u.first_name} ${u.last_name}` : u.username)).join(', ')}
+                                    {assignedUsers.length > 5 ? `, +${assignedUsers.length - 5} more` : ''}
                                 </span>
-                                {task.last_assigned_date && (
-                                    <span className="text-xs text-blue-600">
-                                        (Assigned: {new Date(task.last_assigned_date).toLocaleDateString()})
-                                    </span>
-                                )}
-                            </div>
+                            )}
+                            {task.last_assigned_date && (
+                                <span className="text-xs text-blue-600">
+                                    (Last assigned: {new Date(task.last_assigned_date).toLocaleDateString()})
+                                </span>
+                            )}
                         </div>
-                    )}
+                        <div className="mt-2">
+                            <button onClick={() => onAssign()} className="text-sm text-blue-600 hover:text-blue-800">Edit Participants</button>
+                        </div>
+                    </div>
 
                     {/* Auto-assignment Info */}
                     {task.auto_assign && (
@@ -576,7 +754,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
                                     className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                 >
                                     <Users className="w-4 h-4 inline mr-2" />
-                                    Assign Now
+                                    Select Participants
                                 </button>
                                 
                                 {isAdmin && (

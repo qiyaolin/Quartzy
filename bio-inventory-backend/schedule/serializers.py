@@ -391,6 +391,7 @@ class PeriodicTaskInstanceSerializer(serializers.ModelSerializer):
     completed_by = UserSerializer(read_only=True)
     is_overdue = serializers.ReadOnlyField()
     can_complete = serializers.SerializerMethodField()
+    can_claim = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     
     class Meta:
@@ -399,7 +400,7 @@ class PeriodicTaskInstanceSerializer(serializers.ModelSerializer):
             'id', 'template', 'template_name', 'scheduled_period',
             'execution_start_date', 'execution_end_date', 'status', 'status_display',
             'original_assignees', 'current_assignees', 'assignment_metadata',
-            'assignees', 'primary_assignee', 'is_overdue', 'can_complete',
+            'assignees', 'primary_assignee', 'is_overdue', 'can_complete', 'can_claim',
             'completed_by', 'completed_at', 'completion_duration',
             'completion_notes', 'completion_photos', 'completion_rating',
             'created_at', 'updated_at'
@@ -424,6 +425,13 @@ class PeriodicTaskInstanceSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             return obj.can_be_completed_by(request.user)
+        return False
+    
+    def get_can_claim(self, obj):
+        """Check if current user can claim this task"""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            return obj.can_be_claimed(request.user)
         return False
 
 

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { formatDateET } from './timezone.ts';
 
 export interface ExportConfig {
   fileName: string;
@@ -21,7 +22,7 @@ export interface MultiSheetConfig {
 }
 
 const formatDate = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  return formatDateET(date);
 };
 
 const applyHeaderStyle = (ws: XLSX.WorkSheet, range: XLSX.Range) => {

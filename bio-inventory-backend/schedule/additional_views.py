@@ -19,7 +19,9 @@ from .models import (
     QueueEntry, RotationSystem, Equipment, Booking, Event,
     # Periodic Task Management Models
     TaskTemplate, PeriodicTaskInstance, TaskRotationQueue, 
-    QueueMember, TaskSwapRequest, NotificationRecord
+    QueueMember, TaskSwapRequest, NotificationRecord,
+    # Legacy Models for compatibility
+    RecurringTask, TaskInstance
 )
 from .serializers import (
     # Meeting Management Serializers
@@ -30,7 +32,9 @@ from .serializers import (
     TaskRotationQueueSerializer, QueueMemberSerializer,
     TaskSwapRequestSerializer, TaskGenerationPreviewSerializer,
     BatchTaskGenerationSerializer, TaskStatisticsSerializer,
-    TaskCompletionSerializer
+    TaskCompletionSerializer,
+    # Legacy Serializers for compatibility
+    RecurringTaskSerializer, TaskInstanceSerializer
 )
 
 # Import services if they exist
@@ -1721,3 +1725,385 @@ def group_meetings_api(request):
         logger = logging.getLogger(__name__)
         logger.error(f"Error in group_meetings_api: {str(e)}")
         return Response([])
+
+
+# =============================================================================
+# COMPREHENSIVE TASK INTEGRATION SYSTEM
+# Bridge between legacy frontend APIs and enhanced backend models
+# =============================================================================
+
+class TaskSystemAdapter:
+    """
+    Data transformation adapter between legacy and enhanced task systems
+    """
+    
+    @staticmethod
+    def tasktemplate_to_recurringtask(template: TaskTemplate) -> dict:
+        """
+        Transform TaskTemplate (enhanced) to RecurringTask (legacy) format
+        """
+        return {
+            'id': template.id,
+            'title': template.name,
+            'description': template.description,
+            'task_type': template.category or 'custom',
+            'frequency': template.frequency or 'monthly',
+            'assignee_count': template.default_people,
+            'location': 'Lab',  # Default location
+            'estimated_duration_hours': float(template.estimated_hours) if template.estimated_hours else 2.0,
+            'auto_assign': True,  # Enhanced system supports auto-assignment
+            'is_active': template.is_active,
+            'next_due_date': template.start_date.isoformat() if template.start_date else None,
+            'last_assigned_date': template.updated_at.isoformat() if template.updated_at else None,
+            'last_assigned_user_ids': [],  # Will be populated from rotation queue
+            'assignee_group': [],  # Will be populated from rotation queue
+            'cron_schedule': f"0 0 1 */{template.interval or 1} *" if template.frequency == 'monthly' else "0 0 * * 0",
+            'created_at': template.created_at.isoformat(),
+            'updated_at': template.updated_at.isoformat(),
+        }
+    
+    @staticmethod
+    def periodictask_to_onetimetask(instance: PeriodicTaskInstance) -> dict:
+        """
+        Transform PeriodicTaskInstance to OneTimeTask format
+        """
+        return {
+            'id': instance.id,
+            'template_name': instance.template_name,
+            'execution_start_date': instance.execution_start_date.isoformat(),
+            'execution_end_date': instance.execution_end_date.isoformat(),
+            'status': instance.status,
+            'current_assignees': list(instance.get_assignees().values_list('id', flat=True)),
+            'assignment_metadata': instance.assignment_metadata or {},
+        }
+    
+    @staticmethod
+    def populate_rotation_data(task_data: dict, template: TaskTemplate) -> dict:
+        """
+        Enhance task data with rotation queue information
+        """
+        try:
+            rotation_queue = template.rotation_queues.first()
+            if rotation_queue:
+                # Get eligible users from rotation queue
+                eligible_users = rotation_queue.queue_members.filter(is_active=True)
+                task_data['assignee_group'] = [
+                    {
+                        'id': member.user.id,
+                        'username': member.user.username,
+                        'first_name': member.user.first_name,
+                        'last_name': member.user.last_name,
+                        'email': member.user.email,
+                        'is_active': member.is_active
+                    }
+                    for member in eligible_users
+                ]
+                
+                # Get last assigned users from most recent task instance
+                recent_instance = PeriodicTaskInstance.objects.filter(
+                    template=template
+                ).order_by('-created_at').first()
+                
+                if recent_instance:
+                    task_data['last_assigned_user_ids'] = list(
+                        recent_instance.get_assignees().values_list('id', flat=True)
+                    )
+                    task_data['last_assigned_date'] = recent_instance.created_at.isoformat()
+                    
+        except Exception as e:
+            logger.warning(f"Could not populate rotation data for template {template.id}: {e}")
+        
+        return task_data
+
+
+class RecurringTaskCompatibilityView(APIView):
+    """
+    Compatibility endpoint for /api/recurring-tasks/
+    Maps to enhanced TaskTemplate system
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """
+        Return TaskTemplate data in legacy RecurringTask format
+        """
+        try:
+            templates = TaskTemplate.objects.filter(is_active=True)
+            adapted_tasks = []
+            
+            for template in templates:
+                task_data = TaskSystemAdapter.tasktemplate_to_recurringtask(template)
+                task_data = TaskSystemAdapter.populate_rotation_data(task_data, template)
+                adapted_tasks.append(task_data)
+            
+            return Response(adapted_tasks)
+            
+        except Exception as e:
+            logger.error(f"Error in RecurringTaskCompatibilityView: {e}")
+            return Response([], status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        """
+        Create new TaskTemplate from legacy RecurringTask format
+        """
+        try:
+            data = request.data
+            
+            # Transform legacy format to enhanced format
+            template_data = {
+                'name': data.get('title', ''),
+                'description': data.get('description', ''),
+                'task_type': 'recurring',
+                'frequency': data.get('frequency', 'monthly'),
+                'interval': 1,
+                'category': data.get('task_type', 'custom'),
+                'default_people': data.get('assignee_count', 1),
+                'min_people': 1,
+                'max_people': data.get('assignee_count', 1),
+                'estimated_hours': data.get('estimated_duration_hours', 2.0),
+                'is_active': data.get('is_active', True),
+                'created_by': request.user
+            }
+            
+            template = TaskTemplate.objects.create(**template_data)
+            
+            # Create rotation queue if assignee group is provided
+            if 'assignee_group_ids' in data and data['assignee_group_ids']:
+                from .models import TaskRotationQueue, QueueMember
+                
+                rotation_queue = TaskRotationQueue.objects.create(
+                    template=template,
+                    algorithm='fair_rotation'
+                )
+                
+                # Add users to rotation queue
+                for user_id in data['assignee_group_ids']:
+                    try:
+                        user = User.objects.get(id=user_id)
+                        QueueMember.objects.create(
+                            queue=rotation_queue,
+                            user=user,
+                            is_active=True
+                        )
+                    except User.DoesNotExist:
+                        continue
+            
+            # Return in legacy format
+            result = TaskSystemAdapter.tasktemplate_to_recurringtask(template)
+            result = TaskSystemAdapter.populate_rotation_data(result, template)
+            
+            return Response(result, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error creating task template: {e}")
+            return Response(
+                {'error': f'Failed to create task: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class OneTimeTaskCompatibilityView(APIView):
+    """
+    Compatibility endpoint for /api/one-time-tasks/
+    Maps to PeriodicTaskInstance with one-time task filtering
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """
+        Return one-time PeriodicTaskInstance data in OneTimeTask format
+        """
+        try:
+            # Get one-time tasks (pending tasks that can be claimed)
+            one_time_instances = PeriodicTaskInstance.objects.filter(
+                template__task_type='one_time',
+                status__in=['scheduled', 'pending']
+            ).order_by('-created_at')
+            
+            adapted_tasks = []
+            for instance in one_time_instances:
+                task_data = TaskSystemAdapter.periodictask_to_onetimetask(instance)
+                adapted_tasks.append(task_data)
+            
+            return Response(adapted_tasks)
+            
+        except Exception as e:
+            logger.error(f"Error in OneTimeTaskCompatibilityView: {e}")
+            return Response([], status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request):
+        """
+        Create one-time task instance
+        Frontend sends: { name, description, deadline }
+        """
+        try:
+            data = request.data
+            
+            # Extract fields from frontend format
+            name = data.get('name') or data.get('template_name', 'One-Time Task')
+            description = data.get('description', '')
+            deadline = data.get('deadline') or data.get('execution_end_date')
+            
+            # Validate required fields
+            if not name:
+                return Response(
+                    {'error': 'Task name is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Parse deadline
+            try:
+                if deadline:
+                    end_date = parse_date(deadline)
+                    if not end_date:
+                        raise ValueError("Invalid date format")
+                else:
+                    end_date = timezone.now().date() + timedelta(days=7)  # Default to 1 week
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid deadline format. Use YYYY-MM-DD'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            start_date = timezone.now().date()
+            
+            # Create or get one-time task template
+            template, created = TaskTemplate.objects.get_or_create(
+                name=name,
+                task_type='one_time',
+                defaults={
+                    'description': description,
+                    'category': 'custom',
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'default_people': 1,
+                    'min_people': 1,
+                    'max_people': 1,
+                    'is_active': True,
+                    'created_by': request.user,
+                    'priority': 'medium'
+                }
+            )
+            
+            # Create task instance
+            instance = PeriodicTaskInstance.objects.create(
+                template=template,
+                template_name=name,
+                execution_start_date=start_date,
+                execution_end_date=end_date,
+                status='scheduled',  # Use 'scheduled' to allow claiming
+                scheduled_period=timezone.now().strftime('%Y-%m'),
+                original_assignees=[],
+                current_assignees=[],
+                assignment_metadata={
+                    'one_time': True,
+                    'created_by': request.user.id,
+                    'remind_reoffer': data.get('remind_reoffer', False)
+                }
+            )
+            
+            result = TaskSystemAdapter.periodictask_to_onetimetask(instance)
+            return Response(result, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error creating one-time task: {e}")
+            return Response(
+                {'error': f'Failed to create one-time task: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class OneTimeTaskClaimView(APIView):
+    """
+    Endpoint for claiming one-time tasks
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, task_id):
+        """
+        Claim a one-time task for the current user
+        """
+        try:
+            instance = PeriodicTaskInstance.objects.get(id=task_id)
+            
+            # Check if task can be claimed
+            if not instance.can_be_claimed(request.user):
+                return Response(
+                    {'error': 'Task cannot be claimed'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Claim the task
+            instance.claim_task(request.user)
+            
+            result = TaskSystemAdapter.periodictask_to_onetimetask(instance)
+            return Response(result)
+            
+        except PeriodicTaskInstance.DoesNotExist:
+            return Response(
+                {'error': 'Task not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error claiming task {task_id}: {e}")
+            return Response(
+                {'error': f'Failed to claim task: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class TaskAssignmentCompatibilityView(APIView):
+    """
+    Handle task assignment for recurring tasks
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, task_id):
+        """
+        Assign users to a recurring task (TaskTemplate)
+        """
+        try:
+            template = TaskTemplate.objects.get(id=task_id)
+            user_ids = request.data.get('user_ids', [])
+            
+            if not user_ids:
+                return Response(
+                    {'error': 'No user IDs provided'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get or create rotation queue
+            from .models import TaskRotationQueue, QueueMember
+            
+            rotation_queue, created = TaskRotationQueue.objects.get_or_create(
+                template=template,
+                defaults={'algorithm': 'fair_rotation'}
+            )
+            
+            # Clear existing members and add new ones
+            rotation_queue.queue_members.all().delete()
+            
+            for user_id in user_ids:
+                try:
+                    user = User.objects.get(id=user_id)
+                    QueueMember.objects.create(
+                        queue=rotation_queue,
+                        user=user,
+                        is_active=True
+                    )
+                except User.DoesNotExist:
+                    continue
+            
+            return Response({'message': 'Users assigned successfully'})
+            
+        except TaskTemplate.DoesNotExist:
+            return Response(
+                {'error': 'Task not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error assigning users to task {task_id}: {e}")
+            return Response(
+                {'error': f'Failed to assign users: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )

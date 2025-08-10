@@ -1,0 +1,15 @@
+{% extends "notifications/emails/base_email.html" %}
+{% block title %}New One-time Task{% endblock %}
+{% block header_title %}New One-time Task Available{% endblock %}
+{% block content %}
+  <h2>One-time Task Created</h2>
+  <p>A new one-time task has been created:</p>
+  <div class="highlight">
+    <h3>{{ task.name }}</h3>
+    <p>{{ task.description }}</p>
+    <p><strong>Deadline:</strong> {{ task.deadline }}</p>
+  </div>
+  <a class="button" href="{{ claim_url }}" target="_blank">Claim this Task</a>
+{% endblock %}
+
+

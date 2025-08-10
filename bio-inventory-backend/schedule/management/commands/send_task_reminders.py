@@ -1,6 +1,10 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
+try:
+    from zoneinfo import ZoneInfo  # Python 3.9+
+except Exception:  # pragma: no cover
+    ZoneInfo = None
 import logging
 
 from schedule.models import PeriodicTaskInstance
@@ -41,7 +45,24 @@ class Command(BaseCommand):
         overdue_only = options['overdue_only']
         upcoming_only = options['upcoming_only']
         
-        self.stdout.write(self.style.SUCCESS('Starting task reminder notifications...'))
+        # Enforce business rule: only run on US/Eastern weekdays at/after 11:00am ET
+        try:
+            if ZoneInfo is not None:
+                now_et = timezone.now().astimezone(ZoneInfo('America/New_York'))
+            else:
+                now_et = timezone.now()  # fallback
+            # Monday=0..Sunday=6; weekdays 0-4
+            if now_et.weekday() > 4:
+                self.stdout.write(self.style.WARNING('Weekend detected in US/Eastern. Skipping reminders.'))
+                return
+            if now_et.hour < 11:
+                self.stdout.write(self.style.WARNING('Before 11:00 AM US/Eastern. Skipping reminders until window.'))
+                return
+        except Exception:
+            # If timezone conversion fails, proceed but still log
+            self.stdout.write(self.style.WARNING('Timezone check failed; proceeding with sending.'))
+
+        self.stdout.write(self.style.SUCCESS('Starting task reminder notifications (ET weekday window)...'))
         
         # Get overdue tasks
         overdue_tasks = []

@@ -85,26 +85,19 @@ class TaskNotificationService:
         
         # Send email notifications if user preferences allow
         try:
-            # Check user notification preferences
-            from notifications.models import NotificationPreference
-            prefs = NotificationPreference.get_or_create_for_user(user)
-            
-            # Send email if preferences allow
-            if prefs.task_assignments in ['email', 'both']:
-                email_context = {
-                    'task': task_instance,
-                    'recipient': user,
-                    'role': role,
-                    'action_url': f'/schedule/my-tasks/?task_id={task_instance.id}',
-                    'site_name': 'Quartzy Bio-Inventory'
-                }
-                
-                EmailNotificationService.send_email_notification(
-                    recipients=[user],
-                    subject=f"Task {action.title()}: {task_instance.template_name}",
-                    template_name='notifications/emails/task_assignment_notification',
-                    context=email_context
-                )
+            # Send email (simplified policy for now): always email assignees
+            email_context = {
+                'task': task_instance,
+                'recipient': user,
+                'role': role,
+                'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks?task_id={task_instance.id}",
+            }
+            EmailNotificationService.send_email_notification(
+                recipients=[user],
+                subject=f"Task {action.title()}: {task_instance.template_name}",
+                template_name='task_assignment',
+                context=email_context
+            )
         except Exception as e:
             logger.warning(f"Failed to send email notification to {user.username}: {str(e)}")
         
@@ -151,7 +144,7 @@ class TaskNotificationService:
                 execution_end_date__gte=date.today()
             )
         
-        # Send overdue notifications
+        # Send overdue notifications (CC admins as per policy)
         for task in overdue_tasks:
             assignees = task.get_assignees()
             if assignees:
@@ -182,8 +175,46 @@ class TaskNotificationService:
                     )
                     
                     result['overdue_sent'] += 1
+
+                # CC admins and send overdue email copies
+                try:
+                    admin_users = User.objects.filter(is_staff=True, is_active=True)
+                    admin_title = f"Overdue Task (CC): {task.template_name}"
+                    admin_message = (
+                        f"Task '{task.template_name}' for period {task.scheduled_period} is overdue "
+                        f"(due {task.execution_end_date}, {days_overdue} days ago). Assignees: "
+                        f"{', '.join([u.get_full_name() or u.username for u in assignees])}."
+                    )
+                    for admin in admin_users:
+                        NotificationService.create_notification(
+                            recipient=admin,
+                            title=admin_title,
+                            message=admin_message,
+                            notification_type='warning',
+                            priority='medium',
+                            related_object=task,
+                            action_url=f'/schedule/admin-task-dashboard/?task_id={task.id}',
+                            metadata={'cc': 'admin', 'task_id': task.id}
+                        )
+                        # Email CC
+                        try:
+                            EmailNotificationService.send_email_notification(
+                                recipients=[admin],
+                                subject=f"OVERDUE: {task.template_name}",
+                                template_name='task_overdue',
+                                context={
+                                    'task': task,
+                                    'recipient': admin,
+                                    'cc_admin': True,
+                                    'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/admin-task-dashboard?task_id={task.id}"
+                                }
+                            )
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.warning(f"Failed to CC admins for overdue task {task.id}: {e}")
         
-        # Send upcoming deadline notifications
+        # Send upcoming deadline notifications (business rule: only weekdays 11am ET enforced by caller)
         for task in upcoming_tasks:
             assignees = task.get_assignees()
             if assignees:
@@ -218,6 +249,24 @@ class TaskNotificationService:
                     )
                     
                     result['upcoming_sent'] += 1
+
+                # Email reminder at 11am ET is enforced by scheduler; send email now
+                try:
+                    from notifications.email_service import EmailNotificationService
+                    for user in assignees:
+                        EmailNotificationService.send_email_notification(
+                            recipients=[user],
+                            subject=f"Task Reminder: {task.template_name}",
+                            template_name='task_reminder',
+                            context={
+                                'task': task,
+                                'recipient': user,
+                                'days_remaining': days_remaining,
+                                'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks?task_id={task.id}"
+                            }
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to send reminder emails for task {task.id}: {e}")
         
         logger.info(
             f"Sent deadline notifications: {result['overdue_sent']} overdue, "

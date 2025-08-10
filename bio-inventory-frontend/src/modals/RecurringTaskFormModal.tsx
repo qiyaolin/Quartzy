@@ -79,7 +79,7 @@ const RecurringTaskFormModal: React.FC<RecurringTaskFormModalProps> = ({
       
       try {
         // Fetch users from the backend API
-        const response = await fetch(buildApiUrl('schedule/users/'), {
+        const response = await fetch(buildApiUrl('/api/users/active/'), {
           headers: {
             'Authorization': `Token ${token}`,
             'Content-Type': 'application/json'

@@ -1,0 +1,23 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}One-time Task Claimed{% endblock %}
+
+{% block header_title %}Task Claimed{% endblock %}
+
+{% block content %}
+<h2>Task Claimed: {{ task.name }}</h2>
+
+<p>Hello {{ creator_name }},</p>
+
+<p>Your one-time task <strong>{{ task.name }}</strong> has been claimed by <strong>{{ claimer_name }}</strong>.</p>
+
+{% if view_url %}
+<a href="{{ view_url }}" class="button">View Task</a>
+{% endif %}
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}
+
+
+

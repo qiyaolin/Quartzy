@@ -1,0 +1,36 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Overdue Task{% endblock %}
+
+{% block header_title %}Overdue Task{% endblock %}
+
+{% block content %}
+<h2>Overdue: {{ task.template_name|default:task.name }}</h2>
+
+<p>Hello {{ recipient.first_name|default:recipient.username }},</p>
+
+<p>The task <strong>{{ task.template_name|default:task.name }}</strong> is now overdue.</p>
+
+<div class="highlight">
+  <h3>Window Ended</h3>
+  <p>
+    {% if task.execution_end_date %}
+      Ended on {{ task.execution_end_date }}
+    {% endif %}
+  </p>
+</div>
+
+{% if cc_admin %}
+<p>This notice has been copied to administrators.</p>
+{% endif %}
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">Review Task</a>
+{% endif %}
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}
+
+
+

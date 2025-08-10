@@ -13,6 +13,8 @@ export interface GroupMeeting {
     meeting_type: 'lab_meeting' | 'journal_club';
     topic: string;
     presenter_ids: number[];
+    // Main presenter for display and operations (first presenter by default)
+    presenter?: Presenter;
     presenters: Presenter[];
     materials_url?: string;
     materials_file?: string;
@@ -24,7 +26,10 @@ export interface GroupMeeting {
 }
 
 export interface Presenter {
+    // User ID
     id: number;
+    // Backend Presenter model record ID for swap/postpone operations
+    presenter_record_id?: number;
     username: string;
     first_name: string;
     last_name: string;
@@ -76,6 +81,16 @@ export interface RecurringTask {
     next_due_date?: string;
     created_at?: string;
     updated_at?: string;
+}
+
+export interface OneTimeTask {
+    id: number;
+    template_name: string;
+    execution_start_date: string;
+    execution_end_date: string; // deadline
+    status: 'scheduled' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
+    current_assignees: number[];
+    assignment_metadata?: any;
 }
 
 export interface User {
@@ -320,6 +335,32 @@ export const groupMeetingApi = {
         
         const data = await response.json();
         return data.results || data;
+    },
+
+    // One-time tasks
+    getOneTimeTasks: async (token: string): Promise<OneTimeTask[]> => {
+        const response = await fetch(buildApiUrl('/api/one-time-tasks/'), {
+            headers: { 'Authorization': `Token ${token}` }
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to fetch one-time tasks: ${response.statusText}`);
+        }
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+    },
+    claimOneTimeTask: async (token: string, taskId: number): Promise<OneTimeTask> => {
+        const response = await fetch(buildApiUrl(`/api/one-time-tasks/${taskId}/claim/`), {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to claim task: ${response.statusText}`);
+        }
+        return response.json();
     },
 
     // Presenter Selection Logic

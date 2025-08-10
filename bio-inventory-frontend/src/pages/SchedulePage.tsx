@@ -11,6 +11,7 @@ import {
     ScheduleFormData, scheduleHelpers 
 } from '../services/scheduleApi.ts';
 import { groupMeetingApi } from '../services/groupMeetingApi.ts';
+import { buildApiUrl } from '../config/api.ts';
 import ScheduleFormModal from '../modals/ScheduleFormModal.tsx';
 import GroupMeetingFormModal from '../modals/GroupMeetingFormModal.tsx';
 import RecurringTaskFormModal from '../modals/RecurringTaskFormModal.tsx';
@@ -23,7 +24,7 @@ import EquipmentManagement from '../components/EquipmentManagement.tsx';
 import GroupMeetingsManager from '../components/GroupMeetingsManager.tsx';
 import JournalClubHub from '../components/JournalClubHub.tsx';
 import PresenterManagement from '../components/PresenterManagement.tsx';
-import RecurringTaskManager from '../components/RecurringTaskManager.tsx';
+import ImprovedTaskManager from '../components/ImprovedTaskManager.tsx';
 import MeetingEditModal from '../modals/MeetingEditModal.tsx';
 import UnifiedScheduleDashboard from '../components/UnifiedScheduleDashboard.tsx';
 import QuickActions from '../components/QuickActions.tsx';
@@ -206,13 +207,77 @@ const SchedulePage: React.FC = () => {
         }
     }, [token, fetchSchedules, fetchEquipment]);
 
+    // Lightweight approval modals state
+    const [pendingTaskSwapId, setPendingTaskSwapId] = useState<number | null>(null);
+    const [pendingTaskSwap, setPendingTaskSwap] = useState<any>(null);
+    const [taskSwapLoading, setTaskSwapLoading] = useState(false);
+    const [taskSwapReason, setTaskSwapReason] = useState('');
+
+    const [pendingMeetingSwapId, setPendingMeetingSwapId] = useState<number | null>(null);
+    const [pendingMeetingSwap, setPendingMeetingSwap] = useState<any>(null);
+    const [meetingSwapLoading, setMeetingSwapLoading] = useState(false);
+    const [meetingSwapReason, setMeetingSwapReason] = useState('');
+
+    // Fetch details when a swap modal opens
+    useEffect(() => {
+        const run = async () => {
+            if (!token) return;
+            if (pendingTaskSwapId !== null) {
+                setTaskSwapLoading(true);
+                try {
+                    const res = await fetch(buildApiUrl(`api/schedule/task-swap-requests/${pendingTaskSwapId}/`), {
+                        headers: { 'Authorization': `Token ${token}` }
+                    });
+                    if (res.ok) setPendingTaskSwap(await res.json());
+                } finally {
+                    setTaskSwapLoading(false);
+                }
+            }
+        };
+        run();
+    }, [pendingTaskSwapId, token]);
+
+    useEffect(() => {
+        const run = async () => {
+            if (!token) return;
+            if (pendingMeetingSwapId !== null) {
+                setMeetingSwapLoading(true);
+                try {
+                    const res = await fetch(buildApiUrl(`api/schedule/swap-requests/${pendingMeetingSwapId}/`), {
+                        headers: { 'Authorization': `Token ${token}` }
+                    });
+                    if (res.ok) setPendingMeetingSwap(await res.json());
+                } finally {
+                    setMeetingSwapLoading(false);
+                }
+            }
+        };
+        run();
+    }, [pendingMeetingSwapId, token]);
+
     const handleNavigateToAction = useCallback((actionUrl: string) => {
-        const match = actionUrl.match(/\/schedule\/meetings\/(\d+)\/paper-submission\//);
-        if (match) {
-            setJournalClubMeetingId(match[1]);
+        // 1) Journal Club 提交
+        const jc = actionUrl.match(/\/schedule\/meetings\/(\d+)\/paper-submission\//);
+        if (jc) {
+            setJournalClubMeetingId(jc[1]);
             setIsJournalClubHubOpen(true);
             return;
         }
+        // 2) 任务交换审批（管理员）
+        const taskSwap = actionUrl.match(/\/schedule\/task-swap-requests\/(\d+)\/?$/);
+        if (taskSwap) {
+            setActiveTab('tasks');
+            setPendingTaskSwapId(Number(taskSwap[1]));
+            return;
+        }
+        // 3) 组会顺序交换审批（目标用户）
+        const meetingSwap = actionUrl.match(/\/schedule\/swap-requests\/(\d+)\/?$/);
+        if (meetingSwap) {
+            setActiveTab('meetings');
+            setPendingMeetingSwapId(Number(meetingSwap[1]));
+            return;
+        }
+        // 默认：回到会议页
         setActiveTab('meetings');
     }, []);
 
@@ -839,15 +904,32 @@ const SchedulePage: React.FC = () => {
                                 console.log('Quick book equipment:', equipmentId);
                                 fetchAllData();
                             }}
-                            onCompleteTask={(taskId) => {
-                                console.log('Complete task:', taskId);
-                                fetchAllData();
-                                setLastAction({
-                                    type: 'Task Completed',
-                                    message: 'Task marked as complete',
-                                    timestamp: Date.now()
-                                });
-                                setTimeout(() => setLastAction(null), 3000);
+                            onCompleteTask={async (taskId) => {
+                                try {
+                                    // 后端任务完成接口
+                                    const res = await fetch(buildApiUrl(`api/schedule/periodic-tasks/${taskId}/complete/`), {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Token ${token}`,
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({})
+                                    });
+                                    if (!res.ok) {
+                                        const err = await res.json().catch(() => ({}));
+                                        throw new Error(err.error || err.detail || res.statusText);
+                                    }
+                                    await fetchAllData();
+                                    setLastAction({
+                                        type: 'Task Completed',
+                                        message: 'Task marked as complete',
+                                        timestamp: Date.now()
+                                    });
+                                    setTimeout(() => setLastAction(null), 3000);
+                                } catch (e) {
+                                    console.error('Complete task failed:', e);
+                                    alert(e instanceof Error ? e.message : 'Failed to complete task');
+                                }
                             }}
                             onNavigateToAction={handleNavigateToAction}
                             onRefresh={fetchAllData}
@@ -913,14 +995,31 @@ const SchedulePage: React.FC = () => {
                                 });
                                 setTimeout(() => setLastAction(null), 2000);
                             }}
-                            onRequestTaskSwap={(taskId) => {
-                                console.log('Request task swap:', taskId);
-                                setLastAction({
-                                    type: 'Task Swap',
-                                    message: 'Swap request initiated',
-                                    timestamp: Date.now()
-                                });
-                                setTimeout(() => setLastAction(null), 2000);
+                            onRequestTaskSwap={async (taskId) => {
+                                try {
+                                    // 简易：发起“转移到公共池”请求，管理员可后续审批
+                                    const res = await fetch(buildApiUrl('api/schedule/task-swap-requests/create_swap/'), {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Token ${token}`,
+                                            'Content-Type': 'application/json'
+                                        },
+                                        body: JSON.stringify({ task_id: taskId, is_public: true, reason: 'Request swap via dashboard' })
+                                    });
+                                    if (!res.ok) {
+                                        const err = await res.json().catch(() => ({}));
+                                        throw new Error(err.error || err.detail || res.statusText);
+                                    }
+                                    setLastAction({
+                                        type: 'Task Swap',
+                                        message: 'Swap request submitted',
+                                        timestamp: Date.now()
+                                    });
+                                    setTimeout(() => setLastAction(null), 2000);
+                                } catch (e) {
+                                    console.error('Swap request failed:', e);
+                                    alert(e instanceof Error ? e.message : 'Failed to submit swap request');
+                                }
                             }}
                             onCancelBooking={handleCancelBooking}
                             onBookNewEquipment={() => {
@@ -1061,10 +1160,7 @@ const SchedulePage: React.FC = () => {
                 )}
 
                 {activeTab === 'tasks' && (
-                    <RecurringTaskManager 
-                        onCreateTask={() => setIsRecurringTaskModalOpen(true)}
-                        isAdmin={isAdmin}
-                    />
+                    <ImprovedTaskManager />
                 )}
 
                 {activeTab === 'my-schedule' && (
@@ -1077,6 +1173,164 @@ const SchedulePage: React.FC = () => {
             </div>
 
             {/* Modals */}
+            {/* Task Swap Approval Modal (Admin) */}
+            {pendingTaskSwapId !== null && (
+                <div className="modal-backdrop" role="dialog" aria-modal="true">
+                    <div className="modal-panel">
+                        <div className="card-header flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">Approve Task Swap Request</h3>
+                            <button className="btn btn-ghost btn-xs" onClick={() => { setPendingTaskSwapId(null); setPendingTaskSwap(null); setTaskSwapReason(''); }}>✕</button>
+                        </div>
+                        <div className="card-body space-y-3">
+                            {taskSwapLoading ? (
+                                <div className="flex items-center justify-center h-24"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div></div>
+                            ) : pendingTaskSwap ? (
+                                <>
+                                    <div className="text-sm text-gray-700">
+                                        <div><span className="font-medium">Task:</span> {pendingTaskSwap?.task_instance?.template_name} ({pendingTaskSwap?.task_instance?.scheduled_period})</div>
+                                        <div><span className="font-medium">From:</span> {pendingTaskSwap?.from_user?.username}</div>
+                                        {pendingTaskSwap?.to_user && <div><span className="font-medium">To:</span> {pendingTaskSwap?.to_user?.username}</div>}
+                                        <div><span className="font-medium">Reason:</span> {pendingTaskSwap?.reason || '-'}</div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-600 mb-1">Optional admin notes</label>
+                                        <textarea value={taskSwapReason} onChange={e => setTaskSwapReason(e.target.value)} className="w-full border rounded p-2 text-sm" rows={3} />
+                                    </div>
+                                    <div className="flex gap-2 justify-end">
+                                        <button
+                                            disabled={taskSwapLoading}
+                                            className="btn btn-danger btn-sm"
+                                            onClick={async () => {
+                                                try {
+                                                    setTaskSwapLoading(true);
+                                                    const res = await fetch(buildApiUrl(`api/schedule/task-swap-requests/${pendingTaskSwapId}/reject/`), {
+                                                        method: 'POST',
+                                                        headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ reason: taskSwapReason || 'Rejected by admin' })
+                                                    });
+                                                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Reject failed');
+                                                    setPendingTaskSwapId(null); setPendingTaskSwap(null); setTaskSwapReason('');
+                                                    await fetchAllData();
+                                                    setLastAction({ type: 'Task Swap', message: 'Request rejected', timestamp: Date.now() });
+                                                    setTimeout(() => setLastAction(null), 2000);
+                                                } catch (e) {
+                                                    alert(e instanceof Error ? e.message : 'Reject failed');
+                                                } finally {
+                                                    setTaskSwapLoading(false);
+                                                }
+                                            }}
+                                        >Reject</button>
+                                        <button
+                                            disabled={taskSwapLoading}
+                                            className="btn btn-success btn-sm"
+                                            onClick={async () => {
+                                                try {
+                                                    setTaskSwapLoading(true);
+                                                    // Admin approval endpoint
+                                                    const res = await fetch(buildApiUrl(`api/schedule/task-swap-requests/${pendingTaskSwapId}/approve_by_admin/`), {
+                                                        method: 'POST',
+                                                        headers: { 'Authorization': `Token ${token}` }
+                                                    });
+                                                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Approve failed');
+                                                    setPendingTaskSwapId(null); setPendingTaskSwap(null); setTaskSwapReason('');
+                                                    await fetchAllData();
+                                                    setLastAction({ type: 'Task Swap', message: 'Request approved', timestamp: Date.now() });
+                                                    setTimeout(() => setLastAction(null), 2000);
+                                                } catch (e) {
+                                                    alert(e instanceof Error ? e.message : 'Approve failed');
+                                                } finally {
+                                                    setTaskSwapLoading(false);
+                                                }
+                                            }}
+                                        >Approve</button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-sm text-gray-600">Request not found.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Meeting Swap Approval Modal (Target user) */}
+            {pendingMeetingSwapId !== null && (
+                <div className="modal-backdrop" role="dialog" aria-modal="true">
+                    <div className="modal-panel">
+                        <div className="card-header flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">Respond to Meeting Swap</h3>
+                            <button className="btn btn-ghost btn-xs" onClick={() => { setPendingMeetingSwapId(null); setPendingMeetingSwap(null); setMeetingSwapReason(''); }}>✕</button>
+                        </div>
+                        <div className="card-body space-y-3">
+                            {meetingSwapLoading ? (
+                                <div className="flex items-center justify-center h-24"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div></div>
+                            ) : pendingMeetingSwap ? (
+                                <>
+                                    <div className="text-sm text-gray-700">
+                                        <div><span className="font-medium">Type:</span> {pendingMeetingSwap?.request_type}</div>
+                                        <div><span className="font-medium">Requester:</span> {pendingMeetingSwap?.requester?.username}</div>
+                                        <div><span className="font-medium">Reason:</span> {pendingMeetingSwap?.reason || '-'}</div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm text-gray-600 mb-1">Optional notes</label>
+                                        <textarea value={meetingSwapReason} onChange={e => setMeetingSwapReason(e.target.value)} className="w-full border rounded p-2 text-sm" rows={3} />
+                                    </div>
+                                    <div className="flex gap-2 justify-end">
+                                        <button
+                                            disabled={meetingSwapLoading}
+                                            className="btn btn-danger btn-sm"
+                                            onClick={async () => {
+                                                try {
+                                                    setMeetingSwapLoading(true);
+                                                    const res = await fetch(buildApiUrl(`api/schedule/swap-requests/${pendingMeetingSwapId}/reject/`), {
+                                                        method: 'POST',
+                                                        headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ reason: meetingSwapReason || 'Rejected' })
+                                                    });
+                                                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Reject failed');
+                                                    setPendingMeetingSwapId(null); setPendingMeetingSwap(null); setMeetingSwapReason('');
+                                                    await fetchAllData();
+                                                    setLastAction({ type: 'Meeting Swap', message: 'Request rejected', timestamp: Date.now() });
+                                                    setTimeout(() => setLastAction(null), 2000);
+                                                } catch (e) {
+                                                    alert(e instanceof Error ? e.message : 'Reject failed');
+                                                } finally {
+                                                    setMeetingSwapLoading(false);
+                                                }
+                                            }}
+                                        >Reject</button>
+                                        <button
+                                            disabled={meetingSwapLoading}
+                                            className="btn btn-success btn-sm"
+                                            onClick={async () => {
+                                                try {
+                                                    setMeetingSwapLoading(true);
+                                                    // Target user approval endpoint
+                                                    const res = await fetch(buildApiUrl(`api/schedule/swap-requests/${pendingMeetingSwapId}/approve_by_target/`), {
+                                                        method: 'POST',
+                                                        headers: { 'Authorization': `Token ${token}` }
+                                                    });
+                                                    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Approve failed');
+                                                    setPendingMeetingSwapId(null); setPendingMeetingSwap(null); setMeetingSwapReason('');
+                                                    await fetchAllData();
+                                                    setLastAction({ type: 'Meeting Swap', message: 'Request approved', timestamp: Date.now() });
+                                                    setTimeout(() => setLastAction(null), 2000);
+                                                } catch (e) {
+                                                    alert(e instanceof Error ? e.message : 'Approve failed');
+                                                } finally {
+                                                    setMeetingSwapLoading(false);
+                                                }
+                                            }}
+                                        >Approve</button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-sm text-gray-600">Request not found.</div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             <ScheduleFormModal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
@@ -1144,10 +1398,6 @@ const SchedulePage: React.FC = () => {
                             });
                         console.log('Recurring task created successfully:', newTask);
                         
-                        // Refresh data to show the new task
-                        if (activeTab === 'tasks') {
-                            // The RecurringTaskManager component will automatically refresh its data
-                        }
                     } catch (error) {
                         console.error('Error creating recurring task:', error);
                         throw error;
