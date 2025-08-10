@@ -622,6 +622,24 @@ class RecurringTaskViewSet(viewsets.ModelViewSet):
         
         return queryset
 
+    @action(detail=True, methods=['post'])
+    def assign(self, request, pk=None):
+        """为 RecurringTask 指定参与人员（assignee_group）。
+        请求体: { "user_ids": [1,2,...] }
+        """
+        task = self.get_object()
+        user_ids = request.data.get('user_ids', [])
+        if not isinstance(user_ids, list):
+            return Response({'error': 'user_ids must be a list of integers'}, status=status.HTTP_400_BAD_REQUEST)
+
+        users = User.objects.filter(id__in=user_ids)
+        if users.count() != len(user_ids):
+            return Response({'error': 'One or more user IDs not found'}, status=status.HTTP_400_BAD_REQUEST)
+
+        task.assignee_group.set(users)
+        task.save()
+        return Response(self.get_serializer(task).data, status=status.HTTP_200_OK)
+
 
 class TaskInstanceViewSet(viewsets.ModelViewSet):
     """任务实例管理API"""
@@ -1027,6 +1045,88 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
     serializer_class = PeriodicTaskInstanceSerializer
     permission_classes = [permissions.IsAuthenticated]
     
+    def create(self, request, *args, **kwargs):
+        """Compatibility: accept nested template payload for one-time tasks.
+        Allows POST to /schedule/periodic-tasks/ with body:
+        {
+          "template": { name, description, task_type, category, min_people, max_people, default_people, estimated_hours, priority },
+          "execution_start_date": "YYYY-MM-DD",
+          "execution_end_date": "YYYY-MM-DD",
+          "current_assignees": [userId,...],
+          "status": "pending" | ...
+        }
+        """
+        data = request.data or {}
+        template_payload = data.get('template')
+        if isinstance(template_payload, dict):
+            from datetime import datetime
+            from django.utils import timezone as dj_timezone
+            name = template_payload.get('name') or 'One-time Task'
+            description = template_payload.get('description', '')
+            task_type = template_payload.get('task_type', 'one_time')
+            category = template_payload.get('category', 'custom')
+            min_people = int(template_payload.get('min_people', 1) or 1)
+            max_people = int(template_payload.get('max_people', max(1, min_people)) or max(1, min_people))
+            default_people = int(template_payload.get('default_people', min_people) or min_people)
+            estimated_hours = template_payload.get('estimated_hours')
+            priority = template_payload.get('priority', 'medium')
+
+            # Parse dates
+            start_date_str = data.get('execution_start_date') or data.get('start_date')
+            end_date_str = data.get('execution_end_date') or data.get('end_date') or start_date_str
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else dj_timezone.now().date()
+            except Exception:
+                start_date = dj_timezone.now().date()
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else start_date
+            except Exception:
+                end_date = start_date
+
+            # Create minimal template compatible with serializer constraints
+            template = TaskTemplate.objects.create(
+                name=name,
+                description=description,
+                task_type='one_time' if task_type != 'recurring' else 'one_time',
+                category=category,
+                frequency=None,
+                interval=1,
+                start_date=start_date,
+                end_date=end_date,
+                min_people=min_people,
+                max_people=max_people,
+                default_people=default_people,
+                estimated_hours=estimated_hours,
+                window_type='fixed',
+                fixed_start_day=start_date.day,
+                fixed_end_day=end_date.day,
+                priority=priority,
+                is_active=True,
+                created_by=request.user,
+            )
+
+            # Build assignees
+            assignees = data.get('current_assignees') or []
+            if not isinstance(assignees, list):
+                assignees = []
+
+            # Create task instance
+            task = PeriodicTaskInstance.objects.create(
+                template=template,
+                template_name=template.name,
+                scheduled_period=f"{start_date.strftime('%Y-%m')}",
+                execution_start_date=start_date,
+                execution_end_date=end_date,
+                status=data.get('status', 'scheduled'),
+                original_assignees=list(assignees),
+                current_assignees=list(assignees),
+                assignment_metadata={'created_via': 'legacy_compat'}
+            )
+            return Response(self.get_serializer(task).data, status=status.HTTP_201_CREATED)
+
+        # Default behavior
+        return super().create(request, *args, **kwargs)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.sync_service = None
@@ -3516,7 +3616,7 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'equipment_bookings': equipment_bookings,
                 'pending_actions': pending_actions,
                 'stats': stats,
-                'last_updated': timezone.now()
+                'last_updated': timezone.now().isoformat()
             })
 
         except Exception as e:
@@ -3739,9 +3839,10 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
             status__in=['swapped', 'postponed']
         ).count()
 
-        # Use icontains for SQLite compatibility instead of contains for JSON field
+        # Count completed tasks for the current user
+        # Use JSON list containment which works on Postgres and modern SQLite backends
         tasks_completed = PeriodicTaskInstance.objects.filter(
-            current_assignees__icontains=f'"{user.id}"',
+            current_assignees__contains=[user.id],
             status='completed',
             completed_at__year=this_year
         ).count()

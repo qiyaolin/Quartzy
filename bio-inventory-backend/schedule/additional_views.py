@@ -752,6 +752,159 @@ class SendNotificationView(APIView):
             )
 
 
+class OneTimeTasksView(APIView):
+    """一次性任务：创建/列表"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """列出开放的一次性任务（未被领取或进行中）"""
+        from .models import PeriodicTaskInstance, TaskTemplate
+        tasks = PeriodicTaskInstance.objects.filter(
+            template__task_type='one_time'
+        ).exclude(status='completed').order_by('-created_at')[:100]
+        return Response(PeriodicTaskInstanceSerializer(tasks, many=True, context={'request': request}).data)
+
+    def post(self, request):
+        """创建一次性任务（全员可领取）。
+        body: { name, description, deadline (YYYY-MM-DD), remind_reoffer (bool, 可选) }
+        """
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        from .models import TaskTemplate, PeriodicTaskInstance
+        name = request.data.get('name')
+        description = request.data.get('description', '')
+        deadline = request.data.get('deadline')  # YYYY-MM-DD
+        remind_reoffer = bool(request.data.get('remind_reoffer', False))
+
+        if not name:
+            return Response({'error': 'name is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from django.utils.dateparse import parse_date
+        end_date = parse_date(deadline) if deadline else timezone.now().date()
+        start_date = timezone.now().date()
+
+        # 创建 one-time 模板（或复用同名非激活模板）
+        template, _ = TaskTemplate.objects.get_or_create(
+            name=name,
+            defaults={
+                'description': description,
+                'task_type': 'one_time',
+                'category': 'custom',
+                'start_date': start_date,
+                'end_date': end_date,
+                'min_people': 1,
+                'max_people': 1,
+                'default_people': 1,
+                'window_type': 'fixed',
+                'fixed_start_day': start_date.day,
+                'fixed_end_day': end_date.day,
+                'priority': 'medium',
+                'is_active': True,
+                'created_by': request.user,
+            }
+        )
+
+        # 创建任务实例，未分配，状态 scheduled
+        task = PeriodicTaskInstance.objects.create(
+            template=template,
+            template_name=template.name,
+            scheduled_period=f"{start_date.strftime('%Y-%m')}",
+            execution_start_date=start_date,
+            execution_end_date=end_date,
+            status='scheduled',
+            original_assignees=[],
+            current_assignees=[],
+            assignment_metadata={'one_time': True, 'remind_reoffer': remind_reoffer, 'created_by': request.user.id}
+        )
+
+        # 群发邮件到全员
+        try:
+            from django.contrib.auth.models import User
+            recipients = list(User.objects.filter(is_active=True))
+            from notifications.email_service import EmailNotificationService
+            EmailNotificationService.send_email_notification(
+                recipients=recipients,
+                subject=f"One-time Task: {template.name}",
+                template_name='one_time_task_created',
+                context={
+                    'task': {'name': template.name, 'description': template.description, 'deadline': str(end_date)},
+                    'claim_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks/{task.id}/claim"
+                }
+            )
+        except Exception:
+            pass
+
+        return Response(PeriodicTaskInstanceSerializer(task, context={'request': request}).data, status=status.HTTP_201_CREATED)
+
+
+class OneTimeTaskActionView(APIView):
+    """一次性任务领取/完成"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, task_id, action):
+        from django.db import transaction
+        from .models import PeriodicTaskInstance
+        try:
+            task = PeriodicTaskInstance.objects.select_for_update().get(id=task_id)
+        except PeriodicTaskInstance.DoesNotExist:
+            return Response({'error': 'Task not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        with transaction.atomic():
+            task = PeriodicTaskInstance.objects.select_for_update().get(id=task_id)
+            if action == 'claim':
+                if task.current_assignees:
+                    return Response({'error': 'Task already claimed'}, status=status.HTTP_409_CONFLICT)
+                task.current_assignees = [request.user.id]
+                task.original_assignees = [request.user.id]
+                task.status = 'in_progress'
+                meta = task.assignment_metadata or {}
+                meta['claimed_at'] = timezone.now().isoformat()
+                meta['claimed_by'] = request.user.id
+                task.assignment_metadata = meta
+                task.save()
+
+                # 通知创建者（模板创建人）
+                try:
+                    creator = task.template.created_by
+                    from notifications.email_service import EmailNotificationService
+                    EmailNotificationService.send_email_notification(
+                        recipients=[creator],
+                        subject=f"Task Claimed: {task.template_name}",
+                        template_name='one_time_task_claimed',
+                        context={
+                            'task': {'name': task.template_name},
+                            'creator_name': creator.get_full_name() or creator.username,
+                            'claimer_name': request.user.get_full_name() or request.user.username,
+                            'view_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks"
+                        }
+                    )
+                except Exception:
+                    pass
+
+                return Response(PeriodicTaskInstanceSerializer(task, context={'request': request}).data)
+
+            elif action == 'complete':
+                if request.user.id not in task.current_assignees:
+                    return Response({'error': 'You are not the assignee'}, status=status.HTTP_403_FORBIDDEN)
+                if task.status not in ['scheduled', 'pending', 'in_progress']:
+                    return Response({'error': 'Task not in completable state'}, status=status.HTTP_400_BAD_REQUEST)
+
+                # 仅备注/照片为可选，评分不需要
+                serializer = TaskCompletionSerializer(data=request.data)
+                if not serializer.is_valid():
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                data = serializer.validated_data
+                # 强制移除评分
+                data.pop('completion_rating', None)
+
+                task.mark_completed(request.user, **data)
+                return Response(PeriodicTaskInstanceSerializer(task, context={'request': request}).data)
+
+            else:
+                return Response({'error': 'Unsupported action'}, status=status.HTTP_400_BAD_REQUEST)
+
+
 class NotificationHistoryView(APIView):
     """Notification history"""
     permission_classes = [permissions.IsAuthenticated]
