@@ -20,4 +20,9 @@ class Migration(migrations.Migration):
             model_name='equipment',
             name='qr_code',
         ),
+        # Remove QR-related fields from EquipmentUsageLog model
+        migrations.RemoveField(
+            model_name='equipmentusagelog',
+            name='qr_scan_method',
+        ),
     ]

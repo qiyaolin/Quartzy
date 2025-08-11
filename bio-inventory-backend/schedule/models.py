@@ -374,6 +374,16 @@ class EquipmentUsageLog(models.Model):
     )
     
     # Method and notes
+    qr_scan_method = models.CharField(
+        max_length=20,
+        choices=[
+            ('mobile_camera', 'Mobile Camera'),
+            ('desktop_webcam', 'Desktop Webcam'),
+            ('manual_entry', 'Manual Entry'),
+        ],
+        default='manual_entry',
+        help_text="Method used to scan QR code (legacy field)"
+    )
     notes = models.TextField(
         blank=True,
         null=True,
