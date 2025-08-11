@@ -1874,17 +1874,25 @@ class EquipmentCheckinView(APIView):
                 {'error': 'Equipment not found'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
-        
-        # Check if equipment is available for booking
-        if equipment.is_in_use:
-            return Response({
-                'error': f'Equipment is currently in use by {equipment.current_user.username}',
-                'current_user': equipment.current_user.username,
-                'check_in_time': equipment.current_checkin_time,
-                'duration': str(equipment.current_usage_duration)
-            }, status=status.HTTP_409_CONFLICT)
+        except Exception as e:
+            logger.error(f"Error getting equipment {equipment_id}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            return Response(
+                {'error': f'Database error: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         try:
+            # Check if equipment is available for booking
+            if equipment.is_in_use:
+                return Response({
+                    'error': f'Equipment is currently in use by {equipment.current_user.username}',
+                    'current_user': equipment.current_user.username,
+                    'check_in_time': equipment.current_checkin_time,
+                    'duration': str(equipment.current_usage_duration)
+                }, status=status.HTTP_409_CONFLICT)
+            
             # Check in user and update booking
             equipment.check_in_user(request.user)
             
@@ -1895,14 +1903,50 @@ class EquipmentCheckinView(APIView):
                 status='in_progress'
             ).first()
             
+            # Create a safe response without complex serializers first
+            try:
+                equipment_data = EquipmentSerializer(equipment).data
+            except Exception as ser_e:
+                logger.error(f"EquipmentSerializer error: {ser_e}")
+                equipment_data = {
+                    'id': equipment.id,
+                    'name': equipment.name,
+                    'is_in_use': equipment.is_in_use,
+                    'current_user': equipment.current_user.username if equipment.current_user else None
+                }
+            
+            try:
+                booking_data = BookingSerializer(current_booking).data if current_booking else None
+            except Exception as ser_e:
+                logger.error(f"BookingSerializer error: {ser_e}")
+                booking_data = {
+                    'id': current_booking.id if current_booking else None,
+                    'status': current_booking.status if current_booking else None
+                } if current_booking else None
+
             return Response({
                 'message': 'Successfully checked in',
-                'equipment': EquipmentSerializer(equipment).data,
+                'equipment': equipment_data,
                 'check_in_time': equipment.current_checkin_time,
-                'booking': BookingSerializer(current_booking).data if current_booking else None
+                'booking': booking_data
             })
+            
         except ValueError as e:
+            logger.error(f"ValueError in equipment checkin: {e}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            # Catch all other exceptions with detailed logging
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Unexpected error in equipment checkin for equipment {equipment_id}, user {request.user.id}: {e}")
+            logger.error(f"Full traceback: {error_details}")
+            print(f"Equipment checkin error: {e}")
+            print(f"Full traceback: {error_details}")
+            
+            return Response(
+                {'error': f'Internal server error: {str(e)}', 'debug_info': error_details if settings.DEBUG else None},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class EquipmentCheckoutView(APIView):
