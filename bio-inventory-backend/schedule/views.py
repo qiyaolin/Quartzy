@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import Q
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.conf import settings
@@ -1729,7 +1729,11 @@ class QRCodeScanView(APIView):
         action = request.data.get('action', 'checkin')  # checkin or checkout
         
         try:
-            equipment = Equipment.objects.get(qr_code=qr_code, requires_qr_checkin=True)
+            # Since QR functionality was removed, this endpoint should return an error
+            return Response(
+                {'error': 'QR code functionality has been removed'}, 
+                status=status.HTTP_410_GONE
+            )
         except Equipment.DoesNotExist:
             return Response(
                 {'error': 'Equipment not found or QR check-in not enabled'}, 
@@ -2975,22 +2979,46 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
 
         try:
             # Today's events
-            today_events = self._get_today_events(user, today)
+            try:
+                today_events = self._get_today_events(user, today)
+            except Exception as e:
+                logger.error(f"Error in _get_today_events: {e}")
+                today_events = []
 
             # Upcoming meetings
-            upcoming_meetings = self._get_upcoming_meetings(user, today, next_week)
+            try:
+                upcoming_meetings = self._get_upcoming_meetings(user, today, next_week)
+            except Exception as e:
+                logger.error(f"Error in _get_upcoming_meetings: {e}")
+                upcoming_meetings = []
 
             # My tasks
-            my_tasks = self._get_my_tasks(user)
+            try:
+                my_tasks = self._get_my_tasks(user)
+            except Exception as e:
+                logger.error(f"Error in _get_my_tasks: {e}")
+                my_tasks = []
 
             # Equipment bookings
-            equipment_bookings = self._get_equipment_bookings(user, today, next_week)
+            try:
+                equipment_bookings = self._get_equipment_bookings(user, today, next_week)
+            except Exception as e:
+                logger.error(f"Error in _get_equipment_bookings: {e}")
+                equipment_bookings = []
 
             # Pending actions requiring user attention
-            pending_actions = self._get_pending_actions(user)
+            try:
+                pending_actions = self._get_pending_actions(user)
+            except Exception as e:
+                logger.error(f"Error in _get_pending_actions: {e}")
+                pending_actions = []
 
             # Quick stats
-            stats = self._get_user_stats(user)
+            try:
+                stats = self._get_user_stats(user)
+            except Exception as e:
+                logger.error(f"Error in _get_user_stats: {e}")
+                stats = {}
 
             return Response({
                 'today_events': today_events,
@@ -3003,10 +3031,16 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
             })
 
         except Exception as e:
-            # A simple log for production debugging
+            # Enhanced logging for production debugging
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Error in UnifiedDashboardViewSet.overview for user {user.id}: {e}")
+            logger.error(f"Full traceback: {error_details}")
             print(f"Error in UnifiedDashboardViewSet.overview for user {user.id}: {e}")
+            print(f"Full traceback: {error_details}")
+            
             return Response(
-                {'error': f'Failed to load dashboard: {str(e)}'},
+                {'error': f'Failed to load dashboard: {str(e)}', 'debug_info': error_details if settings.DEBUG else None},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -3141,7 +3175,6 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 'start_time': booking.event.start_time,
                 'end_time': booking.event.end_time,
                 'status': booking.status,
-                'requires_qr_checkin': booking.equipment.requires_qr_checkin,
                 'is_today': booking.event.start_time.date() == start_date,
                 'time_until': time_until_val
             }
@@ -3329,8 +3362,8 @@ class QuickActionViewSet(viewsets.ViewSet):
             notes=f"Quick booking - {duration_minutes} minutes"
         )
         
-        # Auto check-in if requested and equipment supports QR
-        if auto_checkin and equipment.requires_qr_checkin and not equipment.is_in_use:
+        # Auto check-in if requested (QR functionality removed)
+        if auto_checkin and not equipment.is_in_use:
             try:
                 equipment.check_in_user(request.user)
                 booking.status = 'in_progress'
@@ -3348,7 +3381,7 @@ class QuickActionViewSet(viewsets.ViewSet):
                 'start_time': start_time,
                 'end_time': end_time,
                 'status': booking.status,
-                'auto_checked_in': auto_checkin and equipment.requires_qr_checkin and not equipment.is_in_use
+                'auto_checked_in': auto_checkin and not equipment.is_in_use
             }
         })
     
