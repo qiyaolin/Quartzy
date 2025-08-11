@@ -362,7 +362,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
       <div className="flex">
         {/* Sidebar - Mini Calendar & Quick Info */}
         {showMiniCalendar && (
-          <div className="w-80 border-r border-gray-100 bg-gray-50">
+          <div className="w-72 border-r border-gray-100 bg-gray-50 flex-shrink-0">
             <div className="p-6 space-y-6">
               {/* Mini Calendar */}
               <div className="card p-4">
@@ -446,8 +446,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
           </div>
         )}
 
-        {/* Main Calendar Area */}
-        <div className="flex-1 overflow-y-auto" ref={containerRef}>
+        {/* Main Calendar Area - improved space utilization */}
+        <div className="flex-1 overflow-y-auto min-w-0" ref={containerRef}>
           {/* Month View */}
           {viewMode === 'month' && calendarLayout === 'grid' && (
             <div className="h-full" style={{ height: availableHeight }}>
@@ -612,8 +612,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         });
                         
                         const overlapCount = overlappingEvents.length;
-                        const eventWidth = Math.max(40, 100 - (overlapCount * 15)); // Reduce width for overlapping events
-                        const leftOffset = overlapCount * 12; // Stagger overlapping events
+                        const eventWidth = Math.max(55, 98 - (overlapCount * 10)); // Increased width utilization
+                        const leftOffset = overlapCount * 8; // Reduced stagger for more space
                         
                         return (
                           <div
@@ -622,10 +622,11 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                             style={{
                               top: startPx,
                               height: barHeight,
-                              left: `${2 + leftOffset}px`,
-                              width: `${eventWidth}%`,
+                              left: `${1 + leftOffset}px`, // Reduced left margin
+                              width: `calc(${eventWidth}% - ${leftOffset}px)`,
                               zIndex: 10 + eventIndex,
-                              minWidth: '80px'
+                              minWidth: '100px', // Increased minimum width
+                              maxWidth: 'calc(100% - 2px)'
                             }}
                             onClick={() => {
                               setLocalSelectedEventId(schedule.id);
@@ -633,18 +634,20 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                             }}
                             title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
                           >
-                            <div className="font-medium text-sm truncate">{schedule.title}</div>
-                            <div className="text-xs opacity-90 truncate">
+                            <div className="font-semibold text-sm truncate mb-1 leading-tight">{schedule.title}</div>
+                            <div className="text-xs font-medium opacity-95 truncate mb-1">
                               {formatTime(schedule.start_time)}
                               {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
                             </div>
                             {schedule.location && barHeight > 64 && (
-                              <div className="text-xs opacity-80 truncate mt-1">
-                                📍 {schedule.location}
+                              <div className="text-xs opacity-85 truncate flex items-center gap-1">
+                                📍 <span>{schedule.location}</span>
                               </div>
                             )}
                             {/* Event type indicator */}
-                            <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white bg-opacity-30"></div>
+                            <div className="absolute top-2 right-2 text-xs font-bold bg-white bg-opacity-25 rounded-full w-5 h-5 flex items-center justify-center">
+                              {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
+                            </div>
                           </div>
                         );
                       })}
@@ -702,7 +705,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   
                   const startPosition = startHour * hourHeightDay + (startMinute / 60) * hourHeightDay;
                   const endPosition = endHour * hourHeightDay + (endMinute / 60) * hourHeightDay;
-                  const height = Math.max(endPosition - startPosition, 60);
+                  const height = Math.max(endPosition - startPosition, 80); // Increased minimum height
                   
                   // Calculate overlaps for proper positioning
                   const overlappingEvents = allEvents.filter((otherSchedule, otherIndex) => {
@@ -718,20 +721,21 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   });
                   
                   const overlapCount = overlappingEvents.length;
-                  const eventWidth = Math.max(45, 90 - (overlapCount * 10));
-                  const leftOffset = overlapCount * 8;
+                  const eventWidth = Math.max(65, 95 - (overlapCount * 8)); // Increased base width
+                  const leftOffset = overlapCount * 6; // Reduced offset for more space
                   
                   return (
                     <div
                       key={schedule.id}
-                      className={`absolute rounded-xl p-4 cursor-pointer text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02] modern-calendar-event ${getEventColor(schedule)}`}
+                      className={`absolute rounded-xl p-5 cursor-pointer text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.01] modern-calendar-event ${getEventColor(schedule)}`}
                       style={{
                         top: startPosition,
                         height: height,
-                        left: `${16 + leftOffset}px`,
+                        left: `${12 + leftOffset}px`, // Reduced left margin
                         width: `calc(${eventWidth}% - ${leftOffset}px)`,
                         zIndex: 10 + eventIndex,
-                        minWidth: '200px'
+                        minWidth: '280px', // Increased minimum width
+                        maxWidth: 'calc(100% - 24px)' // Ensure it doesn't overflow
                       }}
                       onClick={() => {
                         setLocalSelectedEventId(schedule.id);
@@ -742,64 +746,64 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       <div className="flex items-start justify-between h-full">
                         <div className="flex-1 min-w-0 flex flex-col">
                           {/* Event type badge */}
-                          <div className="inline-flex items-center gap-1 mb-2">
-                            <span className="text-xs font-medium px-2 py-1 bg-white bg-opacity-20 rounded-full">
+                          <div className="inline-flex items-center gap-2 mb-3">
+                            <span className="text-sm font-semibold px-3 py-1 bg-white bg-opacity-25 rounded-full backdrop-blur-sm">
                               {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase() + scheduleHelpers.getEventType(schedule).slice(1)}
                             </span>
                             {schedule.status !== 'scheduled' && (
-                              <span className="text-xs font-medium px-2 py-1 bg-white bg-opacity-30 rounded-full">
+                              <span className="text-sm font-medium px-3 py-1 bg-white bg-opacity-35 rounded-full backdrop-blur-sm">
                                 {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
                               </span>
                             )}
                           </div>
                           
-                          <div className="font-semibold text-lg truncate mb-1">{schedule.title}</div>
-                          <div className="text-sm opacity-90 mb-2">
-                            🕐 {formatTime(schedule.start_time)}
-                            {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                          <div className="font-bold text-xl mb-3 leading-tight">{schedule.title}</div>
+                          <div className="text-base font-medium opacity-95 mb-3 flex items-center gap-2">
+                            🕐 <span>{formatTime(schedule.start_time)}
+                            {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}</span>
                           </div>
                           
                           {schedule.location && (
-                            <div className="flex items-center gap-1 text-sm opacity-80 mb-2">
-                              <MapPin className="w-3 h-3 flex-shrink-0" />
-                              <span className="truncate">{schedule.location}</span>
+                            <div className="flex items-center gap-2 text-base opacity-90 mb-3">
+                              <MapPin className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate font-medium">{schedule.location}</span>
                             </div>
                           )}
                           
-                          {schedule.description && height > 120 && (
-                            <div className="text-sm opacity-75 line-clamp-3 flex-1 overflow-hidden">
+                          {schedule.description && height > 140 && (
+                            <div className="text-base opacity-85 line-clamp-4 flex-1 overflow-hidden leading-relaxed">
                               {schedule.description}
                             </div>
                           )}
                         </div>
                         
-                        {/* Action buttons */}
-                        <div className="flex flex-col gap-1 ml-3 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-all">
+                        {/* Action buttons - improved visibility */}
+                        <div className="flex flex-col gap-2 ml-4 opacity-80 hover:opacity-100 transition-all">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onEditEvent?.(schedule);
                             }}
-                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-all"
+                            className="p-2.5 hover:bg-white hover:bg-opacity-25 rounded-xl transition-all transform hover:scale-110 bg-white bg-opacity-10"
                             title="Edit event"
                           >
-                            <Edit3 className="w-4 h-4" />
+                            <Edit3 className="w-5 h-5" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onDeleteEvent?.(schedule.id);
                             }}
-                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg text-red-200 hover:text-red-100 transition-all"
+                            className="p-2.5 hover:bg-white hover:bg-opacity-25 rounded-xl text-red-200 hover:text-red-100 transition-all transform hover:scale-110 bg-white bg-opacity-10"
                             title="Delete event"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-5 h-5" />
                           </button>
                         </div>
                       </div>
                       
-                      {/* Event connection line */}
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-white bg-opacity-40 rounded-r"></div>
+                      {/* Event connection line - enhanced */}
+                      <div className="absolute left-0 top-0 bottom-0 w-2 bg-white bg-opacity-50 rounded-r-lg"></div>
                     </div>
                   );
                 })}
@@ -809,7 +813,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
         </div>
 
         {/* Right Detail Panel (visible on large screens) */}
-        <div className="hidden xl:block w-96 border-l border-gray-100 bg-white">
+        <div className="hidden xl:block w-80 border-l border-gray-100 bg-white flex-shrink-0">
           <ScheduleDetailPanel
             schedule={selectedEvent}
             onClose={() => {
