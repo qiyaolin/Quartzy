@@ -77,12 +77,13 @@ class Equipment(models.Model):
         super().save(*args, **kwargs)
     
     def check_in_user(self, user):
-        """Check in a user to this equipment"""
+        """Check in a user to this equipment and update associated booking"""
         if self.is_in_use:
             raise ValueError(f"Equipment {self.name} is already in use by {self.current_user}")
         
+        current_time = timezone.now()
         self.current_user = user
-        self.current_checkin_time = timezone.now()
+        self.current_checkin_time = current_time
         self.is_in_use = True
         self.save()
         
@@ -92,27 +93,60 @@ class Equipment(models.Model):
             user=user,
             check_in_time=self.current_checkin_time
         )
+        
+        # Update associated booking status and start time
+        current_booking = Booking.objects.filter(
+            equipment=self,
+            user=user,
+            event__start_time__lte=current_time,
+            event__end_time__gte=current_time,
+            status__in=['confirmed', 'pending']
+        ).first()
+        
+        if current_booking:
+            current_booking.status = 'in_progress'
+            # Update the actual start time to current time
+            current_booking.event.start_time = current_time
+            current_booking.event.save()
+            current_booking.save()
     
     def check_out_user(self, user=None):
-        """Check out the current user from this equipment"""
+        """Check out the current user from this equipment, update booking, and notify next user"""
         if not self.is_in_use:
             raise ValueError(f"Equipment {self.name} is not currently in use")
         
         if user and self.current_user != user:
             raise ValueError(f"Only {self.current_user} can check out from {self.name}")
         
+        current_time = timezone.now()
+        current_user = self.current_user
+        
         # Update usage log
         usage_log = EquipmentUsageLog.objects.filter(
             equipment=self,
-            user=self.current_user,
+            user=current_user,
             is_active=True
         ).first()
         
         if usage_log:
-            usage_log.check_out_time = timezone.now()
+            usage_log.check_out_time = current_time
             usage_log.usage_duration = usage_log.check_out_time - usage_log.check_in_time
             usage_log.is_active = False
             usage_log.save()
+        
+        # Update associated booking status and end time
+        current_booking = Booking.objects.filter(
+            equipment=self,
+            user=current_user,
+            status='in_progress'
+        ).first()
+        
+        if current_booking:
+            current_booking.status = 'completed'
+            # Update the actual end time to current time
+            current_booking.event.end_time = current_time
+            current_booking.event.save()
+            current_booking.save()
         
         # Clear current usage
         self.current_user = None
@@ -120,7 +154,59 @@ class Equipment(models.Model):
         self.is_in_use = False
         self.save()
         
+        # Check for next booking today and notify user
+        self._notify_next_booking_user(current_time)
+        
         return usage_log
+    
+    def _notify_next_booking_user(self, current_time):
+        """Check for next booking today and send notification email"""
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        # Find next booking for today
+        today_start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = current_time.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        next_booking = Booking.objects.filter(
+            equipment=self,
+            event__start_time__gte=current_time,
+            event__start_time__range=(today_start, today_end),
+            status='confirmed'
+        ).order_by('event__start_time').first()
+        
+        if next_booking and next_booking.user.email:
+            try:
+                # Send notification email
+                subject = f'Equipment Available Early - {self.name}'
+                message = f'''
+Hello {next_booking.user.first_name or next_booking.user.username},
+
+Good news! The equipment "{self.name}" has become available earlier than expected.
+
+Your booking details:
+- Equipment: {self.name}
+- Location: {self.location}
+- Originally scheduled: {next_booking.event.start_time.strftime('%Y-%m-%d %H:%M')}
+- Available now: {current_time.strftime('%Y-%m-%d %H:%M')}
+
+You can now check in to use the equipment if you're ready.
+
+Best regards,
+Lab Equipment Management System
+'''
+                
+                send_mail(
+                    subject,
+                    message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [next_booking.user.email],
+                    fail_silently=True,
+                )
+                
+                print(f"Notification sent to {next_booking.user.email} about early availability of {self.name}")
+            except Exception as e:
+                print(f"Failed to send notification email: {e}")
     
     @property
     def current_usage_duration(self):

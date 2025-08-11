@@ -3,24 +3,15 @@ import {
   Monitor, 
   Plus, 
   Search, 
-  QrCode, 
-  MapPin, 
-  User, 
-  Calendar,
-  Clock,
-  Edit3,
-  BookOpen,
-  Timer,
   X
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
-import { Equipment, equipmentApi, Booking } from "../services/scheduleApi.ts";
+import { Equipment, equipmentApi } from "../services/scheduleApi.ts";
+import EquipmentCard from './EquipmentCard.tsx';
 import { buildApiUrl } from "../config/api.ts";
 import QuickBookModal from './QuickBookModal.tsx';
 
 interface EquipmentManagementProps {
-  onShowQRCode?: (equipment: Equipment) => void;
-  onQRScan?: (mode: 'checkin' | 'checkout') => void;
   onEditEquipment?: (equipment: Equipment) => void;
   isAdmin?: boolean;
 }
@@ -30,12 +21,9 @@ interface EquipmentFormData {
   description: string;
   location: string;
   is_bookable: boolean;
-  requires_qr_checkin: boolean;
 }
 
 const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
-  onShowQRCode,
-  onQRScan,
   onEditEquipment,
   isAdmin = false
 }) => {
@@ -49,8 +37,6 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   const [filterStatus, setFilterStatus] = useState<'all' | 'available' | 'in_use'>('all');
   const [filterLocation, setFilterLocation] = useState('all');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
   // Booking modal state
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedEquipmentForBooking, setSelectedEquipmentForBooking] = useState<Equipment | null>(null);
@@ -61,8 +47,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     name: '',
     description: '',
     location: '',
-    is_bookable: true,
-    requires_qr_checkin: false
+    is_bookable: true
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,65 +62,13 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       setEquipment(data);
     } catch (error) {
       console.error('Error fetching equipment:', error);
-      // Mock data for development
-      setEquipment([
-        {
-          id: 1,
-          name: 'Biological Safety Cabinet A',
-          description: 'Class II Type A2 BSC for cell culture work',
-          location: 'Lab Room 101',
-          is_bookable: true,
-          requires_qr_checkin: true,
-          qr_code: 'BSC-A2-001',
-          is_in_use: false,
-          current_user: null,
-          current_checkin_time: null,
-          current_usage_duration: null
-        },
-        {
-          id: 2,
-          name: 'Microscope - Zeiss',
-          description: 'Confocal microscope for imaging',
-          location: 'Imaging Room',
-          is_bookable: true,
-          requires_qr_checkin: false,
-          qr_code: null,
-          is_in_use: true,
-          current_user: { id: 1, username: 'alice', first_name: 'Alice', last_name: 'Johnson' },
-          current_checkin_time: '2024-01-15T09:30:00Z',
-          current_usage_duration: '2 hours 15 minutes'
-        },
-        {
-          id: 3,
-          name: 'Centrifuge',
-          description: 'High-speed centrifuge for sample preparation',
-          location: 'Lab Room 102',
-          is_bookable: true,
-          requires_qr_checkin: true,
-          qr_code: 'CENT-001',
-          is_in_use: false,
-          current_user: null,
-          current_checkin_time: null,
-          current_usage_duration: null
-        }
-      ]);
+      console.error('Failed to fetch equipment data:', error);
+      setEquipment([]);
     } finally {
       setLoading(false);
     }
   }, [token]);
 
-  // Fetch bookings for selected equipment
-  const fetchBookings = useCallback(async (equipmentId: number) => {
-    if (!token) return;
-    
-    try {
-      const bookingsData = await equipmentApi.getEquipmentBookings(token, equipmentId);
-      setBookings(bookingsData);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
-      setBookings([]); // Set empty array on error
-    }
-  }, [token]);
 
   useEffect(() => {
     fetchEquipment();
@@ -192,8 +125,6 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
           description: formData.description,
           location: formData.location,
           is_bookable: formData.is_bookable,
-          requires_qr_checkin: formData.requires_qr_checkin,
-          qr_code: formData.requires_qr_checkin ? `EQ-${Date.now()}` : undefined,
           is_in_use: false,
           current_user: undefined,
           current_checkin_time: undefined,
@@ -209,8 +140,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
           name: '',
           description: '',
           location: '',
-          is_bookable: true,
-          requires_qr_checkin: false
+          is_bookable: true
         });
         setFormErrors({});
         setShowAddForm(false);
@@ -240,14 +170,6 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   // Get unique locations for filter
   const locations = Array.from(new Set(equipment.map(eq => eq.location).filter(Boolean)));
 
-  const handleEquipmentSelect = (eq: Equipment) => {
-    setSelectedEquipment(eq);
-    fetchBookings(eq.id);
-  };
-
-  const formatDateTime = (dateTimeString: string) => {
-    return new Date(dateTimeString).toLocaleString();
-  };
 
   // Handle equipment booking with modal
   const handleBookEquipment = useCallback((equipment: Equipment) => {
@@ -284,10 +206,6 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       setSelectedEquipmentForBooking(null);
       fetchEquipment(); // Refresh equipment list
       
-      if (selectedEquipment?.id === selectedEquipmentForBooking.id) {
-        fetchBookings(selectedEquipmentForBooking.id); // Refresh bookings if same equipment selected
-      }
-      
       console.log('Equipment booked successfully:', data);
     } catch (error) {
       console.error('Error booking equipment:', error);
@@ -295,7 +213,12 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
     } finally {
       setIsSubmittingBooking(false);
     }
-  }, [token, selectedEquipmentForBooking, selectedEquipment, fetchEquipment, fetchBookings]);
+  }, [token, selectedEquipmentForBooking, fetchEquipment]);
+
+  // Handle equipment status change (for check in/out)
+  const handleStatusChange = useCallback(() => {
+    fetchEquipment(); // Refresh equipment list when status changes
+  }, [fetchEquipment]);
 
   if (loading) {
     return (
@@ -311,24 +234,10 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Equipment Management</h2>
-          <p className="text-gray-600">Manage lab equipment, bookings, and QR check-in/out</p>
+          <p className="text-gray-600">Manage lab equipment and bookings</p>
         </div>
         
         <div className="flex gap-2">
-          <button
-            onClick={() => onQRScan?.('checkin')}
-            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <QrCode className="w-4 h-4 mr-2" />
-            Quick Check In
-          </button>
-          <button
-            onClick={() => onQRScan?.('checkout')}
-            className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            <QrCode className="w-4 h-4 mr-2" />
-            Quick Check Out
-          </button>
           {isAdmin && (
             <button
               onClick={() => setShowAddForm(true)}
@@ -381,237 +290,24 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Equipment List */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-lg border border-gray-200">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">
-                Equipment ({filteredEquipment.length})
-              </h3>
-            </div>
-            
-            <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-              {filteredEquipment.length === 0 ? (
-                <div className="p-8 text-center">
-                  <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No equipment found matching your criteria</p>
-                </div>
-              ) : (
-                filteredEquipment.map((eq) => (
-                  <div
-                    key={eq.id}
-                    className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                      selectedEquipment?.id === eq.id ? 'bg-blue-50 border-l-4 border-blue-500' : ''
-                    }`}
-                    onClick={() => handleEquipmentSelect(eq)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h4 className="font-medium text-gray-900">{eq.name}</h4>
-                          <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            eq.is_in_use 
-                              ? 'bg-red-100 text-red-800' 
-                              : 'bg-green-100 text-green-800'
-                          }`}>
-                            {eq.is_in_use ? 'In Use' : 'Available'}
-                          </div>
-                        </div>
-                        
-                        {eq.description && (
-                          <p className="text-sm text-gray-600 mb-2">{eq.description}</p>
-                        )}
-                        
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            <span>{eq.location}</span>
-                          </div>
-                          
-                          {eq.requires_qr_checkin && (
-                            <div className="flex items-center gap-1">
-                              <QrCode className="w-4 h-4" />
-                              <span>QR Required</span>
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            <span>Bookable: {eq.is_bookable ? 'Yes' : 'No'}</span>
-                          </div>
-                        </div>
-
-                        {eq.is_in_use && eq.current_user && (
-                          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                            <div className="flex items-center gap-2 text-yellow-800 text-sm">
-                              <User className="w-4 h-4" />
-                              <span>Used by {eq.current_user.first_name} {eq.current_user.last_name}</span>
-                            </div>
-                            {eq.current_usage_duration && (
-                              <div className="flex items-center gap-2 text-yellow-700 text-xs mt-1">
-                                <Timer className="w-3 h-3" />
-                                <span>Duration: {eq.current_usage_duration}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-1 ml-4">
-                        {eq.requires_qr_checkin && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onShowQRCode?.(eq);
-                            }}
-                            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                            title="Show QR Code"
-                          >
-                            <QrCode className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        {eq.is_bookable && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleBookEquipment(eq);
-                            }}
-                            className="p-2 text-gray-400 hover:text-green-600 transition-colors"
-                            title="Book Equipment"
-                          >
-                            <Calendar className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        {isAdmin && onEditEquipment && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditEquipment(eq);
-                            }}
-                            className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                            title="Edit Equipment"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+      {/* Equipment Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredEquipment.length === 0 ? (
+          <div className="col-span-full p-8 text-center bg-white rounded-lg border border-gray-200">
+            <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">No equipment found matching your criteria</p>
           </div>
-        </div>
-
-        {/* Equipment Details and Bookings */}
-        <div className="space-y-6">
-          {selectedEquipment ? (
-            <>
-              {/* Equipment Details */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Equipment Details</h3>
-                
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Name</label>
-                    <p className="text-gray-900">{selectedEquipment.name}</p>
-                  </div>
-                  
-                  {selectedEquipment.description && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Description</label>
-                      <p className="text-gray-900">{selectedEquipment.description}</p>
-                    </div>
-                  )}
-                  
-                  <div>
-                    <label className="text-sm font-medium text-gray-600">Location</label>
-                    <p className="text-gray-900">{selectedEquipment.location}</p>
-                  </div>
-                  
-                  {selectedEquipment.qr_code && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">QR Code</label>
-                      <p className="text-gray-900 font-mono">{selectedEquipment.qr_code}</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 mt-4">
-                  {selectedEquipment.requires_qr_checkin && (
-                    <button
-                      onClick={() => onShowQRCode?.(selectedEquipment)}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      <QrCode className="w-4 h-4 mr-2" />
-                      Show QR
-                    </button>
-                  )}
-                  
-                  {selectedEquipment.is_bookable && (
-                    <button
-                      onClick={() => handleBookEquipment(selectedEquipment)}
-                      className="flex-1 inline-flex items-center justify-center px-3 py-2 bg-primary-600 text-white rounded-md text-sm font-medium hover:bg-primary-700"
-                    >
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Book
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Recent Bookings */}
-              <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Bookings</h3>
-                
-                {bookings.length === 0 ? (
-                  <div className="text-center py-6">
-                    <BookOpen className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-500 text-sm">No recent bookings</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {bookings.map((booking) => (
-                      <div key={booking.id} className="border border-gray-200 rounded p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">
-                            {booking.user}
-                          </span>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                            booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {booking.status}
-                          </span>
-                        </div>
-                        
-                        <div className="text-xs text-gray-600 space-y-1">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>{formatDateTime(booking.start_time)} - {formatDateTime(booking.end_time)}</span>
-                          </div>
-                          <div className="text-gray-500">
-                            {booking.title}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-              <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Select equipment to view details and bookings</p>
-            </div>
-          )}
-        </div>
+        ) : (
+          filteredEquipment.map((eq) => (
+            <EquipmentCard
+              key={eq.id}
+              equipment={eq}
+              onBooking={handleBookEquipment}
+              onStatusChange={handleStatusChange}
+              currentUsername={authContext?.user?.username}
+            />
+          ))
+        )}
       </div>
 
       {/* Add Equipment Modal */}
@@ -690,16 +386,6 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
                   <span className="text-sm font-medium text-gray-700">Equipment is bookable</span>
                 </label>
 
-                <label className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.requires_qr_checkin}
-                    onChange={(e) => setFormData(prev => ({ ...prev, requires_qr_checkin: e.target.checked }))}
-                    className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    disabled={isSubmitting}
-                  />
-                  <span className="text-sm font-medium text-gray-700">Requires QR code check-in</span>
-                </label>
               </div>
 
               {formErrors.submit && (

@@ -1858,11 +1858,11 @@ class AvailableEquipmentView(APIView):
 
 
 class EquipmentCheckinView(APIView):
-    """Equipment check-in endpoint"""
+    """Equipment check-in endpoint with booking integration"""
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request, equipment_id):
-        """Check in to equipment"""
+        """Check in to equipment and update associated booking"""
         try:
             equipment = Equipment.objects.get(id=equipment_id)
         except Equipment.DoesNotExist:
@@ -1871,22 +1871,42 @@ class EquipmentCheckinView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Check if equipment is available for booking
+        if equipment.is_in_use:
+            return Response({
+                'error': f'Equipment is currently in use by {equipment.current_user.username}',
+                'current_user': equipment.current_user.username,
+                'check_in_time': equipment.current_checkin_time,
+                'duration': str(equipment.current_usage_duration)
+            }, status=status.HTTP_409_CONFLICT)
+        
         try:
+            # Check in user and update booking
             equipment.check_in_user(request.user)
+            
+            # Get updated booking information
+            current_booking = Booking.objects.filter(
+                equipment=equipment,
+                user=request.user,
+                status='in_progress'
+            ).first()
+            
             return Response({
                 'message': 'Successfully checked in',
-                'equipment': EquipmentSerializer(equipment).data
+                'equipment': EquipmentSerializer(equipment).data,
+                'check_in_time': equipment.current_checkin_time,
+                'booking': BookingSerializer(current_booking).data if current_booking else None
             })
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class EquipmentCheckoutView(APIView):
-    """Equipment check-out endpoint"""
+    """Equipment check-out endpoint with booking completion and next user notification"""
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request, equipment_id):
-        """Check out from equipment"""
+        """Check out from equipment, complete booking, and notify next user"""
         try:
             equipment = Equipment.objects.get(id=equipment_id)
         except Equipment.DoesNotExist:
@@ -1895,12 +1915,37 @@ class EquipmentCheckoutView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
+        # Check if equipment is in use by current user
+        if not equipment.is_in_use:
+            return Response(
+                {'error': 'Equipment is not currently in use'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if equipment.current_user != request.user:
+            return Response({
+                'error': f'Equipment is being used by {equipment.current_user.username}',
+                'current_user': equipment.current_user.username
+            }, status=status.HTTP_403_FORBIDDEN)
+        
         try:
+            # Check out user, update booking, and notify next user
             usage_log = equipment.check_out_user(request.user)
+            
+            # Get completed booking information
+            completed_booking = Booking.objects.filter(
+                equipment=equipment,
+                user=request.user,
+                status='completed'
+            ).first()
+            
             return Response({
                 'message': 'Successfully checked out',
                 'equipment': EquipmentSerializer(equipment).data,
-                'usage_log': EquipmentUsageLogSerializer(usage_log).data if usage_log else None
+                'usage_log': EquipmentUsageLogSerializer(usage_log).data if usage_log else None,
+                'usage_duration': str(usage_log.usage_duration) if usage_log else None,
+                'booking': BookingSerializer(completed_booking).data if completed_booking else None,
+                'notification_sent': 'Next user has been notified if booking exists for today'
             })
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
