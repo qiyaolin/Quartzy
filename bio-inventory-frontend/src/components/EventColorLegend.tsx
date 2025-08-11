@@ -22,41 +22,46 @@ const EventColorLegend: React.FC<EventColorLegendProps> = ({
       type: 'meeting',
       icon: Users,
       label: 'Meetings',
-      description: 'Group meetings, presentations, discussions'
+      description: 'Group meetings, presentations, discussions',
+      color: 'bg-gradient-to-r from-purple-500 to-purple-600'
     },
     {
       type: 'booking',
       icon: Calendar,
       label: 'Equipment Bookings',
-      description: 'Reserved equipment and lab instruments'
+      description: 'Reserved equipment and lab instruments',
+      color: 'bg-gradient-to-r from-blue-500 to-blue-600'
     },
     {
       type: 'task',
       icon: CheckCircle2,
       label: 'Tasks',
-      description: 'Maintenance, cleaning, assignments'
+      description: 'Maintenance, cleaning, assignments',
+      color: 'bg-gradient-to-r from-orange-500 to-orange-600'
     },
     {
       type: 'equipment',
       icon: Settings,
       label: 'Equipment',
-      description: 'Equipment-related activities'
+      description: 'Equipment-related activities',
+      color: 'bg-gradient-to-r from-emerald-500 to-emerald-600'
     },
     {
       type: 'personal',
       icon: Clock,
       label: 'Personal',
-      description: 'Other scheduled activities'
+      description: 'Other scheduled activities',
+      color: 'bg-gradient-to-r from-indigo-500 to-indigo-600'
     }
   ];
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2 flex-wrap text-xs">
-        {eventTypes.map(({ type, label }) => (
-          <div key={type} className="flex items-center gap-1">
-            <div className={`w-3 h-3 rounded ${scheduleHelpers.getEventColor(type, 'scheduled')}`} />
-            <span className="text-gray-600">{label}</span>
+      <div className="flex items-center gap-3 flex-wrap text-xs">
+        {eventTypes.map(({ type, label, color }) => (
+          <div key={type} className="flex items-center gap-1.5">
+            <div className={`w-3 h-3 rounded-full shadow-sm ${color}`} />
+            <span className="text-gray-600 font-medium">{label}</span>
           </div>
         ))}
       </div>
@@ -72,10 +77,10 @@ const EventColorLegend: React.FC<EventColorLegendProps> = ({
         </div>
       )}
       
-      <div className="space-y-2">
-        {eventTypes.map(({ type, icon: Icon, label, description }) => (
+      <div className="space-y-3">
+        {eventTypes.map(({ type, icon: Icon, label, description, color }) => (
           <div key={type} className="flex items-start gap-3">
-            <div className={`w-4 h-4 rounded mt-0.5 ${scheduleHelpers.getEventColor(type, 'scheduled')}`} />
+            <div className={`w-4 h-4 rounded-full mt-0.5 shadow-sm ${color}`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <Icon className="w-4 h-4 text-gray-500" />

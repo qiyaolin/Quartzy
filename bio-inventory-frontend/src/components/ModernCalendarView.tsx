@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Schedule, scheduleHelpers } from "../services/scheduleApi.ts";
 import ScheduleDetailPanel from './ScheduleDetailPanel.tsx';
+import EventColorLegend from './EventColorLegend.tsx';
 
 interface ModernCalendarViewProps {
   schedules: Schedule[];
@@ -275,9 +276,15 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
   return (
     <div className="card overflow-hidden">
-      {/* Modern Header */}
-      <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Modern Header with enhanced styling */}
+      <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white p-6 relative overflow-hidden">
+        {/* Background pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-20 -translate-y-20"></div>
+          <div className="absolute bottom-0 right-0 w-60 h-60 bg-white rounded-full translate-x-20 translate-y-20"></div>
+        </div>
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center gap-4">
             {/* Navigation Controls */}
             <div className="flex items-center bg-white bg-opacity-20 rounded-xl p-1">
@@ -412,8 +419,14 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       .filter(s => s.date === new Date().toISOString().split('T')[0])
                       .slice(0, 3)
                       .map(schedule => (
-                        <div key={schedule.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
-                          <div className={`w-2 h-8 rounded-full ${getEventColor(schedule)}`} />
+                        <div key={schedule.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                          <div className={`w-3 h-3 rounded-full shadow-sm ${
+                            scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-gradient-to-r from-purple-500 to-purple-600' :
+                            scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
+                            scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
+                            scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' :
+                            'bg-gradient-to-r from-indigo-500 to-indigo-600'
+                          }`} />
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-gray-900 truncate" title={`${schedule.title} (${scheduleHelpers.getEventType(schedule)})`}>
                               {schedule.title}
@@ -426,6 +439,9 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Color Legend */}
+              <EventColorLegend showTitle={true} />
             </div>
           </div>
         )}
@@ -471,25 +487,43 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       )}
                     </div>
                     
-                    {/* Events */}
+                    {/* Events with enhanced styling */}
                     <div className="space-y-1">
                       {day.schedules.slice(0, 3).map((schedule) => (
                         <div
                           key={schedule.id}
-                          className={`text-xs p-1 rounded cursor-pointer truncate border-l-2 transition-all duration-200 hover:shadow-sm modern-calendar-event ${getEventColorLight(schedule)}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocalSelectedEventId(schedule.id);
-                              onSelectEvent?.(schedule);
-                            }}
+                          className={`text-xs p-2 rounded-lg cursor-pointer truncate transition-all duration-200 hover:shadow-md hover:scale-[1.02] modern-calendar-event ${getEventColorLight(schedule)} relative`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLocalSelectedEventId(schedule.id);
+                            onSelectEvent?.(schedule);
+                          }}
                           title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
                         >
-                          {formatTime(schedule.start_time)} {schedule.title}
+                          {/* Event type indicator dot */}
+                          <div className={`absolute left-1 top-1/2 transform -translate-y-1/2 w-2 h-2 rounded-full ${
+                            scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-purple-500' :
+                            scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-blue-500' :
+                            scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-orange-500' :
+                            scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-emerald-500' :
+                            'bg-indigo-500'
+                          }`}></div>
+                          
+                          <div className="pl-4">
+                            <div className="font-medium truncate">
+                              {formatTime(schedule.start_time)} {schedule.title}
+                            </div>
+                            {schedule.status !== 'scheduled' && (
+                              <div className="text-xs opacity-75 mt-1">
+                                {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                       {day.schedules.length > 3 && (
-                        <div className="text-xs text-gray-500 font-medium">
-                          +{day.schedules.length - 3} more
+                        <div className="text-xs text-gray-500 font-medium px-2 py-1 bg-gray-100 rounded-lg">
+                          +{day.schedules.length - 3} more events
                         </div>
                       )}
                     </div>
@@ -553,8 +587,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         ></div>
                       ))}
                       
-                      {/* Events */}
-                      {day.schedules.map((schedule) => {
+                      {/* Events with improved overlap handling */}
+                      {day.schedules.map((schedule, eventIndex) => {
                         const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
                         const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
                         const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
@@ -562,14 +596,36 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         const startPx = startHour * hourHeightWeek + (startMinute / 60) * hourHeightWeek;
                         const endPx = endHour * hourHeightWeek + (endMinute / 60) * hourHeightWeek;
                         const barHeight = Math.max(endPx - startPx, 48);
+                        
+                        // Calculate overlap with other events
+                        const overlappingEvents = day.schedules.filter((otherSchedule, otherIndex) => {
+                          if (otherIndex >= eventIndex) return false; // Only check previous events
+                          const otherStartHour = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[0]) : 9;
+                          const otherStartMinute = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[1]) : 0;
+                          const otherEndHour = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[0]) : otherStartHour + 1;
+                          const otherEndMinute = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[1]) : 0;
+                          const otherStartPx = otherStartHour * hourHeightWeek + (otherStartMinute / 60) * hourHeightWeek;
+                          const otherEndPx = otherEndHour * hourHeightWeek + (otherEndMinute / 60) * hourHeightWeek;
+                          
+                          // Check if events overlap
+                          return startPx < otherEndPx && endPx > otherStartPx;
+                        });
+                        
+                        const overlapCount = overlappingEvents.length;
+                        const eventWidth = Math.max(40, 100 - (overlapCount * 15)); // Reduce width for overlapping events
+                        const leftOffset = overlapCount * 12; // Stagger overlapping events
+                        
                         return (
                           <div
                             key={schedule.id}
-                            className={`absolute left-1 right-1 rounded-lg p-2 cursor-pointer text-white shadow-sm border-l-4 transition-all duration-200 hover:shadow-md modern-calendar-event ${getEventColor(schedule)}`}
+                            className={`absolute rounded-lg p-2 cursor-pointer text-white shadow-sm transition-all duration-200 hover:shadow-lg hover:scale-105 modern-calendar-event ${getEventColor(schedule)}`}
                             style={{
                               top: startPx,
                               height: barHeight,
-                              zIndex: 10
+                              left: `${2 + leftOffset}px`,
+                              width: `${eventWidth}%`,
+                              zIndex: 10 + eventIndex,
+                              minWidth: '80px'
                             }}
                             onClick={() => {
                               setLocalSelectedEventId(schedule.id);
@@ -582,11 +638,13 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                               {formatTime(schedule.start_time)}
                               {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
                             </div>
-                            {schedule.location && (
+                            {schedule.location && barHeight > 64 && (
                               <div className="text-xs opacity-80 truncate mt-1">
                                 📍 {schedule.location}
                               </div>
                             )}
+                            {/* Event type indicator */}
+                            <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white bg-opacity-30"></div>
                           </div>
                         );
                       })}
@@ -621,7 +679,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   ></div>
                 ))}
                 
-                {/* Events */}
+                {/* Events with enhanced layout and overlap handling */}
                 {schedules
                   .filter(s => s.date === selectedDate)
                   .reduce((unique: Schedule[], schedule) => {
@@ -636,7 +694,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                     }
                     return unique;
                   }, [])
-                  .map((schedule) => {
+                  .map((schedule, eventIndex, allEvents) => {
                   const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
                   const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
                   const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
@@ -644,16 +702,36 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   
                   const startPosition = startHour * hourHeightDay + (startMinute / 60) * hourHeightDay;
                   const endPosition = endHour * hourHeightDay + (endMinute / 60) * hourHeightDay;
-                  const height = Math.max(endPosition - startPosition, 48);
+                  const height = Math.max(endPosition - startPosition, 60);
+                  
+                  // Calculate overlaps for proper positioning
+                  const overlappingEvents = allEvents.filter((otherSchedule, otherIndex) => {
+                    if (otherIndex >= eventIndex) return false;
+                    const otherStartHour = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[0]) : 9;
+                    const otherStartMinute = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[1]) : 0;
+                    const otherEndHour = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[0]) : otherStartHour + 1;
+                    const otherEndMinute = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[1]) : 0;
+                    const otherStartPosition = otherStartHour * hourHeightDay + (otherStartMinute / 60) * hourHeightDay;
+                    const otherEndPosition = otherEndHour * hourHeightDay + (otherEndMinute / 60) * hourHeightDay;
+                    
+                    return startPosition < otherEndPosition && endPosition > otherStartPosition;
+                  });
+                  
+                  const overlapCount = overlappingEvents.length;
+                  const eventWidth = Math.max(45, 90 - (overlapCount * 10));
+                  const leftOffset = overlapCount * 8;
                   
                   return (
                     <div
                       key={schedule.id}
-                      className={`absolute left-4 right-4 rounded-xl p-4 cursor-pointer text-white shadow-lg border-l-4 transition-all duration-200 hover:shadow-xl modern-calendar-event ${getEventColor(schedule)}`}
+                      className={`absolute rounded-xl p-4 cursor-pointer text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.02] modern-calendar-event ${getEventColor(schedule)}`}
                       style={{
                         top: startPosition,
                         height: height,
-                        zIndex: 10
+                        left: `${16 + leftOffset}px`,
+                        width: `calc(${eventWidth}% - ${leftOffset}px)`,
+                        zIndex: 10 + eventIndex,
+                        minWidth: '200px'
                       }}
                       onClick={() => {
                         setLocalSelectedEventId(schedule.id);
@@ -661,33 +739,49 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       }}
                       title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-base truncate">{schedule.title}</div>
-                          <div className="text-sm opacity-90 mt-1">
-                            {formatTime(schedule.start_time)}
+                      <div className="flex items-start justify-between h-full">
+                        <div className="flex-1 min-w-0 flex flex-col">
+                          {/* Event type badge */}
+                          <div className="inline-flex items-center gap-1 mb-2">
+                            <span className="text-xs font-medium px-2 py-1 bg-white bg-opacity-20 rounded-full">
+                              {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase() + scheduleHelpers.getEventType(schedule).slice(1)}
+                            </span>
+                            {schedule.status !== 'scheduled' && (
+                              <span className="text-xs font-medium px-2 py-1 bg-white bg-opacity-30 rounded-full">
+                                {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="font-semibold text-lg truncate mb-1">{schedule.title}</div>
+                          <div className="text-sm opacity-90 mb-2">
+                            🕐 {formatTime(schedule.start_time)}
                             {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
                           </div>
+                          
                           {schedule.location && (
-                            <div className="flex items-center gap-1 text-sm opacity-80 mt-2">
-                              <MapPin className="w-3 h-3" />
+                            <div className="flex items-center gap-1 text-sm opacity-80 mb-2">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />
                               <span className="truncate">{schedule.location}</span>
                             </div>
                           )}
-                          {schedule.description && (
-                            <div className="text-sm opacity-75 mt-2 line-clamp-2">
+                          
+                          {schedule.description && height > 120 && (
+                            <div className="text-sm opacity-75 line-clamp-3 flex-1 overflow-hidden">
                               {schedule.description}
                             </div>
                           )}
                         </div>
                         
-                        <div className="flex items-center gap-1 ml-2 opacity-0 hover:opacity-100 transition-opacity">
+                        {/* Action buttons */}
+                        <div className="flex flex-col gap-1 ml-3 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-all">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               onEditEvent?.(schedule);
                             }}
-                            className="p-1 hover:bg-white hover:bg-opacity-20 rounded"
+                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-all"
+                            title="Edit event"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
@@ -696,12 +790,16 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                               e.stopPropagation();
                               onDeleteEvent?.(schedule.id);
                             }}
-                            className="p-1 hover:bg-white hover:bg-opacity-20 rounded text-red-300"
+                            className="p-2 hover:bg-white hover:bg-opacity-20 rounded-lg text-red-200 hover:text-red-100 transition-all"
+                            title="Delete event"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
+                      
+                      {/* Event connection line */}
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-white bg-opacity-40 rounded-r"></div>
                     </div>
                   );
                 })}

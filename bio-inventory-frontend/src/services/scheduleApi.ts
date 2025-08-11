@@ -725,39 +725,39 @@ export const scheduleHelpers = {
     return colors[status] || colors.pending;
   },
 
-  // Get event type and status combined color
+  // Get event type and status combined color with improved contrast
   getEventColor: (eventType?: string, status?: string): string => {
-    // Primary colors for event types with status variations
+    // Enhanced colors for event types with better visual distinction and contrast
     const eventColors: Record<string, Record<string, string>> = {
       meeting: {
-        scheduled: 'bg-purple-500 border-purple-600 text-white',
-        in_progress: 'bg-purple-600 border-purple-700 text-white',
-        completed: 'bg-purple-300 border-purple-400 text-purple-800',
-        cancelled: 'bg-purple-200 border-purple-300 text-purple-600 opacity-70'
+        scheduled: 'bg-gradient-to-r from-purple-500 to-purple-600 border-l-4 border-purple-700 text-white shadow-md',
+        in_progress: 'bg-gradient-to-r from-purple-600 to-purple-700 border-l-4 border-purple-800 text-white shadow-lg ring-2 ring-purple-300',
+        completed: 'bg-gradient-to-r from-purple-100 to-purple-200 border-l-4 border-purple-400 text-purple-900 shadow-sm',
+        cancelled: 'bg-gradient-to-r from-gray-100 to-gray-200 border-l-4 border-gray-400 text-gray-600 opacity-75 line-through'
       },
       booking: {
-        scheduled: 'bg-blue-500 border-blue-600 text-white',
-        in_progress: 'bg-blue-600 border-blue-700 text-white', 
-        completed: 'bg-blue-300 border-blue-400 text-blue-800',
-        cancelled: 'bg-blue-200 border-blue-300 text-blue-600 opacity-70'
+        scheduled: 'bg-gradient-to-r from-blue-500 to-blue-600 border-l-4 border-blue-700 text-white shadow-md',
+        in_progress: 'bg-gradient-to-r from-blue-600 to-blue-700 border-l-4 border-blue-800 text-white shadow-lg ring-2 ring-blue-300',
+        completed: 'bg-gradient-to-r from-blue-100 to-blue-200 border-l-4 border-blue-400 text-blue-900 shadow-sm',
+        cancelled: 'bg-gradient-to-r from-gray-100 to-gray-200 border-l-4 border-gray-400 text-gray-600 opacity-75 line-through'
       },
       task: {
-        scheduled: 'bg-orange-500 border-orange-600 text-white',
-        in_progress: 'bg-orange-600 border-orange-700 text-white',
-        completed: 'bg-orange-300 border-orange-400 text-orange-800',
-        cancelled: 'bg-orange-200 border-orange-300 text-orange-600 opacity-70'
+        scheduled: 'bg-gradient-to-r from-orange-500 to-orange-600 border-l-4 border-orange-700 text-white shadow-md',
+        in_progress: 'bg-gradient-to-r from-orange-600 to-orange-700 border-l-4 border-orange-800 text-white shadow-lg ring-2 ring-orange-300',
+        completed: 'bg-gradient-to-r from-orange-100 to-orange-200 border-l-4 border-orange-400 text-orange-900 shadow-sm',
+        cancelled: 'bg-gradient-to-r from-gray-100 to-gray-200 border-l-4 border-gray-400 text-gray-600 opacity-75 line-through'
       },
       equipment: {
-        scheduled: 'bg-teal-500 border-teal-600 text-white',
-        in_progress: 'bg-teal-600 border-teal-700 text-white',
-        completed: 'bg-teal-300 border-teal-400 text-teal-800',
-        cancelled: 'bg-teal-200 border-teal-300 text-teal-600 opacity-70'
+        scheduled: 'bg-gradient-to-r from-emerald-500 to-emerald-600 border-l-4 border-emerald-700 text-white shadow-md',
+        in_progress: 'bg-gradient-to-r from-emerald-600 to-emerald-700 border-l-4 border-emerald-800 text-white shadow-lg ring-2 ring-emerald-300',
+        completed: 'bg-gradient-to-r from-emerald-100 to-emerald-200 border-l-4 border-emerald-400 text-emerald-900 shadow-sm',
+        cancelled: 'bg-gradient-to-r from-gray-100 to-gray-200 border-l-4 border-gray-400 text-gray-600 opacity-75 line-through'
       },
       personal: {
-        scheduled: 'bg-indigo-500 border-indigo-600 text-white',
-        in_progress: 'bg-indigo-600 border-indigo-700 text-white',
-        completed: 'bg-indigo-300 border-indigo-400 text-indigo-800',
-        cancelled: 'bg-indigo-200 border-indigo-300 text-indigo-600 opacity-70'
+        scheduled: 'bg-gradient-to-r from-indigo-500 to-indigo-600 border-l-4 border-indigo-700 text-white shadow-md',
+        in_progress: 'bg-gradient-to-r from-indigo-600 to-indigo-700 border-l-4 border-indigo-800 text-white shadow-lg ring-2 ring-indigo-300',
+        completed: 'bg-gradient-to-r from-indigo-100 to-indigo-200 border-l-4 border-indigo-400 text-indigo-900 shadow-sm',
+        cancelled: 'bg-gradient-to-r from-gray-100 to-gray-200 border-l-4 border-gray-400 text-gray-600 opacity-75 line-through'
       }
     };
 
@@ -767,41 +767,41 @@ export const scheduleHelpers = {
     // Return type-specific color or fallback to default
     return eventColors[currentEventType]?.[currentStatus] || 
            eventColors.personal[currentStatus] ||
-           'bg-gray-500 border-gray-600 text-white';
+           'bg-gradient-to-r from-gray-500 to-gray-600 border-l-4 border-gray-700 text-white shadow-md';
   },
 
-  // Get lighter version for calendar month view
+  // Get lighter version for calendar month view with enhanced visibility
   getEventColorLight: (eventType?: string, status?: string): string => {
     const lightColors: Record<string, Record<string, string>> = {
       meeting: {
-        scheduled: 'bg-purple-100 text-purple-800 border-l-purple-500',
-        in_progress: 'bg-purple-200 text-purple-900 border-l-purple-600',
-        completed: 'bg-purple-50 text-purple-700 border-l-purple-300',
-        cancelled: 'bg-gray-100 text-gray-600 border-l-gray-400 line-through'
+        scheduled: 'bg-gradient-to-r from-purple-50 to-purple-100 text-purple-800 border-l-4 border-purple-500 shadow-sm hover:shadow-md transition-all duration-200',
+        in_progress: 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-900 border-l-4 border-purple-600 shadow-sm ring-1 ring-purple-200 hover:shadow-md transition-all duration-200',
+        completed: 'bg-gradient-to-r from-purple-25 to-purple-50 text-purple-700 border-l-4 border-purple-300 shadow-sm opacity-90',
+        cancelled: 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-500 border-l-4 border-gray-300 line-through opacity-70'
       },
       booking: {
-        scheduled: 'bg-blue-100 text-blue-800 border-l-blue-500',
-        in_progress: 'bg-blue-200 text-blue-900 border-l-blue-600',
-        completed: 'bg-blue-50 text-blue-700 border-l-blue-300',
-        cancelled: 'bg-gray-100 text-gray-600 border-l-gray-400 line-through'
+        scheduled: 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-800 border-l-4 border-blue-500 shadow-sm hover:shadow-md transition-all duration-200',
+        in_progress: 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-900 border-l-4 border-blue-600 shadow-sm ring-1 ring-blue-200 hover:shadow-md transition-all duration-200',
+        completed: 'bg-gradient-to-r from-blue-25 to-blue-50 text-blue-700 border-l-4 border-blue-300 shadow-sm opacity-90',
+        cancelled: 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-500 border-l-4 border-gray-300 line-through opacity-70'
       },
       task: {
-        scheduled: 'bg-orange-100 text-orange-800 border-l-orange-500',
-        in_progress: 'bg-orange-200 text-orange-900 border-l-orange-600',
-        completed: 'bg-orange-50 text-orange-700 border-l-orange-300',
-        cancelled: 'bg-gray-100 text-gray-600 border-l-gray-400 line-through'
+        scheduled: 'bg-gradient-to-r from-orange-50 to-orange-100 text-orange-800 border-l-4 border-orange-500 shadow-sm hover:shadow-md transition-all duration-200',
+        in_progress: 'bg-gradient-to-r from-orange-100 to-orange-200 text-orange-900 border-l-4 border-orange-600 shadow-sm ring-1 ring-orange-200 hover:shadow-md transition-all duration-200',
+        completed: 'bg-gradient-to-r from-orange-25 to-orange-50 text-orange-700 border-l-4 border-orange-300 shadow-sm opacity-90',
+        cancelled: 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-500 border-l-4 border-gray-300 line-through opacity-70'
       },
       equipment: {
-        scheduled: 'bg-teal-100 text-teal-800 border-l-teal-500',
-        in_progress: 'bg-teal-200 text-teal-900 border-l-teal-600',
-        completed: 'bg-teal-50 text-teal-700 border-l-teal-300',
-        cancelled: 'bg-gray-100 text-gray-600 border-l-gray-400 line-through'
+        scheduled: 'bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-800 border-l-4 border-emerald-500 shadow-sm hover:shadow-md transition-all duration-200',
+        in_progress: 'bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-900 border-l-4 border-emerald-600 shadow-sm ring-1 ring-emerald-200 hover:shadow-md transition-all duration-200',
+        completed: 'bg-gradient-to-r from-emerald-25 to-emerald-50 text-emerald-700 border-l-4 border-emerald-300 shadow-sm opacity-90',
+        cancelled: 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-500 border-l-4 border-gray-300 line-through opacity-70'
       },
       personal: {
-        scheduled: 'bg-indigo-100 text-indigo-800 border-l-indigo-500',
-        in_progress: 'bg-indigo-200 text-indigo-900 border-l-indigo-600',
-        completed: 'bg-indigo-50 text-indigo-700 border-l-indigo-300',
-        cancelled: 'bg-gray-100 text-gray-600 border-l-gray-400 line-through'
+        scheduled: 'bg-gradient-to-r from-indigo-50 to-indigo-100 text-indigo-800 border-l-4 border-indigo-500 shadow-sm hover:shadow-md transition-all duration-200',
+        in_progress: 'bg-gradient-to-r from-indigo-100 to-indigo-200 text-indigo-900 border-l-4 border-indigo-600 shadow-sm ring-1 ring-indigo-200 hover:shadow-md transition-all duration-200',
+        completed: 'bg-gradient-to-r from-indigo-25 to-indigo-50 text-indigo-700 border-l-4 border-indigo-300 shadow-sm opacity-90',
+        cancelled: 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-500 border-l-4 border-gray-300 line-through opacity-70'
       }
     };
 
@@ -810,7 +810,7 @@ export const scheduleHelpers = {
     
     return lightColors[currentEventType]?.[currentStatus] || 
            lightColors.personal[currentStatus] ||
-           'bg-gray-100 text-gray-800 border-l-gray-500';
+           'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 border-l-4 border-gray-400 shadow-sm';
   },
 
   // Detect event type from schedule data
