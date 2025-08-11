@@ -92,8 +92,8 @@ class Equipment(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
     
-    def check_in_user(self, user, duration_hours=1):
-        """Check in a user to this equipment and update or create booking"""
+    def check_in_user(self, user, create_booking=False, duration_hours=1):
+        """Check in a user to this equipment and optionally update or create booking"""
         if self.is_in_use:
             raise ValueError(f"Equipment {self.name} is already in use by {self.current_user}")
         
@@ -147,8 +147,8 @@ class Equipment(models.Model):
             nearest_booking.save()
             
             print(f"Updated start time: {nearest_booking.event.start_time}")
-            return nearest_booking
-        else:
+            return {'booking': nearest_booking, 'booking_found': True}
+        elif create_booking:
             print(f"No booking found for equipment {self.name} and user {user.username} today")
             print("Creating new booking...")
             
@@ -170,11 +170,14 @@ class Equipment(models.Model):
                 user=user,
                 event=event,
                 status='in_progress',
-                notes=f"Auto-created booking from check-in at {eastern_now.strftime('%Y-%m-%d %H:%M')}"
+                notes=f"Created from check-in at {eastern_now.strftime('%Y-%m-%d %H:%M')}"
             )
             
             print(f"Created new booking {new_booking.id} from {eastern_now} to {end_time}")
-            return new_booking
+            return {'booking': new_booking, 'booking_found': False, 'booking_created': True}
+        else:
+            print(f"No booking found for equipment {self.name} and user {user.username} today")
+            return {'booking': None, 'booking_found': False, 'needs_booking': True}
     
     def check_out_user(self, user=None):
         """Check out the current user from this equipment, update booking, and notify next user"""
@@ -280,6 +283,74 @@ Lab Equipment Management System
         if self.is_in_use and self.current_checkin_time:
             return get_eastern_now() - self.current_checkin_time
         return None
+    
+    @property
+    def next_booking_today(self):
+        """Get the next booking for this equipment today"""
+        eastern_now = get_eastern_now()
+        today_start = eastern_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        
+        return Booking.objects.filter(
+            equipment=self,
+            event__start_time__gte=eastern_now,
+            event__start_time__lt=today_end,
+            status__in=['confirmed', 'pending']
+        ).order_by('event__start_time').first()
+    
+    @property
+    def current_booking(self):
+        """Get the current active booking for this equipment"""
+        if not self.is_in_use:
+            return None
+        
+        return Booking.objects.filter(
+            equipment=self,
+            user=self.current_user,
+            status='in_progress'
+        ).first()
+    
+    @property
+    def status_display(self):
+        """Get human-readable status with time information"""
+        eastern_now = get_eastern_now()
+        
+        if self.is_in_use:
+            duration = self.current_usage_duration
+            if duration:
+                hours = int(duration.total_seconds() // 3600)
+                minutes = int((duration.total_seconds() % 3600) // 60)
+                duration_str = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
+                
+                current_booking = self.current_booking
+                if current_booking:
+                    end_time = current_booking.event.end_time
+                    remaining = end_time - eastern_now
+                    if remaining.total_seconds() > 0:
+                        remaining_hours = int(remaining.total_seconds() // 3600)
+                        remaining_minutes = int((remaining.total_seconds() % 3600) // 60)
+                        remaining_str = f"{remaining_hours}h {remaining_minutes}m" if remaining_hours > 0 else f"{remaining_minutes}m"
+                        return f"In use for {duration_str} ({remaining_str} remaining)"
+                    else:
+                        return f"In use for {duration_str} (booking expired)"
+                else:
+                    return f"In use for {duration_str} (no booking)"
+            else:
+                return "In use"
+        else:
+            next_booking = self.next_booking_today
+            if next_booking:
+                time_until = next_booking.event.start_time - eastern_now
+                if time_until.total_seconds() > 0:
+                    hours_until = int(time_until.total_seconds() // 3600)
+                    minutes_until = int((time_until.total_seconds() % 3600) // 60)
+                    time_until_str = f"{hours_until}h {minutes_until}m" if hours_until > 0 else f"{minutes_until}m"
+                    start_time_str = next_booking.event.start_time.strftime('%I:%M %p')
+                    return f"Available (next booking: {start_time_str} in {time_until_str})"
+                else:
+                    return f"Available (booking overdue: {next_booking.user.username})"
+            else:
+                return "Available"
     
     def __str__(self):
         return self.name

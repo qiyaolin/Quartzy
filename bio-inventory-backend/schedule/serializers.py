@@ -39,9 +39,37 @@ class EventSerializer(serializers.ModelSerializer):
 
 
 class EquipmentSerializer(serializers.ModelSerializer):
-    """Equipment serializer with simple check-in/out support"""
+    """Equipment serializer with enhanced status information"""
     current_user = UserSerializer(read_only=True)
     current_usage_duration = serializers.ReadOnlyField()
+    status_display = serializers.ReadOnlyField()
+    next_booking_today = serializers.SerializerMethodField()
+    current_booking = serializers.SerializerMethodField()
+    
+    def get_next_booking_today(self, obj):
+        """Get next booking information"""
+        next_booking = obj.next_booking_today
+        if next_booking:
+            return {
+                'id': next_booking.id,
+                'user': next_booking.user.username,
+                'start_time': next_booking.event.start_time,
+                'end_time': next_booking.event.end_time
+            }
+        return None
+    
+    def get_current_booking(self, obj):
+        """Get current booking information"""
+        current_booking = obj.current_booking
+        if current_booking:
+            return {
+                'id': current_booking.id,
+                'user': current_booking.user.username,
+                'start_time': current_booking.event.start_time,
+                'end_time': current_booking.event.end_time,
+                'status': current_booking.status
+            }
+        return None
     
     def to_representation(self, instance):
         """Custom serialization with error handling"""
@@ -54,6 +82,8 @@ class EquipmentSerializer(serializers.ModelSerializer):
                 data['is_in_use'] = False
             if 'is_bookable' not in data:
                 data['is_bookable'] = True
+            if 'status_display' not in data:
+                data['status_display'] = 'Available'
             return data
         except Exception as e:
             print(f"Error serializing equipment {instance.id if instance else 'None'}: {e}")
@@ -68,6 +98,9 @@ class EquipmentSerializer(serializers.ModelSerializer):
                 'current_checkin_time': None,
                 'is_in_use': getattr(instance, 'is_in_use', False),
                 'current_usage_duration': None,
+                'status_display': 'Available',
+                'next_booking_today': None,
+                'current_booking': None,
                 'created_at': getattr(instance, 'created_at', None),
                 'updated_at': getattr(instance, 'updated_at', None)
             }
@@ -77,11 +110,13 @@ class EquipmentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'is_bookable', 
             'location', 'current_user', 'current_checkin_time', 'is_in_use',
-            'current_usage_duration', 'created_at', 'updated_at'
+            'current_usage_duration', 'status_display', 'next_booking_today', 
+            'current_booking', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'current_user', 'current_checkin_time', 
-            'is_in_use', 'current_usage_duration', 'created_at', 'updated_at'
+            'is_in_use', 'current_usage_duration', 'status_display',
+            'next_booking_today', 'current_booking', 'created_at', 'updated_at'
         ]
 
 

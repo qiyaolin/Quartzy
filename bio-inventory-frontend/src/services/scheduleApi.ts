@@ -341,6 +341,12 @@ export interface Equipment {
   current_checkin_time?: string;
   is_in_use: boolean;
   current_usage_duration?: string;
+  current_booking?: {
+    id: number;
+    start_time: string;
+    end_time: string;
+    status: string;
+  };
   created_at: string;
   updated_at: string;
 }

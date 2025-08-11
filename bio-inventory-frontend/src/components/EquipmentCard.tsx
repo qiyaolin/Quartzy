@@ -26,6 +26,14 @@ interface Equipment {
     };
     current_checkin_time?: string;
     current_usage_duration?: string;
+    current_booking?: {
+        id: number;
+        start_time: string;
+        end_time: string;
+        status: string;
+    };
+    created_at: string;
+    updated_at: string;
 }
 
 interface EquipmentCardProps {
@@ -214,6 +222,11 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
                                     <div className="flex items-center gap-1 mt-1">
                                         <Clock className="w-3 h-3" />
                                         <span>{formatDuration(equipment.current_usage_duration)}</span>
+                                    </div>
+                                )}
+                                {equipment.current_booking && (
+                                    <div className="mt-1">
+                                        <p>Booking: {new Date(equipment.current_booking.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {new Date(equipment.current_booking.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                     </div>
                                 )}
                             </div>

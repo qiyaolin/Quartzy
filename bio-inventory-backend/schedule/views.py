@@ -1893,16 +1893,19 @@ class EquipmentCheckinView(APIView):
                     'duration': str(equipment.current_usage_duration)
                 }, status=status.HTTP_409_CONFLICT)
             
-            # Get optional duration from request (default to 1 hour)
+            # Get optional parameters from request
             duration_hours = float(request.data.get('duration_hours', 1.0))
-            if duration_hours <= 0 or duration_hours > 24:
+            create_booking = request.data.get('create_booking', False)
+            
+            if create_booking and (duration_hours <= 0 or duration_hours > 24):
                 return Response(
                     {'error': 'Duration must be between 0.5 and 24 hours'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Check in user and update/create booking
-            booking = equipment.check_in_user(request.user, duration_hours)
+            # Check in user and handle booking logic
+            result = equipment.check_in_user(request.user, create_booking=create_booking, duration_hours=duration_hours)
+            booking = result.get('booking')
             
             # Create a safe response
             try:
@@ -1927,13 +1930,26 @@ class EquipmentCheckinView(APIView):
                     'end_time': booking.event.end_time if booking else None
                 } if booking else None
 
-            return Response({
+            response_data = {
                 'message': 'Successfully checked in',
                 'equipment': equipment_data,
                 'check_in_time': equipment.current_checkin_time,
                 'booking': booking_data,
-                'booking_created': booking.notes and 'Auto-created' in booking.notes if booking else False
-            })
+                'booking_found': result.get('booking_found', False),
+                'booking_created': result.get('booking_created', False),
+                'needs_booking': result.get('needs_booking', False)
+            }
+            
+            # If no booking found and user didn't request to create one, suggest booking creation
+            if result.get('needs_booking'):
+                from .models import get_eastern_now
+                response_data.update({
+                    'message': 'Checked in successfully, but no booking found for today',
+                    'suggested_start_time': get_eastern_now().isoformat(),
+                    'suggested_duration_hours': 1.0
+                })
+            
+            return Response(response_data)
             
         except ValueError as e:
             logger.error(f"ValueError in equipment checkin: {e}")
