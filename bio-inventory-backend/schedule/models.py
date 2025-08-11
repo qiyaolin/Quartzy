@@ -41,28 +41,15 @@ class Event(models.Model):
         ordering = ['start_time']
 
 
-def generate_equipment_qr_code():
-    """Generate a unique QR code for equipment"""
-    return f"BSC-{uuid.uuid4().hex[:8].upper()}"
 
 
 class Equipment(models.Model):
-    """Equipment model for bookings with QR code check-in/out support"""
+    """Equipment model for bookings with simple check-in/out support"""
     
     name = models.CharField(max_length=255, help_text="Equipment name, e.g., Microscope, BSC")
     description = models.TextField(blank=True, null=True, help_text="Equipment description")
     is_bookable = models.BooleanField(default=True, help_text="Whether equipment can be booked")
-    requires_qr_checkin = models.BooleanField(default=False, help_text="Whether QR code check-in is required")
     location = models.CharField(max_length=255, blank=True, help_text="Equipment location")
-    
-    # QR Code functionality
-    qr_code = models.CharField(
-        max_length=50, 
-        unique=True, 
-        null=True, 
-        blank=True, 
-        help_text="Unique QR code for check-in/out"
-    )
     
     # Current usage tracking
     current_user = models.ForeignKey(
@@ -87,9 +74,6 @@ class Equipment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def save(self, *args, **kwargs):
-        # Auto-generate QR code for equipment that requires QR check-in
-        if self.requires_qr_checkin and not self.qr_code:
-            self.qr_code = generate_equipment_qr_code()
         super().save(*args, **kwargs)
     
     def check_in_user(self, user):
@@ -268,11 +252,6 @@ class Booking(models.Model):
 class EquipmentUsageLog(models.Model):
     """Detailed logging of equipment usage sessions"""
     
-    SCAN_METHOD_CHOICES = [
-        ('mobile_camera', 'Mobile Camera'),
-        ('desktop_webcam', 'Desktop Webcam'),
-        ('manual_entry', 'Manual Entry'),
-    ]
     
     equipment = models.ForeignKey(
         Equipment,
@@ -309,12 +288,6 @@ class EquipmentUsageLog(models.Model):
     )
     
     # Method and notes
-    qr_scan_method = models.CharField(
-        max_length=20,
-        choices=SCAN_METHOD_CHOICES,
-        default='mobile_camera',
-        help_text="Method used to scan QR code"
-    )
     notes = models.TextField(
         blank=True,
         null=True,

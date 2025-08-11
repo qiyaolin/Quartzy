@@ -332,9 +332,7 @@ export interface Equipment {
   name: string;
   description?: string;
   is_bookable: boolean;
-  requires_qr_checkin: boolean;
   location: string;
-  qr_code?: string;
   current_user?: {
     username: string;
     first_name?: string;
@@ -376,11 +374,6 @@ export interface EquipmentUsageLog {
   updated_at: string;
 }
 
-export interface QRScanRequest {
-  qr_code: string;
-  scan_method?: 'mobile_camera' | 'desktop_webcam' | 'manual_entry';
-  notes?: string;
-}
 
 // Equipment API Service
 export const equipmentApi = {
@@ -500,57 +493,6 @@ export const equipmentApi = {
     }
   },
 
-  // QR Code check-in
-  qrCheckin: async (token: string, qrData: QRScanRequest): Promise<any> => {
-    const response = await fetch(buildApiUrl('/api/schedule/equipment/qr_checkin/'), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(qrData)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Failed to check in: ${response.statusText}`);
-    }
-    
-    return response.json();
-  },
-
-  // QR Code check-out
-  qrCheckout: async (token: string, qrData: QRScanRequest): Promise<any> => {
-    const response = await fetch(buildApiUrl('/api/schedule/equipment/qr_checkout/'), {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(qrData)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Failed to check out: ${response.statusText}`);
-    }
-    
-    return response.json();
-  },
-
-  // Get equipment QR code
-  getEquipmentQR: async (token: string, equipmentId: number): Promise<any> => {
-    const response = await fetch(buildApiUrl(`api/schedule/equipment/${equipmentId}/qr_code/`), {
-      headers: { 'Authorization': `Token ${token}` }
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `Failed to get QR code: ${response.statusText}`);
-    }
-    
-    return response.json();
-  },
 
   // Get equipment usage logs
   getUsageLogs: async (token: string, equipmentId: number, params: any = {}): Promise<EquipmentUsageLog[]> => {

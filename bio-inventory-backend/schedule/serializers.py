@@ -39,7 +39,7 @@ class EventSerializer(serializers.ModelSerializer):
 
 
 class EquipmentSerializer(serializers.ModelSerializer):
-    """Equipment serializer with QR code support"""
+    """Equipment serializer with simple check-in/out support"""
     current_user = UserSerializer(read_only=True)
     current_usage_duration = serializers.ReadOnlyField()
     
@@ -47,12 +47,11 @@ class EquipmentSerializer(serializers.ModelSerializer):
         model = Equipment
         fields = [
             'id', 'name', 'description', 'is_bookable', 
-            'requires_qr_checkin', 'location', 'qr_code',
-            'current_user', 'current_checkin_time', 'is_in_use',
+            'location', 'current_user', 'current_checkin_time', 'is_in_use',
             'current_usage_duration', 'created_at', 'updated_at'
         ]
         read_only_fields = [
-            'id', 'qr_code', 'current_user', 'current_checkin_time', 
+            'id', 'current_user', 'current_checkin_time', 
             'is_in_use', 'current_usage_duration', 'created_at', 'updated_at'
         ]
 
@@ -323,22 +322,6 @@ class WaitingQueueEntrySerializer(serializers.ModelSerializer):
         ]
 
 
-class QRCodeScanSerializer(serializers.Serializer):
-    """Serializer for QR code scanning operations"""
-    qr_code = serializers.CharField(max_length=50)
-    scan_method = serializers.ChoiceField(
-        choices=EquipmentUsageLog.SCAN_METHOD_CHOICES,
-        default='mobile_camera'
-    )
-    notes = serializers.CharField(required=False, allow_blank=True)
-    
-    def validate_qr_code(self, value):
-        """Validate that QR code exists and belongs to QR-enabled equipment"""
-        try:
-            equipment = Equipment.objects.get(qr_code=value, requires_qr_checkin=True)
-        except Equipment.DoesNotExist:
-            raise serializers.ValidationError("Invalid QR code or equipment not found")
-        return value
 
 
 # ===============================================

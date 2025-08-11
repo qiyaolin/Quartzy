@@ -2,8 +2,8 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import '../styles/mobile-schedule.css';
 import { 
     Calendar, Clock, Users, MapPin, Plus, Edit3, Trash2, Search, 
-    Settings, QrCode, CheckCircle, AlertCircle, User, Monitor,
-    CalendarDays, BookOpen, Repeat, Filter, Eye, EyeOff, X
+    Settings, CheckCircle, User, Monitor,
+    CalendarDays, BookOpen, Repeat, Eye, EyeOff, X
 } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { 
@@ -15,19 +15,15 @@ import { buildApiUrl } from '../config/api.ts';
 import ScheduleFormModal from '../modals/ScheduleFormModal.tsx';
 import GroupMeetingFormModal from '../modals/GroupMeetingFormModal.tsx';
 import RecurringTaskFormModal from '../modals/RecurringTaskFormModal.tsx';
-import EquipmentQRScanner from '../components/EquipmentQRScanner.tsx';
-import EquipmentQRDisplay from '../components/EquipmentQRDisplay.tsx';
 import CalendarView from '../components/CalendarView.tsx';
 import ModernCalendarView from '../components/ModernCalendarView.tsx';
 import MobileScheduleDashboard from '../components/MobileScheduleDashboard.tsx';
 import EquipmentManagement from '../components/EquipmentManagement.tsx';
 import GroupMeetingsManager from '../components/GroupMeetingsManager.tsx';
 import JournalClubHub from '../components/JournalClubHub.tsx';
-import PresenterManagement from '../components/PresenterManagement.tsx';
 import ImprovedTaskManager from '../components/ImprovedTaskManager.tsx';
 import MeetingEditModal from '../modals/MeetingEditModal.tsx';
 import UnifiedScheduleDashboard from '../components/UnifiedScheduleDashboard.tsx';
-import QuickActions from '../components/QuickActions.tsx';
 import EnhancedQuickActions from '../components/EnhancedQuickActions.tsx';
 import MyScheduleView from '../components/MyScheduleView.tsx';
 import QuickTourModal from '../components/QuickTourModal.tsx';
@@ -114,10 +110,6 @@ const SchedulePage: React.FC = () => {
     const [isGroupMeetingModalOpen, setIsGroupMeetingModalOpen] = useState(false);
     const [isRecurringTaskModalOpen, setIsRecurringTaskModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
-    const [qrScanMode, setQrScanMode] = useState<'checkin' | 'checkout'>('checkin');
-    const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
-    const [showQRDisplay, setShowQRDisplay] = useState(false);
     const [isMeetingEditModalOpen, setIsMeetingEditModalOpen] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
     const [selectedEventForDetails, setSelectedEventForDetails] = useState<Schedule | null>(null);
@@ -359,31 +351,6 @@ const SchedulePage: React.FC = () => {
         setIsModalOpen(false);
     };
 
-    const handleOpenQRScanner = (mode: 'checkin' | 'checkout') => {
-        setQrScanMode(mode);
-        setIsQRScannerOpen(true);
-    };
-
-    const handleCloseQRScanner = () => {
-        setIsQRScannerOpen(false);
-        setSelectedEquipment(null);
-    };
-
-    const handleQRScanSuccess = (result: any) => {
-        console.log('QR Scan Success:', result);
-        // Refresh equipment data after successful scan
-        fetchEquipment();
-    };
-
-    const handleShowQRCode = (equipmentItem: Equipment) => {
-        setSelectedEquipment(equipmentItem);
-        setShowQRDisplay(true);
-    };
-
-    const handleCloseQRDisplay = () => {
-        setShowQRDisplay(false);
-        setSelectedEquipment(null);
-    };
 
     const handleSubmitSchedule = async (scheduleData: ScheduleFormData) => {
         setIsSubmitting(true);
@@ -610,24 +577,7 @@ const SchedulePage: React.FC = () => {
                     </div>
                 );
             case 'equipment':
-                return (
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={() => handleOpenQRScanner('checkin')}
-                            className="btn btn-success btn-sm"
-                        >
-                            <QrCode className="w-4 h-4 mr-2" />
-                            Check In
-                        </button>
-                        <button 
-                            onClick={() => handleOpenQRScanner('checkout')}
-                            className="btn btn-danger btn-sm"
-                        >
-                            <QrCode className="w-4 h-4 mr-2" />
-                            Check Out
-                        </button>
-                    </div>
-                );
+                return null;
             case 'meetings':
                 return isAdmin ? (
                     <button 
@@ -1212,8 +1162,6 @@ const SchedulePage: React.FC = () => {
 
                 {activeTab === 'equipment' && (
                     <EquipmentManagement 
-                        onShowQRCode={handleShowQRCode}
-                        onQRScan={handleOpenQRScanner}
                         onEditEquipment={isAdmin ? handleEditEquipment : undefined}
                         isAdmin={isAdmin}
                     />
@@ -1477,20 +1425,6 @@ const SchedulePage: React.FC = () => {
                 isSubmitting={isSubmitting}
             />
 
-            <EquipmentQRScanner
-                isOpen={isQRScannerOpen}
-                onClose={handleCloseQRScanner}
-                onSuccess={handleQRScanSuccess}
-                mode={qrScanMode}
-            />
-
-            {selectedEquipment && (
-                <EquipmentQRDisplay
-                    isOpen={showQRDisplay}
-                    onClose={handleCloseQRDisplay}
-                    equipment={selectedEquipment}
-                />
-            )}
 
             <MeetingEditModal
                 isOpen={isMeetingEditModalOpen}
@@ -1642,9 +1576,7 @@ const ScheduleListView: React.FC<{
 const EquipmentView: React.FC<{
     equipment: Equipment[];
     loading: boolean;
-    onShowQRCode: (equipment: Equipment) => void;
-    onQRScan: (mode: 'checkin' | 'checkout') => void;
-}> = ({ equipment, loading, onShowQRCode, onQRScan }) => {
+}> = ({ equipment, loading }) => {
     if (loading) {
         return <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -1699,25 +1631,9 @@ const EquipmentView: React.FC<{
                                     <CheckCircle className="w-4 h-4 mr-1" />
                                     <span>Bookable: {eq.is_bookable ? 'Yes' : 'No'}</span>
                                 </div>
-                                {eq.requires_qr_checkin && (
-                                    <div className="flex items-center text-sm text-gray-500">
-                                        <QrCode className="w-4 h-4 mr-1" />
-                                        <span>QR Required</span>
-                                    </div>
-                                )}
                             </div>
                             
                             <div className="flex gap-2 mt-4">
-                                {eq.requires_qr_checkin && (
-                                    <button
-                                        onClick={() => onShowQRCode(eq)}
-                                        className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                    >
-                                        <QrCode className="w-4 h-4 mr-2" />
-                                        Show QR
-                                    </button>
-                                )}
-                                
                                 {eq.is_bookable && (
                                     <button className="flex-1 inline-flex items-center justify-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700">
                                         <Calendar className="w-4 h-4 mr-2" />

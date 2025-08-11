@@ -17,9 +17,7 @@ interface Equipment {
     name: string;
     description?: string;
     location: string;
-    requires_qr_checkin: boolean;
     is_bookable: boolean;
-    qr_code?: string;
     is_in_use: boolean;
     current_user?: {
         username: string;
@@ -247,7 +245,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
                     </div>
 
                     {/* Booking Section */}
-                    {equipment.is_bookable && !equipment.requires_qr_checkin && onBooking && (
+                    {equipment.is_bookable && onBooking && (
                         <div className="pt-3 border-t border-gray-100">
                             <button
                                 onClick={() => onBooking(equipment)}

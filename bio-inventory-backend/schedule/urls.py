@@ -41,7 +41,6 @@ urlpatterns = [
     path('', include(router.urls)),
     
     # Additional API views that aren't ViewSets
-    path('qr-scan/', views.QRCodeScanView.as_view(), name='qr-scan'),
     
     # Override group-meetings to return MeetingInstance data
     path('group-meetings/', additional_views.group_meetings_api, name='group-meetings-override'),
