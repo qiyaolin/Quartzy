@@ -596,7 +596,11 @@ class TaskNotificationService:
         title = f"System Maintenance: {maintenance_type.replace('_', ' ').title()}"
         
         if scheduled_time:
-            message = f"Scheduled for {scheduled_time.strftime('%Y-%m-%d %H:%M')}. {message}"
+            # Convert to Eastern timezone for display
+            from schedule.models import get_eastern_timezone
+            eastern_tz = get_eastern_timezone()
+            scheduled_time_eastern = scheduled_time.astimezone(eastern_tz)
+            message = f"Scheduled for {scheduled_time_eastern.strftime('%B %d, %Y at %I:%M %p %Z')}. {message}"
         
         notifications = NotificationService.create_bulk_notification(
             recipients=recipients,

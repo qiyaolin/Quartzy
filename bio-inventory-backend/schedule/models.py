@@ -247,6 +247,11 @@ class Equipment(models.Model):
         if next_booking and next_booking.user.email:
             try:
                 # Send notification email
+                # Convert times to Eastern timezone for display
+                eastern_tz = get_eastern_timezone()
+                scheduled_time_eastern = next_booking.event.start_time.astimezone(eastern_tz)
+                available_time_eastern = current_time.astimezone(eastern_tz)
+                
                 subject = f'Equipment Available Early - {self.name}'
                 message = f'''
 Hello {next_booking.user.first_name or next_booking.user.username},
@@ -256,8 +261,8 @@ Good news! The equipment "{self.name}" has become available earlier than expecte
 Your booking details:
 - Equipment: {self.name}
 - Location: {self.location}
-- Originally scheduled: {next_booking.event.start_time.strftime('%Y-%m-%d %H:%M')}
-- Available now: {current_time.strftime('%Y-%m-%d %H:%M')}
+- Originally scheduled: {scheduled_time_eastern.strftime('%B %d, %Y at %I:%M %p %Z')}
+- Available now: {available_time_eastern.strftime('%I:%M %p %Z')}
 
 You can now check in to use the equipment if you're ready.
 
