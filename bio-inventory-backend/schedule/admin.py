@@ -21,8 +21,8 @@ class EventAdmin(admin.ModelAdmin):
 
 @admin.register(Equipment)
 class EquipmentAdmin(admin.ModelAdmin):
-    list_display = ['name', 'is_bookable', 'requires_qr_checkin', 'location']
-    list_filter = ['is_bookable', 'requires_qr_checkin']
+    list_display = ['name', 'is_bookable', 'location', 'is_in_use']
+    list_filter = ['is_bookable', 'is_in_use']
     search_fields = ['name', 'description', 'location']
     ordering = ['name']
 
