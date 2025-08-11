@@ -43,6 +43,35 @@ class EquipmentSerializer(serializers.ModelSerializer):
     current_user = UserSerializer(read_only=True)
     current_usage_duration = serializers.ReadOnlyField()
     
+    def to_representation(self, instance):
+        """Custom serialization with error handling"""
+        try:
+            data = super().to_representation(instance)
+            # Ensure all expected fields are present
+            if 'current_user' not in data:
+                data['current_user'] = None
+            if 'is_in_use' not in data:
+                data['is_in_use'] = False
+            if 'is_bookable' not in data:
+                data['is_bookable'] = True
+            return data
+        except Exception as e:
+            print(f"Error serializing equipment {instance.id if instance else 'None'}: {e}")
+            # Return minimal safe data
+            return {
+                'id': instance.id if instance else None,
+                'name': instance.name if instance else 'Unknown',
+                'description': getattr(instance, 'description', '') or '',
+                'is_bookable': getattr(instance, 'is_bookable', True),
+                'location': getattr(instance, 'location', '') or '',
+                'current_user': None,
+                'current_checkin_time': None,
+                'is_in_use': getattr(instance, 'is_in_use', False),
+                'current_usage_duration': None,
+                'created_at': getattr(instance, 'created_at', None),
+                'updated_at': getattr(instance, 'updated_at', None)
+            }
+    
     class Meta:
         model = Equipment
         fields = [

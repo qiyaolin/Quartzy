@@ -160,7 +160,8 @@ class Equipment(models.Model):
                 title=f"Equipment Booking - {self.name}",
                 start_time=eastern_now,
                 end_time=end_time,
-                event_type='booking'
+                event_type='booking',
+                created_by=user
             )
             
             # Create booking
@@ -277,7 +278,7 @@ Lab Equipment Management System
     def current_usage_duration(self):
         """Get current usage duration if equipment is in use"""
         if self.is_in_use and self.current_checkin_time:
-            return timezone.now() - self.current_checkin_time
+            return get_eastern_now() - self.current_checkin_time
         return None
     
     def __str__(self):
