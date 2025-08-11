@@ -3,8 +3,24 @@ from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, datetime
 import uuid
+import pytz
+
+
+def get_eastern_timezone():
+    """Get US Eastern timezone (handles EST/EDT automatically)"""
+    return pytz.timezone('America/New_York')
+
+
+def get_eastern_now():
+    """Get current time in US Eastern timezone"""
+    return timezone.now().astimezone(get_eastern_timezone())
+
+
+def get_eastern_today():
+    """Get today's date in US Eastern timezone"""
+    return get_eastern_now().date()
 
 
 class Event(models.Model):
@@ -76,14 +92,17 @@ class Equipment(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
     
-    def check_in_user(self, user):
-        """Check in a user to this equipment and update associated booking"""
+    def check_in_user(self, user, duration_hours=1):
+        """Check in a user to this equipment and update or create booking"""
         if self.is_in_use:
             raise ValueError(f"Equipment {self.name} is already in use by {self.current_user}")
         
-        current_time = timezone.now()
+        # Use Eastern timezone for all operations
+        eastern_now = get_eastern_now()
+        eastern_today = get_eastern_today()
+        
         self.current_user = user
-        self.current_checkin_time = current_time
+        self.current_checkin_time = eastern_now
         self.is_in_use = True
         self.save()
         
@@ -94,21 +113,67 @@ class Equipment(models.Model):
             check_in_time=self.current_checkin_time
         )
         
-        # Update associated booking status and start time
-        current_booking = Booking.objects.filter(
+        # Find the nearest booking for today for this user and equipment
+        today_start = eastern_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        
+        # Get all bookings for today and find the nearest one to check-in time
+        today_bookings = Booking.objects.filter(
             equipment=self,
             user=user,
-            event__start_time__lte=current_time,
-            event__end_time__gte=current_time,
+            event__start_time__gte=today_start,
+            event__start_time__lt=today_end,
             status__in=['confirmed', 'pending']
-        ).first()
+        ).order_by('event__start_time')
         
-        if current_booking:
-            current_booking.status = 'in_progress'
-            # Update the actual start time to current time
-            current_booking.event.start_time = current_time
-            current_booking.event.save()
-            current_booking.save()
+        nearest_booking = None
+        min_time_diff = None
+        
+        for booking in today_bookings:
+            time_diff = abs((booking.event.start_time - eastern_now).total_seconds())
+            if min_time_diff is None or time_diff < min_time_diff:
+                min_time_diff = time_diff
+                nearest_booking = booking
+        
+        if nearest_booking:
+            print(f"Found nearest booking {nearest_booking.id} for equipment {self.name} and user {user.username}")
+            print(f"Original start time: {nearest_booking.event.start_time}")
+            print(f"Updating start time to: {eastern_now}")
+            
+            # Update the booking with actual check-in time
+            nearest_booking.status = 'in_progress'
+            nearest_booking.event.start_time = eastern_now
+            nearest_booking.event.save()
+            nearest_booking.save()
+            
+            print(f"Updated start time: {nearest_booking.event.start_time}")
+            return nearest_booking
+        else:
+            print(f"No booking found for equipment {self.name} and user {user.username} today")
+            print("Creating new booking...")
+            
+            # Create new booking with specified duration
+            end_time = eastern_now + timedelta(hours=duration_hours)
+            
+            # Create event first
+            event = Event.objects.create(
+                title=f"Equipment Booking - {self.name}",
+                start_time=eastern_now,
+                end_time=end_time,
+                event_type='booking'
+            )
+            
+            # Create booking
+            new_booking = Booking.objects.create(
+                equipment=self,
+                user=user,
+                event=event,
+                status='in_progress',
+                notes=f"Auto-created booking from check-in at {eastern_now.strftime('%Y-%m-%d %H:%M')}"
+            )
+            
+            print(f"Created new booking {new_booking.id} from {eastern_now} to {end_time}")
+            return new_booking
     
     def check_out_user(self, user=None):
         """Check out the current user from this equipment, update booking, and notify next user"""
@@ -118,7 +183,7 @@ class Equipment(models.Model):
         if user and self.current_user != user:
             raise ValueError(f"Only {self.current_user} can check out from {self.name}")
         
-        current_time = timezone.now()
+        current_time = get_eastern_now()
         current_user = self.current_user
         
         # Update usage log

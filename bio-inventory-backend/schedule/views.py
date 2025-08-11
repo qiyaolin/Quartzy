@@ -1866,7 +1866,7 @@ class EquipmentCheckinView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def post(self, request, equipment_id):
-        """Check in to equipment and update associated booking"""
+        """Check in to equipment and update or create booking"""
         try:
             equipment = Equipment.objects.get(id=equipment_id)
         except Equipment.DoesNotExist:
@@ -1893,17 +1893,18 @@ class EquipmentCheckinView(APIView):
                     'duration': str(equipment.current_usage_duration)
                 }, status=status.HTTP_409_CONFLICT)
             
-            # Check in user and update booking
-            equipment.check_in_user(request.user)
+            # Get optional duration from request (default to 1 hour)
+            duration_hours = float(request.data.get('duration_hours', 1.0))
+            if duration_hours <= 0 or duration_hours > 24:
+                return Response(
+                    {'error': 'Duration must be between 0.5 and 24 hours'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            # Get updated booking information
-            current_booking = Booking.objects.filter(
-                equipment=equipment,
-                user=request.user,
-                status='in_progress'
-            ).first()
+            # Check in user and update/create booking
+            booking = equipment.check_in_user(request.user, duration_hours)
             
-            # Create a safe response without complex serializers first
+            # Create a safe response
             try:
                 equipment_data = EquipmentSerializer(equipment).data
             except Exception as ser_e:
@@ -1916,19 +1917,22 @@ class EquipmentCheckinView(APIView):
                 }
             
             try:
-                booking_data = BookingSerializer(current_booking).data if current_booking else None
+                booking_data = BookingSerializer(booking).data if booking else None
             except Exception as ser_e:
                 logger.error(f"BookingSerializer error: {ser_e}")
                 booking_data = {
-                    'id': current_booking.id if current_booking else None,
-                    'status': current_booking.status if current_booking else None
-                } if current_booking else None
+                    'id': booking.id if booking else None,
+                    'status': booking.status if booking else None,
+                    'start_time': booking.event.start_time if booking else None,
+                    'end_time': booking.event.end_time if booking else None
+                } if booking else None
 
             return Response({
                 'message': 'Successfully checked in',
                 'equipment': equipment_data,
                 'check_in_time': equipment.current_checkin_time,
-                'booking': booking_data
+                'booking': booking_data,
+                'booking_created': booking.notes and 'Auto-created' in booking.notes if booking else False
             })
             
         except ValueError as e:
@@ -3017,8 +3021,10 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def overview(self, request):
         """Get unified dashboard overview for current user"""
+        from .models import get_eastern_now, get_eastern_today
+        
         user = request.user
-        today = timezone.now().date()
+        today = get_eastern_today()
         next_week = today + timedelta(days=7)
 
         try:
