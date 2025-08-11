@@ -41,6 +41,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedEquipmentForBooking, setSelectedEquipmentForBooking] = useState<Equipment | null>(null);
   const [isSubmittingBooking, setIsSubmittingBooking] = useState(false);
+  const [isCheckInMode, setIsCheckInMode] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<EquipmentFormData>({
@@ -172,8 +173,9 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
 
 
   // Handle equipment booking with modal
-  const handleBookEquipment = useCallback((equipment: Equipment) => {
+  const handleBookEquipment = useCallback((equipment: Equipment, checkInMode: boolean = false) => {
     setSelectedEquipmentForBooking(equipment);
+    setIsCheckInMode(checkInMode);
     setIsBookingModalOpen(true);
   }, []);
 
@@ -431,9 +433,11 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         <QuickBookModal
           equipment={selectedEquipmentForBooking}
           isSubmitting={isSubmittingBooking}
+          isCheckInMode={isCheckInMode}
           onClose={() => {
             setIsBookingModalOpen(false);
             setSelectedEquipmentForBooking(null);
+            setIsCheckInMode(false);
           }}
           onSubmit={handleBookingSubmit}
         />

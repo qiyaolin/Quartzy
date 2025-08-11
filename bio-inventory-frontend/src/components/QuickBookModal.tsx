@@ -23,20 +23,29 @@ interface QuickBookModalProps {
     isSubmitting: boolean;
     onClose: () => void;
     onSubmit: (data: QuickBookingData) => void;
+    isCheckInMode?: boolean; // New prop to indicate this is a check-in operation
 }
 
 const QuickBookModal: React.FC<QuickBookModalProps> = ({
     equipment,
     isSubmitting,
     onClose,
-    onSubmit
+    onSubmit,
+    isCheckInMode = false
 }) => {
     const authContext = useContext(AuthContext);
     const token = authContext?.token;
     
     const [duration, setDuration] = useState(60);
-    const [startTime, setStartTime] = useState('');
-    const [autoCheckin, setAutoCheckin] = useState(true);
+    const [startTime, setStartTime] = useState(() => {
+        // For check-in mode, set current time as default
+        if (isCheckInMode) {
+            const now = new Date();
+            return now.toTimeString().slice(0, 5); // Format as HH:MM
+        }
+        return '';
+    });
+    const [autoCheckin, setAutoCheckin] = useState(isCheckInMode ? true : true); // Always true for check-in mode
     const [conflictWarning, setConflictWarning] = useState<string | null>(null);
     const [checkingAvailability, setCheckingAvailability] = useState(false);
 
@@ -120,7 +129,9 @@ const QuickBookModal: React.FC<QuickBookModalProps> = ({
                             <Monitor className="w-5 h-5 text-blue-600" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-semibold text-gray-900">Book Equipment</h3>
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                {isCheckInMode ? 'Check In Equipment' : 'Book Equipment'}
+                            </h3>
                             <p className="text-sm text-gray-600">{equipment.name}</p>
                             <p className="text-xs text-gray-500">{equipment.location}</p>
                         </div>
@@ -166,7 +177,7 @@ const QuickBookModal: React.FC<QuickBookModalProps> = ({
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Start Time (optional)
+                                {isCheckInMode ? 'Start Time' : 'Start Time (optional)'}
                             </label>
                             <input
                                 type="time"
@@ -174,9 +185,13 @@ const QuickBookModal: React.FC<QuickBookModalProps> = ({
                                 onChange={(e) => setStartTime(e.target.value)}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Start now"
+                                disabled={isCheckInMode} // Disable editing for check-in mode
                             />
                             <p className="text-xs text-gray-500 mt-1">
-                                Leave empty to start immediately
+                                {isCheckInMode 
+                                    ? 'Check-in will start at the current time' 
+                                    : 'Leave empty to start immediately'
+                                }
                             </p>
                         </div>
 
@@ -187,9 +202,10 @@ const QuickBookModal: React.FC<QuickBookModalProps> = ({
                                 checked={autoCheckin}
                                 onChange={(e) => setAutoCheckin(e.target.checked)}
                                 className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                disabled={isCheckInMode} // Always enabled for check-in mode
                             />
                             <label htmlFor="autoCheckin" className="ml-2 text-sm text-gray-700">
-                                Auto check-in upon booking
+                                {isCheckInMode ? 'Will check-in immediately' : 'Auto check-in upon booking'}
                             </label>
                         </div>
 
@@ -215,7 +231,7 @@ const QuickBookModal: React.FC<QuickBookModalProps> = ({
                                 ) : (
                                     <>
                                         <CalendarCheck className="w-4 h-4" />
-                                        Book Now
+                                        {isCheckInMode ? 'Check In Now' : 'Book Now'}
                                     </>
                                 )}
                             </button>

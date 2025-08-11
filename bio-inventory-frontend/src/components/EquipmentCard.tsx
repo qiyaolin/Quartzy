@@ -38,7 +38,7 @@ interface Equipment {
 
 interface EquipmentCardProps {
     equipment: Equipment;
-    onBooking?: (equipment: Equipment) => void;
+    onBooking?: (equipment: Equipment, checkInMode?: boolean) => void;
     onViewUsage?: (equipment: Equipment) => void;
     currentUserId?: number;
     currentUsername?: string;
@@ -58,17 +58,10 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
     const authContext = useContext(AuthContext);
     const token = authContext?.token || null;
 
-    const handleCheckIn = async () => {
-        if (!token) return;
-        try {
-            setSubmitting('checkin');
-            await equipmentApi.checkIn(token, equipment.id);
-            onStatusChange?.();
-        } catch (e) {
-            console.error('Check-in failed', e);
-            alert((e as Error).message || 'Check-in failed');
-        } finally {
-            setSubmitting(null);
+    const handleCheckIn = () => {
+        // Trigger booking modal for check-in instead of direct API call
+        if (onBooking) {
+            onBooking(equipment, true); // Pass true to indicate check-in mode
         }
     };
 
@@ -238,11 +231,10 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
                         {canCheckIn() && (
                             <button
                                 onClick={handleCheckIn}
-                                disabled={submitting === 'checkin'}
-                                className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-60 transition-colors"
+                                className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
                             >
                                 <CheckCircle className="w-4 h-4" />
-                                {submitting === 'checkin' ? 'Checking In...' : 'Check In'}
+                                Check In
                             </button>
                         )}
                         {canCheckOut() && (
