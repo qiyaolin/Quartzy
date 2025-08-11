@@ -15,7 +15,7 @@ from notifications.services import NotificationService
 from notifications.email_service import EmailNotificationService
 from ..models import (
     PeriodicTaskInstance, TaskSwapRequest, TaskTemplate,
-    QueueMember, TaskRotationQueue
+    QueueMember, TaskRotationQueue, NotificationRecord
 )
 
 logger = logging.getLogger(__name__)
@@ -84,22 +84,27 @@ class TaskNotificationService:
             notifications.append(notification)
         
         # Send email notifications if user preferences allow
-        try:
-            # Send email (simplified policy for now): always email assignees
-            email_context = {
-                'task': task_instance,
-                'recipient': user,
-                'role': role,
-                'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks?task_id={task_instance.id}",
-            }
-            EmailNotificationService.send_email_notification(
-                recipients=[user],
-                subject=f"Task {action.title()}: {task_instance.template_name}",
-                template_name='task_assignment',
-                context=email_context
-            )
-        except Exception as e:
-            logger.warning(f"Failed to send email notification to {user.username}: {str(e)}")
+        for user in assignees:
+            try:
+                # Determine if user is primary assignee for email context
+                is_primary = task_instance.get_primary_assignee() == user
+                role = "primary assignee" if is_primary else "assistant"
+                
+                # Send email (simplified policy for now): always email assignees
+                email_context = {
+                    'task': task_instance,
+                    'recipient': user,
+                    'role': role,
+                    'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks?task_id={task_instance.id}",
+                }
+                EmailNotificationService.send_email_notification(
+                    recipients=[user],
+                    subject=f"Task {action.title()}: {task_instance.template_name}",
+                    template_name='task_assignment',
+                    context=email_context
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send email notification to {user.username}: {str(e)}")
         
         logger.info(
             f"Created {len(notifications)} task assignment notifications "
@@ -686,3 +691,169 @@ class TaskNotificationService:
                 'total_pending_swaps': pending_swaps.count()
             }
         }
+    
+    @classmethod
+    def notify_task_status_change(
+        cls,
+        task_instance: PeriodicTaskInstance,
+        assignees: List[User],
+        new_status: str,
+        changed_by: User
+    ) -> List[NotificationRecord]:
+        """Notify users when task status changes (e.g., started, paused)"""
+        notifications = []
+        
+        for user in assignees:
+            # Skip notifying the user who made the change
+            if user.id == changed_by.id:
+                continue
+                
+            title = f"Task Status Changed: {task_instance.template_name}"
+            message = (
+                f"The task '{task_instance.template_name}' for period {task_instance.scheduled_period} "
+                f"has been changed to '{new_status}' by {changed_by.get_full_name() or changed_by.username}."
+            )
+            
+            notification = NotificationService.create_notification(
+                recipient=user,
+                title=title,
+                message=message,
+                notification_type='info',
+                priority='medium',
+                related_object=task_instance,
+                action_url=f'/schedule/my-tasks/?task_id={task_instance.id}',
+                metadata={'task_id': task_instance.id, 'new_status': new_status}
+            )
+            
+            notifications.append(notification)
+        
+        # Send email notifications
+        try:
+            EmailNotificationService.send_email_notification(
+                recipients=assignees,
+                subject=f"Task Status Update: {task_instance.template_name}",
+                template_name='task_status_change',
+                context={
+                    'task': task_instance,
+                    'new_status': new_status,
+                    'changed_by': changed_by.get_full_name() or changed_by.username,
+                    'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks?task_id={task_instance.id}"
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send status change email for task {task_instance.id}: {e}")
+        
+        logger.info(
+            f"Created {len(notifications)} task status change notifications for task {task_instance.id}"
+        )
+        
+        return notifications
+    
+    @classmethod
+    def notify_task_cancellation(
+        cls,
+        task_instance: PeriodicTaskInstance,
+        assignees: List[User],
+        cancelled_by: User,
+        reason: str
+    ) -> List[NotificationRecord]:
+        """Notify users when task is cancelled"""
+        notifications = []
+        
+        for user in assignees:
+            title = f"Task Cancelled: {task_instance.template_name}"
+            message = (
+                f"The task '{task_instance.template_name}' for period {task_instance.scheduled_period} "
+                f"has been cancelled by {cancelled_by.get_full_name() or cancelled_by.username}. "
+                f"Reason: {reason}"
+            )
+            
+            notification = NotificationService.create_notification(
+                recipient=user,
+                title=title,
+                message=message,
+                notification_type='warning',
+                priority='medium',
+                related_object=task_instance,
+                action_url=f'/schedule/my-tasks/?task_id={task_instance.id}',
+                metadata={'task_id': task_instance.id, 'cancellation_reason': reason}
+            )
+            
+            notifications.append(notification)
+        
+        # Send email notifications
+        try:
+            EmailNotificationService.send_email_notification(
+                recipients=assignees,
+                subject=f"Task Cancelled: {task_instance.template_name}",
+                template_name='task_cancellation',
+                context={
+                    'task': task_instance,
+                    'cancelled_by': cancelled_by.get_full_name() or cancelled_by.username,
+                    'reason': reason,
+                    'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks"
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send cancellation email for task {task_instance.id}: {e}")
+        
+        logger.info(
+            f"Created {len(notifications)} task cancellation notifications for task {task_instance.id}"
+        )
+        
+        return notifications
+    
+    @classmethod
+    def notify_task_deletion(
+        cls,
+        task_instance: PeriodicTaskInstance,
+        assignees: List[User],
+        deleted_by: User
+    ) -> List[NotificationRecord]:
+        """Notify users when task is deleted"""
+        notifications = []
+        
+        for user in assignees:
+            title = f"Task Deleted: {task_instance.template_name}"
+            message = (
+                f"The task '{task_instance.template_name}' for period {task_instance.scheduled_period} "
+                f"has been deleted by {deleted_by.get_full_name() or deleted_by.username}. "
+                f"This task is no longer available."
+            )
+            
+            notification = NotificationService.create_notification(
+                recipient=user,
+                title=title,
+                message=message,
+                notification_type='error',
+                priority='high',
+                related_object=None,  # Task is deleted, no object reference
+                action_url=f'/schedule/my-tasks/',
+                metadata={'deleted_task_name': task_instance.template_name}
+            )
+            
+            notifications.append(notification)
+        
+        # Send email notifications
+        try:
+            EmailNotificationService.send_email_notification(
+                recipients=assignees,
+                subject=f"Task Deleted: {task_instance.template_name}",
+                template_name='task_deletion',
+                context={
+                    'task': {
+                        'name': task_instance.template_name,
+                        'period': task_instance.scheduled_period
+                    },
+                    'deleted_by': deleted_by.get_full_name() or deleted_by.username,
+                    'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks"
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send deletion email for task {task_instance.id}: {e}")
+        
+        logger.info(
+            f"Created {len(notifications)} task deletion notifications for task {task_instance.id}"
+        )
+        
+        return notifications

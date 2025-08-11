@@ -68,10 +68,11 @@ INSTALLED_APPS = [
     'schedule',
 ]
 
+# Put CORS middleware at the very top so that it adds headers to all responses (including 4xx/5xx)
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -84,7 +85,7 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -194,7 +195,33 @@ cors_origins_env = os.environ.get(
     'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com'
 )
 CORS_ALLOWED_ORIGINS = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
+
+# Fallback: allow all origins via env flag (useful for hotfix/probing CORS in prod)
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() == 'true'
 CORS_ALLOW_CREDENTIALS = True
+
+# Trust the frontend origins for CSRF (mainly for session auth if ever used, safe to add)
+csrf_trusted_env = os.environ.get(
+    'CSRF_TRUSTED_ORIGINS',
+    'https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com,https://*.web.app,https://*.firebaseapp.com'
+)
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in csrf_trusted_env.split(',') if o.strip()]
+
+# Also allow regex-based origins for firebase/web.app wildcard subdomains
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r'^https:\/\/.*\.web\.app$',
+    r'^https:\/\/.*\.firebaseapp\.com$'
+]
+
+# Restrict CORS handling to API and schedule endpoints
+CORS_URLS_REGEX = r'^\/(api|schedule)\/.*$'
+
+# Be explicit about common headers (Authorization etc.)
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'authorization',
+    'content-type',
+]
 
 # DRF Token Auth config
 REST_FRAMEWORK = {

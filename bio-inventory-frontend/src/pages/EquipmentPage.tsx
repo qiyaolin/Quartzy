@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
-    QrCode, 
     Calendar, 
     Plus, 
     Search, 
@@ -11,7 +10,6 @@ import {
 import { AuthContext } from '../components/AuthContext.tsx';
 import { equipmentApi, Equipment } from "../services/scheduleApi.ts";
 import EquipmentCard from '../components/EquipmentCard';
-import EquipmentQRScanner from '../components/EquipmentQRScanner';
 import QuickBookModal from '../components/QuickBookModal';
 
 const EquipmentPage: React.FC = () => {
@@ -27,8 +25,6 @@ const EquipmentPage: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [filterQREnabled, setFilterQREnabled] = useState('all');
-    const [showQRScanner, setShowQRScanner] = useState(false);
-    const [scannerMode, setScannerMode] = useState<'checkin' | 'checkout'>('checkin');
 
     const fetchEquipment = useCallback(async () => {
         try {
@@ -56,9 +52,7 @@ const EquipmentPage: React.FC = () => {
         }
     }, [token, fetchEquipment]);
 
-    const handleQRScanSuccess = (result: any) => {
-        console.log('QR scan successful:', result);
-        // Refresh equipment list to show updated status
+    const handleStatusChange = () => {
         fetchEquipment();
     };
 
@@ -88,10 +82,7 @@ const EquipmentPage: React.FC = () => {
         alert(`Usage history for ${equipment.name} will be implemented`);
     };
 
-    const handleScannerOpen = (mode: 'checkin' | 'checkout') => {
-        setScannerMode(mode);
-        setShowQRScanner(true);
-    };
+    // QR scanner removed in favor of button-based actions
 
     // Filter equipment based on search and filters
     const filteredEquipment = equipment.filter(eq => {
@@ -133,26 +124,10 @@ const EquipmentPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Equipment Management</h1>
-                    <p className="text-gray-600">Manage equipment bookings and QR code check-in/out</p>
+                    <p className="text-gray-600">Manage equipment bookings and check-in/out</p>
                 </div>
                 
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={() => handleScannerOpen('checkin')}
-                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                        <QrCode className="w-4 h-4 mr-2" />
-                        Quick Check In
-                    </button>
-                    
-                    <button
-                        onClick={() => handleScannerOpen('checkout')}
-                        className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                        <QrCode className="w-4 h-4 mr-2" />
-                        Quick Check Out
-                    </button>
-                    
                     <button
                         onClick={fetchEquipment}
                         className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
@@ -201,7 +176,7 @@ const EquipmentPage: React.FC = () => {
                             <p className="text-sm font-medium text-gray-600">QR Enabled</p>
                             <p className="text-2xl font-semibold text-blue-600">{stats.qr_enabled}</p>
                         </div>
-                        <QrCode className="w-8 h-8 text-blue-400" />
+                        {/* QR stats icon retained for now */}
                     </div>
                 </div>
             </div>
@@ -277,18 +252,11 @@ const EquipmentPage: React.FC = () => {
                             onViewUsage={handleViewUsage}
                             currentUserId={user?.id}
                             currentUsername={user?.username}
+                            onStatusChange={handleStatusChange}
                         />
                     ))
                 )}
             </div>
-
-            {/* QR Scanner Modal */}
-            <EquipmentQRScanner
-                isOpen={showQRScanner}
-                onClose={() => setShowQRScanner(false)}
-                onSuccess={handleQRScanSuccess}
-                mode={scannerMode}
-            />
 
             {/* Booking Modal */}
             {isBookingModalOpen && selectedEquipmentForBooking && (

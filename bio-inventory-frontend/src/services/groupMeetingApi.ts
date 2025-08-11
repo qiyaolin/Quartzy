@@ -276,33 +276,23 @@ export const groupMeetingApi = {
     },
 
     createRecurringTask: async (token: string, taskData: Partial<RecurringTask>): Promise<RecurringTask> => {
-        const postJson = async (url: string) => {
-            const res = await fetch(buildApiUrl(url), {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Token ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(taskData)
-            });
-            if (!res.ok) {
-                const contentType = res.headers.get('content-type') || '';
-                const errBody = contentType.includes('application/json') ? await res.json().catch(() => ({})) : await res.text();
-                const pick = (obj: any) => obj?.detail || obj?.error || obj?.message || obj?.title || res.statusText;
-                const message = typeof errBody === 'string' ? errBody : pick(errBody);
-                throw new Error(message + (res.status === 405 ? ' (405)' : ''));
-            }
-            return res.json();
-        };
-        try {
-            return await postJson('/api/recurring-tasks/');
-        } catch (e: any) {
-            if (typeof e?.message === 'string' && (e.message.includes('405') || /Method\s+"POST"\s+not\s+allowed/i.test(e.message))) {
-                // Fallback to schedule namespaced endpoint
-                return await postJson('/api/schedule/recurring-tasks/');
-            }
-            throw e;
+        // Always use enhanced system endpoint via compatibility view
+        const res = await fetch(buildApiUrl('/api/recurring-tasks/'), {
+            method: 'POST',
+            headers: {
+                'Authorization': `Token ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(taskData)
+        });
+        if (!res.ok) {
+            const contentType = res.headers.get('content-type') || '';
+            const errBody = contentType.includes('application/json') ? await res.json().catch(() => ({})) : await res.text();
+            const pick = (obj: any) => obj?.detail || obj?.error || obj?.message || obj?.title || res.statusText;
+            const message = typeof errBody === 'string' ? errBody : pick(errBody);
+            throw new Error(message);
         }
+        return res.json();
     },
 
     assignRecurringTask: async (token: string, taskId: number, userIds: number[]): Promise<any> => {

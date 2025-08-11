@@ -424,9 +424,35 @@ export const equipmentApi = {
     return response.json();
   },
 
+  // Check in by equipment ID (button-based, no QR)
+  checkIn: async (token: string, equipmentId: number): Promise<any> => {
+    const response = await fetch(buildApiUrl(`api/schedule/equipment/${equipmentId}/checkin/`), {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to check in: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
+  // Check out by equipment ID (button-based, no QR)
+  checkOut: async (token: string, equipmentId: number): Promise<any> => {
+    const response = await fetch(buildApiUrl(`api/schedule/equipment/${equipmentId}/checkout/`), {
+      method: 'POST',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to check out: ${response.statusText}`);
+    }
+    return response.json();
+  },
+
   // Create new equipment
   createEquipment: async (token: string, equipmentData: Omit<Equipment, 'id' | 'created_at' | 'updated_at' | 'is_in_use' | 'current_user' | 'current_checkin_time' | 'current_usage_duration'>): Promise<Equipment> => {
-    const response = await fetch(buildApiUrl('api/schedule/equipment/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/equipment/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -476,7 +502,7 @@ export const equipmentApi = {
 
   // QR Code check-in
   qrCheckin: async (token: string, qrData: QRScanRequest): Promise<any> => {
-    const response = await fetch(buildApiUrl('api/schedule/equipment/qr_checkin/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/equipment/qr_checkin/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -495,7 +521,7 @@ export const equipmentApi = {
 
   // QR Code check-out
   qrCheckout: async (token: string, qrData: QRScanRequest): Promise<any> => {
-    const response = await fetch(buildApiUrl('api/schedule/equipment/qr_checkout/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/equipment/qr_checkout/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -583,7 +609,7 @@ export const equipmentApi = {
   // Initialize default equipment
   initializeDefaultEquipment: async (token: string): Promise<Equipment[]> => {
     try {
-      const response = await fetch(buildApiUrl('api/schedule/equipment/initialize_defaults/'), {
+      const response = await fetch(buildApiUrl('/api/schedule/equipment/initialize_defaults/'), {
         method: 'POST',
         headers: { 'Authorization': `Token ${token}` }
       });
@@ -606,7 +632,7 @@ export const equipmentApi = {
     start_time?: string;
     auto_checkin?: boolean;
   }): Promise<any> => {
-    const response = await fetch(buildApiUrl('api/schedule/quick-actions/quick_book_equipment/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/quick-actions/quick_book_equipment/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -624,7 +650,7 @@ export const equipmentApi = {
   },
 
   extendBooking: async (token: string, bookingId: number, extraMinutes: number = 30): Promise<any> => {
-    const response = await fetch(buildApiUrl('api/schedule/quick-actions/extend_booking/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/quick-actions/extend_booking/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -931,7 +957,7 @@ export const scheduleHelpers = {
 export const intelligentMeetingApi = {
   // Admin Dashboard
   getAdminDashboard: async (token: string): Promise<AdminDashboardData> => {
-    const response = await fetch(buildApiUrl('api/schedule/admin-dashboard/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/admin-dashboard/'), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -944,7 +970,7 @@ export const intelligentMeetingApi = {
 
   // Personal Dashboard
   getPersonalDashboard: async (token: string): Promise<PersonalDashboardData> => {
-    const response = await fetch(buildApiUrl('api/schedule/personal-dashboard/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/personal-dashboard/'), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -957,7 +983,7 @@ export const intelligentMeetingApi = {
 
   // Meeting Configuration
   getMeetingConfiguration: async (token: string): Promise<MeetingConfiguration> => {
-    const response = await fetch(buildApiUrl('api/schedule/meeting-configuration/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/meeting-configuration/'), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -970,7 +996,7 @@ export const intelligentMeetingApi = {
   },
 
   updateMeetingConfiguration: async (token: string, config: Partial<MeetingConfiguration>): Promise<MeetingConfiguration> => {
-    const response = await fetch(buildApiUrl('api/schedule/meeting-configuration/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/meeting-configuration/'), {
       method: 'PUT',
       headers: {
         'Authorization': `Token ${token}`,
@@ -995,8 +1021,8 @@ export const intelligentMeetingApi = {
     });
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('api/schedule/meetings/')}?${queryParams.toString()}`
-      : buildApiUrl('api/schedule/meetings/');
+      ? `${buildApiUrl('/api/schedule/meetings/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/meetings/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }
@@ -1016,7 +1042,7 @@ export const intelligentMeetingApi = {
     meeting_types?: string[];
     auto_assign_presenters?: boolean;
   }): Promise<{ message: string; meetings: MeetingInstance[] }> => {
-    const response = await fetch(buildApiUrl('api/schedule/meetings/generate/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/meetings/generate/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -1144,8 +1170,8 @@ export const intelligentMeetingApi = {
     });
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('api/schedule/paper-archive/')}?${queryParams.toString()}`
-      : buildApiUrl('api/schedule/paper-archive/');
+      ? `${buildApiUrl('/api/schedule/paper-archive/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/paper-archive/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }
@@ -1160,7 +1186,7 @@ export const intelligentMeetingApi = {
 
   // Swap Requests
   getSwapRequests: async (token: string): Promise<SwapRequest[]> => {
-    const response = await fetch(buildApiUrl('api/schedule/swap-requests/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/swap-requests/'), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -1180,7 +1206,7 @@ export const intelligentMeetingApi = {
     reason: string;
     cascade_effect?: 'skip' | 'cascade';
   }): Promise<SwapRequest> => {
-    const response = await fetch(buildApiUrl('api/schedule/swap-requests/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/swap-requests/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -1333,7 +1359,7 @@ export const intelligentMeetingApi = {
     message: string;
     template_name?: string;
   }): Promise<{ message: string }> => {
-    const response = await fetch(buildApiUrl('api/schedule/notifications/send/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/notifications/send/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -1351,7 +1377,7 @@ export const intelligentMeetingApi = {
   },
 
   getNotificationHistory: async (token: string): Promise<{ notifications: any[] }> => {
-    const response = await fetch(buildApiUrl('api/schedule/notification-history/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/notification-history/'), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -1513,8 +1539,8 @@ export const periodicTaskApi = {
     });
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('api/schedule/task-templates/')}?${queryParams.toString()}`
-      : buildApiUrl('api/schedule/task-templates/');
+      ? `${buildApiUrl('/api/schedule/task-templates/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/task-templates/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }
@@ -1529,7 +1555,7 @@ export const periodicTaskApi = {
   },
 
   createTaskTemplate: async (token: string, templateData: Omit<TaskTemplate, 'id' | 'created_by' | 'created_at' | 'updated_at'>): Promise<TaskTemplate> => {
-    const response = await fetch(buildApiUrl('api/schedule/task-templates/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/task-templates/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -1588,8 +1614,8 @@ export const periodicTaskApi = {
     });
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('api/schedule/periodic-tasks/')}?${queryParams.toString()}`
-      : buildApiUrl('api/schedule/periodic-tasks/');
+      ? `${buildApiUrl('/api/schedule/periodic-tasks/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/periodic-tasks/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }
@@ -1646,7 +1672,7 @@ export const periodicTaskApi = {
 
   // Task Rotation Queues
   getTaskRotationQueues: async (token: string): Promise<TaskRotationQueue[]> => {
-    const response = await fetch(buildApiUrl('api/schedule/task-rotation-queues/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/task-rotation-queues/'), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -1689,8 +1715,8 @@ export const periodicTaskApi = {
     });
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('api/schedule/task-swap-requests/')}?${queryParams.toString()}`
-      : buildApiUrl('api/schedule/task-swap-requests/');
+      ? `${buildApiUrl('/api/schedule/task-swap-requests/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/task-swap-requests/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }
@@ -1711,7 +1737,7 @@ export const periodicTaskApi = {
     reason: string;
     is_public_pool?: boolean;
   }): Promise<TaskSwapRequest> => {
-    const response = await fetch(buildApiUrl('api/schedule/task-swap-requests/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/task-swap-requests/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -1760,12 +1786,63 @@ export const periodicTaskApi = {
     return response.json();
   },
 
+  // Task Status Management - Start Task
+  startTask: async (token: string, taskId: number): Promise<PeriodicTaskInstance> => {
+    const response = await fetch(buildApiUrl(`api/schedule/periodic-tasks/${taskId}/start/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to start task: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Task Status Management - Cancel Task
+  cancelTask: async (token: string, taskId: number, reason: string): Promise<PeriodicTaskInstance> => {
+    const response = await fetch(buildApiUrl(`api/schedule/periodic-tasks/${taskId}/cancel/`), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to cancel task: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
+  // Task Management - Delete Task (Admin only)
+  deleteTask: async (token: string, taskId: number): Promise<void> => {
+    const response = await fetch(buildApiUrl(`api/schedule/periodic-tasks/${taskId}/`), {
+      method: 'DELETE',
+      headers: { 'Authorization': `Token ${token}` }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to delete task: ${response.statusText}`);
+    }
+  },
+
   // Task Generation and Management
   previewTaskGeneration: async (token: string, data: {
     periods: string[];
     template_ids?: number[];
   }): Promise<TaskGenerationPreview[]> => {
-    const response = await fetch(buildApiUrl('api/schedule/periodic-tasks/preview-generation/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/periodic-tasks/preview-generation/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -1786,7 +1863,7 @@ export const periodicTaskApi = {
     periods: string[];
     template_ids?: number[];
   }): Promise<{ message: string; generated_tasks: PeriodicTaskInstance[] }> => {
-    const response = await fetch(buildApiUrl('api/schedule/periodic-tasks/generate/'), {
+    const response = await fetch(buildApiUrl('/api/schedule/periodic-tasks/generate/'), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -1821,8 +1898,8 @@ export const periodicTaskApi = {
     });
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('api/schedule/periodic-tasks/statistics/')}?${queryParams.toString()}`
-      : buildApiUrl('api/schedule/periodic-tasks/statistics/');
+      ? `${buildApiUrl('/api/schedule/periodic-tasks/statistics/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/periodic-tasks/statistics/');
       
     const response = await fetch(url, {
       headers: { 'Authorization': `Token ${token}` }

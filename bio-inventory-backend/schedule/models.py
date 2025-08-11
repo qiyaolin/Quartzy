@@ -1381,17 +1381,35 @@ class TaskSwapRequest(models.Model):
         
         self.save()
     
-    def approve_by_admin(self, admin_user):
-        """Approve by admin"""
+    def approve_by_admin(self, admin_user, force_execute: bool = True):
+        """Approve by admin.
+        If force_execute is True, execute swap immediately for direct swap requests
+        (request_type == 'swap' and to_user is set), without waiting for target user approval.
+        """
         self.admin_approved = True
         self.admin_approved_at = timezone.now()
         self.admin_approved_by = admin_user
-        
-        if self.can_approve():
+
+        executed = False
+
+        # For direct swap requests, allow admin approval to immediately finalize the swap
+        if force_execute and self.request_type == 'swap' and self.to_user:
+            # Mark as fully approved and execute assignment change
+            if self.target_user_approved is not True:
+                self.target_user_approved = True
+                self.target_user_approved_at = timezone.now()
             self.status = 'approved'
             self._execute_swap()
-        
+            executed = True
+        else:
+            # Fallback to existing rule: execute only when all approvals satisfied
+            if self.can_approve():
+                self.status = 'approved'
+                self._execute_swap()
+                executed = True
+
         self.save()
+        return executed
     
     def reject(self, reason=None):
         """Reject the request"""

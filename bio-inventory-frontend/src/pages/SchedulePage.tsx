@@ -33,6 +33,7 @@ import MyScheduleView from '../components/MyScheduleView.tsx';
 import QuickTourModal from '../components/QuickTourModal.tsx';
 import SmartWelcomeBanner from '../components/SmartWelcomeBanner.tsx';
 import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal.tsx';
+import TaskSwapRequestModal, { TaskSwapFormData } from '../modals/TaskSwapRequestModal.tsx';
 
 type TabType = 'dashboard' | 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
 
@@ -119,6 +120,7 @@ const SchedulePage: React.FC = () => {
     const [showQRDisplay, setShowQRDisplay] = useState(false);
     const [isMeetingEditModalOpen, setIsMeetingEditModalOpen] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+    const [selectedEventForDetails, setSelectedEventForDetails] = useState<Schedule | null>(null);
     const [isJournalClubHubOpen, setIsJournalClubHubOpen] = useState(false);
     const [journalClubMeetingId, setJournalClubMeetingId] = useState<string | null>(null);
     
@@ -129,6 +131,13 @@ const SchedulePage: React.FC = () => {
     // Enhanced UX state
     const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
     const [lastAction, setLastAction] = useState<{ type: string; message: string; timestamp: number } | null>(null);
+    
+    // Task Swap Modal state
+    const [swapModalOpen, setSwapModalOpen] = useState(false);
+    const [swapSubmitting, setSwapSubmitting] = useState(false);
+    const [swapTaskId, setSwapTaskId] = useState<number | null>(null);
+    const [swapTaskTitle, setSwapTaskTitle] = useState<string | undefined>(undefined);
+    const [users, setUsers] = useState<any[]>([]);
 
     // Fetch functions
     const fetchSchedules = useCallback(async () => {
@@ -157,6 +166,15 @@ const SchedulePage: React.FC = () => {
             setAvailableEquipment(data.filter(eq => eq.is_bookable && !eq.is_in_use));
         } catch (err) {
             console.error('Error fetching equipment:', err);
+        }
+    }, [token]);
+
+    const fetchUsers = useCallback(async () => {
+        try {
+            const users = await groupMeetingApi.getActiveUsers(token);
+            setUsers(users || []);
+        } catch (error) {
+            console.error('Error loading users:', error);
         }
     }, [token]);
 
@@ -285,10 +303,11 @@ const SchedulePage: React.FC = () => {
         setLoading(true);
         await Promise.all([
             fetchSchedules(),
-            fetchEquipment()
+            fetchEquipment(),
+            fetchUsers()
         ]);
         setLoading(false);
-    }, [fetchSchedules, fetchEquipment]);
+    }, [fetchSchedules, fetchEquipment, fetchUsers]);
 
     // Initialize data on mount
     useEffect(() => {
@@ -427,6 +446,63 @@ const SchedulePage: React.FC = () => {
     const handleCloseEditModal = () => {
         setIsEditModalOpen(false);
         setEditingSchedule(null);
+    };
+
+    // Task Swap Modal handlers
+    const handleOpenSwapModal = (taskId: number, taskTitle?: string) => {
+        setSwapTaskId(taskId);
+        setSwapTaskTitle(taskTitle);
+        setSwapModalOpen(true);
+    };
+
+    const handleCloseSwapModal = () => {
+        setSwapModalOpen(false);
+        setSwapTaskId(null);
+        setSwapTaskTitle(undefined);
+    };
+
+    const handleSubmitSwap = async ({ taskId, toUserId, reason }: TaskSwapFormData) => {
+        if (!token || !user) return;
+        setSwapSubmitting(true);
+        try {
+            const response = await fetch(buildApiUrl('api/schedule/task-swap-requests/'), {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    task_instance_id: taskId,
+                    request_type: 'swap',
+                    to_user_id: toUserId,
+                    reason
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || errorData.detail || response.statusText);
+            }
+            
+            handleCloseSwapModal();
+            setLastAction({
+                type: 'Task Swap Request',
+                message: 'Swap request submitted successfully',
+                timestamp: Date.now()
+            });
+            setTimeout(() => setLastAction(null), 3000);
+            
+        } catch (error) {
+            console.error('Error submitting swap request:', error);
+            setLastAction({
+                type: 'Error',
+                message: `Failed to submit swap request: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                timestamp: Date.now()
+            });
+            setTimeout(() => setLastAction(null), 5000);
+        } finally {
+            setSwapSubmitting(false);
+        }
     };
 
     // Filter data - exclude cancelled events by default unless specifically requested
@@ -995,31 +1071,10 @@ const SchedulePage: React.FC = () => {
                                 });
                                 setTimeout(() => setLastAction(null), 2000);
                             }}
-                            onRequestTaskSwap={async (taskId) => {
-                                try {
-                                    // 简易：发起“转移到公共池”请求，管理员可后续审批
-                                    const res = await fetch(buildApiUrl('api/schedule/task-swap-requests/create_swap/'), {
-                                        method: 'POST',
-                                        headers: {
-                                            'Authorization': `Token ${token}`,
-                                            'Content-Type': 'application/json'
-                                        },
-                                        body: JSON.stringify({ task_id: taskId, is_public: true, reason: 'Request swap via dashboard' })
-                                    });
-                                    if (!res.ok) {
-                                        const err = await res.json().catch(() => ({}));
-                                        throw new Error(err.error || err.detail || res.statusText);
-                                    }
-                                    setLastAction({
-                                        type: 'Task Swap',
-                                        message: 'Swap request submitted',
-                                        timestamp: Date.now()
-                                    });
-                                    setTimeout(() => setLastAction(null), 2000);
-                                } catch (e) {
-                                    console.error('Swap request failed:', e);
-                                    alert(e instanceof Error ? e.message : 'Failed to submit swap request');
-                                }
+                            onRequestTaskSwap={(taskId) => {
+                                // Find the task to get its title
+                                // Since we don't have easy access to the task data here, we'll pass a default title
+                                handleOpenSwapModal(taskId, `Task ${taskId}`);
                             }}
                             onCancelBooking={handleCancelBooking}
                             onBookNewEquipment={() => {
@@ -1064,8 +1119,10 @@ const SchedulePage: React.FC = () => {
                                 if (date) setSelectedDate(date);
                                 handleOpenModal();
                             }}
+                            onSelectEvent={(event) => setSelectedEventForDetails(event)}
                             onEditEvent={(event) => {
-                                console.log('Edit event:', event);
+                                setEditingSchedule(event);
+                                setIsEditModalOpen(true);
                             }}
                             onDeleteEvent={async (eventId) => {
                                 try {
@@ -1091,6 +1148,20 @@ const SchedulePage: React.FC = () => {
                                     // Restore the event if deletion failed
                                     await fetchSchedules();
                                     alert('Failed to delete event. Please try again.');
+                                }
+                            }}
+                            onMarkComplete={async (eventId) => {
+                                try {
+                                    const schedule = schedules.find(s => s.id === eventId);
+                                    if (!schedule) return;
+                                    const updated = await scheduleApi.updateSchedule(token, eventId, { status: 'completed' } as any);
+                                    setSchedules(prev => prev.map(s => s.id === eventId ? updated : s));
+                                    setSelectedEventForDetails(updated);
+                                    setLastAction({ type: 'Event Completed', message: 'Event marked as completed', timestamp: Date.now() });
+                                    setTimeout(() => setLastAction(null), 2000);
+                                } catch (e) {
+                                    console.error('Mark complete failed', e);
+                                    alert('Failed to mark as complete');
                                 }
                             }}
                         />
@@ -1443,6 +1514,18 @@ const SchedulePage: React.FC = () => {
                     await fetchSchedules();
                 }}
                 isSubmitting={isSubmitting}
+            />
+
+            {/* Task Swap Request Modal */}
+            <TaskSwapRequestModal
+                isOpen={swapModalOpen}
+                onClose={handleCloseSwapModal}
+                taskTitle={swapTaskTitle}
+                taskId={swapTaskId}
+                users={users}
+                currentUserId={user?.id ?? null}
+                submitting={swapSubmitting}
+                onSubmit={handleSubmitSwap}
             />
 
             {/* Journal Club Hub Modal */}

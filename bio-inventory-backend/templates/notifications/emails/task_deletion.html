@@ -1,0 +1,34 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Task Deleted{% endblock %}
+
+{% block header_title %}Task Deleted{% endblock %}
+
+{% block content %}
+<h2>Task Has Been Deleted</h2>
+
+<p>Hello,</p>
+
+<p>The task <strong>{{ task.name }}</strong> has been permanently deleted from the system.</p>
+
+<div class="highlight">
+  <h3>Deletion Details</h3>
+  <p><strong>Task:</strong> {{ task.name }}</p>
+  <p><strong>Period:</strong> {{ task.period }}</p>
+  <p><strong>Deleted by:</strong> {{ deleted_by }}</p>
+  <p><strong>Date:</strong> {% now "F j, Y \a\t g:i A" %}</p>
+</div>
+
+<div class="warning">
+  <p><strong>Important:</strong> This task has been permanently removed and is no longer available in the system. Any associated data and assignments have been cleared.</p>
+</div>
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">View My Tasks</a>
+{% endif %}
+
+<p>You can view your remaining active tasks in the schedule management system.</p>
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}

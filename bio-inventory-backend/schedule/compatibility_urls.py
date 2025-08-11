@@ -22,6 +22,9 @@ urlpatterns = [
     path('api/group-meetings/', api_compatibility.group_meetings_api, name='api-group-meetings'),
     path('api/schedule/group-meetings/', api_compatibility.meetings_api, name='api-schedule-group-meetings'),
     
+    # Meetings endpoints (compatibility for frontend calls to /schedule/meetings/)
+    path('schedule/meetings/', views.MeetingInstanceViewSet.as_view({'get': 'list'}), name='compat-meetings-list'),
+    
     # User endpoints
     path('api/users/active/', api_compatibility.active_users_api, name='api-users-active'),
     path('schedule/users/', api_compatibility.active_users_api, name='schedule-users'),

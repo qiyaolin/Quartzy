@@ -1,0 +1,31 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Task Status Update{% endblock %}
+
+{% block header_title %}Task Status Update{% endblock %}
+
+{% block content %}
+<h2>Task Status Changed</h2>
+
+<p>Hello,</p>
+
+<p>The status of task <strong>{{ task.template_name }}</strong> has been updated.</p>
+
+<div class="highlight">
+  <h3>Task Details</h3>
+  <p><strong>Task:</strong> {{ task.template_name }}</p>
+  <p><strong>Period:</strong> {{ task.scheduled_period }}</p>
+  <p><strong>New Status:</strong> {{ new_status|title }}</p>
+  <p><strong>Changed by:</strong> {{ changed_by }}</p>
+  <p><strong>Execution Window:</strong> {{ task.execution_start_date }} to {{ task.execution_end_date }}</p>
+</div>
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">View Task Details</a>
+{% endif %}
+
+<p>You can view all your assigned tasks in the schedule management system.</p>
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}

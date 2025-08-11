@@ -827,7 +827,8 @@ class OneTimeTasksView(APIView):
             from django.contrib.auth.models import User
             recipients = list(User.objects.filter(is_active=True))
             from notifications.email_service import EmailNotificationService
-            EmailNotificationService.send_email_notification(
+            
+            success = EmailNotificationService.send_email_notification(
                 recipients=recipients,
                 subject=f"One-time Task: {template.name}",
                 template_name='one_time_task_created',
@@ -836,8 +837,14 @@ class OneTimeTasksView(APIView):
                     'claim_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks/{task.id}/claim"
                 }
             )
-        except Exception:
-            pass
+            
+            if not success:
+                logger.warning(f"Failed to send one-time task creation emails for task {task.id}")
+            else:
+                logger.info(f"Successfully sent one-time task creation emails for task {task.id} to {len(recipients)} recipients")
+                
+        except Exception as e:
+            logger.error(f"Error sending one-time task creation emails for task {task.id}: {e}")
 
         return Response(PeriodicTaskInstanceSerializer(task, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
@@ -871,20 +878,53 @@ class OneTimeTaskActionView(APIView):
                 # 通知创建者（模板创建人）
                 try:
                     creator = task.template.created_by
+                    if creator and creator.email:  # Only send if creator has email
+                        from notifications.email_service import EmailNotificationService
+                        success = EmailNotificationService.send_email_notification(
+                            recipients=[creator],
+                            subject=f"Task Claimed: {task.template_name}",
+                            template_name='one_time_task_claimed',
+                            context={
+                                'task': {'name': task.template_name},
+                                'creator_name': creator.get_full_name() or creator.username,
+                                'claimer_name': request.user.get_full_name() or request.user.username,
+                                'view_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks"
+                            }
+                        )
+                        
+                        if not success:
+                            logger.warning(f"Failed to send task claimed email to creator {creator.username} for task {task.id}")
+                        else:
+                            logger.info(f"Successfully sent task claimed email to creator {creator.username} for task {task.id}")
+                    else:
+                        logger.info(f"No creator or email found for task {task.id}, skipping claimed notification")
+                        
+                except Exception as e:
+                    logger.error(f"Error sending task claimed email for task {task.id}: {e}")
+
+                # 同步通知管理员（所有 is_staff 用户）
+                try:
+                    from django.contrib.auth.models import User
                     from notifications.email_service import EmailNotificationService
-                    EmailNotificationService.send_email_notification(
-                        recipients=[creator],
-                        subject=f"Task Claimed: {task.template_name}",
-                        template_name='one_time_task_claimed',
-                        context={
-                            'task': {'name': task.template_name},
-                            'creator_name': creator.get_full_name() or creator.username,
-                            'claimer_name': request.user.get_full_name() or request.user.username,
-                            'view_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks"
-                        }
-                    )
-                except Exception:
-                    pass
+                    admin_users = list(User.objects.filter(is_staff=True, is_active=True))
+                    if admin_users:
+                        admin_success = EmailNotificationService.send_email_notification(
+                            recipients=admin_users,
+                            subject=f"One-time Task Claimed: {task.template_name}",
+                            template_name='one_time_task_claimed',
+                            context={
+                                'task': {'name': task.template_name},
+                                'creator_name': 'Admin Team',
+                                'claimer_name': request.user.get_full_name() or request.user.username,
+                                'view_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks"
+                            }
+                        )
+                        if not admin_success:
+                            logger.warning(f"Failed to send admin claimed notifications for task {task.id}")
+                        else:
+                            logger.info(f"Sent admin claimed notifications for task {task.id} to {len(admin_users)} admins")
+                except Exception as e:
+                    logger.warning(f"Error notifying admins for claimed task {task.id}: {e}")
 
                 return Response(PeriodicTaskInstanceSerializer(task, context={'request': request}).data)
 
@@ -1937,7 +1977,12 @@ class OneTimeTaskCompatibilityView(APIView):
         Frontend sends: { name, description, deadline }
         """
         try:
-            data = request.data
+            # Handle both DRF Request and Django Request objects
+            if hasattr(request, 'data'):
+                data = request.data
+            else:
+                import json
+                data = json.loads(request.body.decode('utf-8')) if request.body else {}
             
             # Extract fields from frontend format
             name = data.get('name') or data.get('template_name', 'One-Time Task')
@@ -2002,6 +2047,30 @@ class OneTimeTaskCompatibilityView(APIView):
                 }
             )
             
+            # Send email notifications to all active users
+            try:
+                from django.contrib.auth.models import User
+                recipients = list(User.objects.filter(is_active=True))
+                from notifications.email_service import EmailNotificationService
+                
+                success = EmailNotificationService.send_email_notification(
+                    recipients=recipients,
+                    subject=f"One-time Task: {template.name}",
+                    template_name='one_time_task_created',
+                    context={
+                        'task': {'name': template.name, 'description': template.description, 'deadline': str(end_date)},
+                        'claim_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks/{instance.id}/claim"
+                    }
+                )
+                
+                if not success:
+                    logger.warning(f"Failed to send one-time task creation emails for task {instance.id}")
+                else:
+                    logger.info(f"Successfully sent one-time task creation emails for task {instance.id} to {len(recipients)} recipients")
+                    
+            except Exception as e:
+                logger.error(f"Error sending one-time task creation emails for task {instance.id}: {e}")
+            
             result = TaskSystemAdapter.periodictask_to_onetimetask(instance)
             return Response(result, status=status.HTTP_201_CREATED)
             
@@ -2035,7 +2104,30 @@ class OneTimeTaskClaimView(APIView):
             
             # Claim the task
             instance.claim_task(request.user)
-            
+            # 通知管理员（所有 is_staff 用户）
+            try:
+                from django.contrib.auth.models import User
+                from notifications.email_service import EmailNotificationService
+                admin_users = list(User.objects.filter(is_staff=True, is_active=True))
+                if admin_users:
+                    admin_success = EmailNotificationService.send_email_notification(
+                        recipients=admin_users,
+                        subject=f"One-time Task Claimed: {instance.template_name}",
+                        template_name='one_time_task_claimed',
+                        context={
+                            'task': {'name': instance.template_name},
+                            'creator_name': 'Admin Team',
+                            'claimer_name': request.user.get_full_name() or request.user.username,
+                            'view_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/one-time-tasks"
+                        }
+                    )
+                    if not admin_success:
+                        logger.warning(f"Failed to send admin claimed notifications for task {instance.id}")
+                    else:
+                        logger.info(f"Sent admin claimed notifications for task {instance.id} to {len(admin_users)} admins")
+            except Exception as e:
+                logger.warning(f"Error notifying admins for claimed task {instance.id}: {e}")
+
             result = TaskSystemAdapter.periodictask_to_onetimetask(instance)
             return Response(result)
             

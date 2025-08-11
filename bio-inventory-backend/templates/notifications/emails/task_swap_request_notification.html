@@ -1,0 +1,36 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Task Swap Request{% endblock %}
+
+{% block header_title %}Task Swap Request{% endblock %}
+
+{% block content %}
+<h2>Task Swap Request</h2>
+
+<p>Hello,</p>
+
+<p>{{ swap_request.from_user }} has requested to swap the task <strong>{{ swap_request.task_name }}</strong> with you.</p>
+
+<div class="highlight">
+  <h3>Request Details</h3>
+  <p><strong>Task:</strong> {{ swap_request.task_name }}</p>
+  <p><strong>Requested by:</strong> {{ swap_request.from_user }}</p>
+  {% if swap_request.to_user and swap_request.to_user != 'Public Pool' %}
+  <p><strong>Requested with:</strong> {{ swap_request.to_user }}</p>
+  {% else %}
+  <p><strong>Type:</strong> Public Pool Request</p>
+  {% endif %}
+  {% if swap_request.reason %}
+  <p><strong>Reason:</strong> {{ swap_request.reason }}</p>
+  {% endif %}
+</div>
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">View Swap Requests</a>
+{% endif %}
+
+<p>Please review and respond to this request through the schedule management system.</p>
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}

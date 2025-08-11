@@ -468,23 +468,20 @@ class TaskSwapService:
         Returns:
             True if swap was executed, False if more approvals needed
         """
+        executed = False
+
         if is_admin:
-            swap_request.admin_approved = True
-            swap_request.admin_approved_at = timezone.now()
-            swap_request.admin_approved_by = approving_user
+            # Use model method that can force execution for direct swaps
+            executed = swap_request.approve_by_admin(approving_user, force_execute=True)
         elif (swap_request.request_type == 'swap' and 
               swap_request.to_user == approving_user):
-            swap_request.target_user_approved = True
-            swap_request.target_user_approved_at = timezone.now()
+            swap_request.approve_by_target_user()
+            executed = (swap_request.status == 'approved')
         else:
             raise TaskAssignmentError("User not authorized to approve this request")
-        
-        # Check if all required approvals are in place
-        if swap_request.can_approve():
-            cls._execute_swap(swap_request)
-            swap_request.status = 'approved'
-            
-            # Send approval notifications
+
+        # Send approval notifications if executed
+        if executed:
             try:
                 from .notification_service import TaskNotificationService
                 TaskNotificationService.notify_swap_request_approved(
@@ -493,11 +490,11 @@ class TaskSwapService:
                 )
             except Exception as e:
                 logger.warning(f"Failed to send swap approval notifications: {str(e)}")
-            
             logger.info(f"Executed swap request: {swap_request}")
-        
+
+        # Ensure state is persisted
         swap_request.save()
-        return swap_request.status == 'approved'
+        return executed
     
     @classmethod
     def claim_from_pool(

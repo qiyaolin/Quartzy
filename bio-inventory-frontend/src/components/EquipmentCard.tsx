@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { 
-    QrCode, 
     MapPin, 
     Clock, 
     User, 
@@ -10,8 +9,8 @@ import {
     MoreVertical,
     History
 } from 'lucide-react';
-import EquipmentQRDisplay from './EquipmentQRDisplay.tsx';
-import EquipmentQRScanner from './EquipmentQRScanner.tsx';
+import { AuthContext } from './AuthContext.tsx';
+import { equipmentApi } from '../services/scheduleApi.ts';
 
 interface Equipment {
     id: number;
@@ -37,6 +36,7 @@ interface EquipmentCardProps {
     onViewUsage?: (equipment: Equipment) => void;
     currentUserId?: number;
     currentUsername?: string;
+    onStatusChange?: () => void;
 }
 
 const EquipmentCard: React.FC<EquipmentCardProps> = ({ 
@@ -44,23 +44,40 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
     onBooking, 
     onViewUsage,
     currentUserId,
-    currentUsername
+    currentUsername,
+    onStatusChange
 }) => {
-    const [showQRDisplay, setShowQRDisplay] = useState(false);
-    const [showQRScanner, setShowQRScanner] = useState(false);
-    const [scannerMode, setScannerMode] = useState<'checkin' | 'checkout'>('checkin');
     const [showMenu, setShowMenu] = useState(false);
+    const [submitting, setSubmitting] = useState<'checkin' | 'checkout' | null>(null);
+    const authContext = useContext(AuthContext);
+    const token = authContext?.token || null;
 
-    const handleQRScanSuccess = (result: any) => {
-        console.log('QR scan successful:', result);
-        // Refresh equipment status or show success message
-        // You might want to trigger a parent component refresh here
+    const handleCheckIn = async () => {
+        if (!token) return;
+        try {
+            setSubmitting('checkin');
+            await equipmentApi.checkIn(token, equipment.id);
+            onStatusChange?.();
+        } catch (e) {
+            console.error('Check-in failed', e);
+            alert((e as Error).message || 'Check-in failed');
+        } finally {
+            setSubmitting(null);
+        }
     };
 
-    const handleScannerOpen = (mode: 'checkin' | 'checkout') => {
-        setScannerMode(mode);
-        setShowQRScanner(true);
-        setShowMenu(false);
+    const handleCheckOut = async () => {
+        if (!token) return;
+        try {
+            setSubmitting('checkout');
+            await equipmentApi.checkOut(token, equipment.id);
+            onStatusChange?.();
+        } catch (e) {
+            console.error('Check-out failed', e);
+            alert((e as Error).message || 'Check-out failed');
+        } finally {
+            setSubmitting(null);
+        }
     };
 
     const getStatusColor = () => {
@@ -76,12 +93,11 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
     };
 
     const canCheckIn = () => {
-        return equipment.requires_qr_checkin && !equipment.is_in_use && equipment.is_bookable;
+        return !equipment.is_in_use && equipment.is_bookable;
     };
 
     const canCheckOut = () => {
-        return equipment.requires_qr_checkin && 
-               equipment.is_in_use && 
+        return equipment.is_in_use && 
                equipment.current_user?.username === currentUsername;
     };
 
@@ -141,19 +157,6 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
                                 {showMenu && (
                                     <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                                         <div className="py-1">
-                                            {equipment.requires_qr_checkin && (
-                                                <button
-                                                    onClick={() => {
-                                                        setShowQRDisplay(true);
-                                                        setShowMenu(false);
-                                                    }}
-                                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                                >
-                                                    <QrCode className="w-4 h-4" />
-                                                    View QR Code
-                                                </button>
-                                            )}
-                                            
                                             {onViewUsage && (
                                                 <button
                                                     onClick={() => {
@@ -219,50 +222,29 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
                         </div>
                     )}
 
-                    {/* QR Code Features */}
-                    {equipment.requires_qr_checkin && (
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-                            <div className="flex items-center gap-2 text-blue-800 mb-2">
-                                <QrCode className="w-4 h-4" />
-                                <span className="font-medium">QR Check-in Required</span>
-                            </div>
-                            <p className="text-sm text-blue-700 mb-3">
-                                Scan the QR code on this equipment to check in/out
-                            </p>
-                            
-                            <div className="flex gap-2">
-                                {canCheckIn() && (
-                                    <button
-                                        onClick={() => handleScannerOpen('checkin')}
-                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
-                                    >
-                                        <CheckCircle className="w-4 h-4" />
-                                        Check In
-                                    </button>
-                                )}
-                                
-                                {canCheckOut() && (
-                                    <button
-                                        onClick={() => handleScannerOpen('checkout')}
-                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
-                                    >
-                                        <AlertCircle className="w-4 h-4" />
-                                        Check Out
-                                    </button>
-                                )}
-                                
-                                {!equipment.is_in_use && !canCheckIn() && (
-                                    <button
-                                        onClick={() => setShowQRDisplay(true)}
-                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-                                    >
-                                        <QrCode className="w-4 h-4" />
-                                        View QR Code
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                        {canCheckIn() && (
+                            <button
+                                onClick={handleCheckIn}
+                                disabled={submitting === 'checkin'}
+                                className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-60 transition-colors"
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                {submitting === 'checkin' ? 'Checking In...' : 'Check In'}
+                            </button>
+                        )}
+                        {canCheckOut() && (
+                            <button
+                                onClick={handleCheckOut}
+                                disabled={submitting === 'checkout'}
+                                className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-60 transition-colors"
+                            >
+                                <AlertCircle className="w-4 h-4" />
+                                {submitting === 'checkout' ? 'Checking Out...' : 'Check Out'}
+                            </button>
+                        )}
+                    </div>
 
                     {/* Booking Section */}
                     {equipment.is_bookable && !equipment.requires_qr_checkin && onBooking && (
@@ -279,20 +261,7 @@ const EquipmentCard: React.FC<EquipmentCardProps> = ({
                 </div>
             </div>
 
-            {/* QR Code Display Modal */}
-            <EquipmentQRDisplay
-                equipmentId={equipment.id}
-                isOpen={showQRDisplay}
-                onClose={() => setShowQRDisplay(false)}
-            />
-
-            {/* QR Code Scanner Modal */}
-            <EquipmentQRScanner
-                isOpen={showQRScanner}
-                onClose={() => setShowQRScanner(false)}
-                onSuccess={handleQRScanSuccess}
-                mode={scannerMode}
-            />
+            {/* QR-related modals removed per button-based flow */}
         </>
     );
 };

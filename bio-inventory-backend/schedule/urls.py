@@ -12,7 +12,6 @@ router.register(r'equipment', views.EquipmentViewSet, basename='equipment')
 router.register(r'bookings', views.BookingViewSet, basename='bookings')
 # router.register(r'group-meetings', views.GroupMeetingViewSet, basename='group-meetings')  # Disabled to use manual override
 router.register(r'presenter-rotations', views.MeetingPresenterRotationViewSet, basename='presenter-rotations')
-router.register(r'recurring-tasks', views.RecurringTaskViewSet, basename='recurring-tasks')
 router.register(r'task-instances', views.TaskInstanceViewSet, basename='task-instances')
 router.register(r'usage-logs', views.EquipmentUsageLogViewSet, basename='usage-logs')
 router.register(r'waiting-queue', views.WaitingQueueEntryViewSet, basename='waiting-queue')

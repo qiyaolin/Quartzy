@@ -6,11 +6,11 @@
 {% block header_title %}Overdue Task{% endblock %}
 
 {% block content %}
-<h2>Overdue: {{ task.template_name|default:task.name }}</h2>
+<h2>Overdue: {{ task.template_name }}</h2>
 
 <p>Hello {{ recipient.first_name|default:recipient.username }},</p>
 
-<p>The task <strong>{{ task.template_name|default:task.name }}</strong> is now overdue.</p>
+<p>The task <strong>{{ task.template_name }}</strong> is now overdue.</p>
 
 <div class="highlight">
   <h3>Window Ended</h3>

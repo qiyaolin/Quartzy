@@ -1,0 +1,31 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Task Cancelled{% endblock %}
+
+{% block header_title %}Task Cancelled{% endblock %}
+
+{% block content %}
+<h2>Task Has Been Cancelled</h2>
+
+<p>Hello,</p>
+
+<p>The task <strong>{{ task.template_name }}</strong> has been cancelled.</p>
+
+<div class="highlight">
+  <h3>Cancellation Details</h3>
+  <p><strong>Task:</strong> {{ task.template_name }}</p>
+  <p><strong>Period:</strong> {{ task.scheduled_period }}</p>
+  <p><strong>Cancelled by:</strong> {{ cancelled_by }}</p>
+  <p><strong>Reason:</strong> {{ reason }}</p>
+  <p><strong>Original Execution Window:</strong> {{ task.execution_start_date }} to {{ task.execution_end_date }}</p>
+</div>
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">View My Tasks</a>
+{% endif %}
+
+<p>No further action is required for this task. You can view your remaining active tasks in the schedule management system.</p>
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}

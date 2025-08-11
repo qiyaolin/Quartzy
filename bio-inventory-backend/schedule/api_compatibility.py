@@ -333,58 +333,15 @@ def meeting_configurations_api(request):
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def recurring_tasks_api(request):
-    """Recurring tasks API endpoint (compatibility layer)
-    - GET: return real RecurringTask list using serializer
-    - POST: create RecurringTask with request.user as creator, attach assignee_group
     """
-    from .models import RecurringTask
-    from .serializers import RecurringTaskSerializer
-    from django.contrib.auth.models import User
-
-    if request.method == 'GET':
-        queryset = (
-            RecurringTask.objects.select_related('created_by')
-            .prefetch_related('assignee_group')
-            .all()
-        )
-        serializer = RecurringTaskSerializer(queryset, many=True)
-        return Response(serializer.data)
-
-    # POST
-    # Only admins can create recurring tasks via compatibility endpoint
-    if not request.user.is_staff:
-        return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
-    try:
-        payload = request.data or {}
-        title = payload.get('title')
-        cron_schedule = payload.get('cron_schedule')
-        description = payload.get('description', '')
-        is_active = bool(payload.get('is_active', True))
-
-        if not title:
-            return Response({'title': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
-        if not cron_schedule:
-            return Response({'cron_schedule': ['This field is required.']}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Create the recurring task
-        task = RecurringTask.objects.create(
-            title=title,
-            description=description,
-            cron_schedule=cron_schedule,
-            is_active=is_active,
-            created_by=request.user,
-        )
-
-        # Attach assignee group if provided (accept both assignee_group and assignee_group_ids)
-        assignee_ids = payload.get('assignee_group') or payload.get('assignee_group_ids') or []
-        if isinstance(assignee_ids, list) and assignee_ids:
-            users = User.objects.filter(id__in=assignee_ids)
-            task.assignee_group.add(*users)
-
-        serializer = RecurringTaskSerializer(task)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    except Exception as e:
-        return Response({'error': f'Failed to create task: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+    Compatibility wrapper that maps legacy recurring-tasks to enhanced TaskTemplate system.
+    - GET: return active TaskTemplate in legacy format
+    - POST: create TaskTemplate from legacy payload
+    """
+    from .additional_views import RecurringTaskCompatibilityView
+    # Delegate to the class-based compatibility view for unified behavior
+    view = RecurringTaskCompatibilityView.as_view()
+    return view(request)
 
 
 @api_view(['GET'])

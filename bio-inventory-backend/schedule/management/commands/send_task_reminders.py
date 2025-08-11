@@ -46,21 +46,26 @@ class Command(BaseCommand):
         upcoming_only = options['upcoming_only']
         
         # Enforce business rule: only run on US/Eastern weekdays at/after 11:00am ET
-        try:
-            if ZoneInfo is not None:
-                now_et = timezone.now().astimezone(ZoneInfo('America/New_York'))
-            else:
-                now_et = timezone.now()  # fallback
-            # Monday=0..Sunday=6; weekdays 0-4
-            if now_et.weekday() > 4:
-                self.stdout.write(self.style.WARNING('Weekend detected in US/Eastern. Skipping reminders.'))
-                return
-            if now_et.hour < 11:
-                self.stdout.write(self.style.WARNING('Before 11:00 AM US/Eastern. Skipping reminders until window.'))
-                return
-        except Exception:
-            # If timezone conversion fails, proceed but still log
-            self.stdout.write(self.style.WARNING('Timezone check failed; proceeding with sending.'))
+        # Allow bypass for testing
+        import os
+        bypass_time_check = os.environ.get('BYPASS_TIME_CHECK') or dry_run
+        
+        if not bypass_time_check:
+            try:
+                if ZoneInfo is not None:
+                    now_et = timezone.now().astimezone(ZoneInfo('America/New_York'))
+                else:
+                    now_et = timezone.now()  # fallback
+                # Monday=0..Sunday=6; weekdays 0-4
+                if now_et.weekday() > 4:
+                    self.stdout.write(self.style.WARNING('Weekend detected in US/Eastern. Skipping reminders.'))
+                    return
+                if now_et.hour < 11:
+                    self.stdout.write(self.style.WARNING('Before 11:00 AM US/Eastern. Skipping reminders until window.'))
+                    return
+            except Exception:
+                # If timezone conversion fails, proceed but still log
+                self.stdout.write(self.style.WARNING('Timezone check failed; proceeding with sending.'))
 
         self.stdout.write(self.style.SUCCESS('Starting task reminder notifications (ET weekday window)...'))
         

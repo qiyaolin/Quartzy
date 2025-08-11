@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -19,6 +19,7 @@ import {
   Bell
 } from 'lucide-react';
 import { Schedule, scheduleHelpers } from "../services/scheduleApi.ts";
+import ScheduleDetailPanel from './ScheduleDetailPanel.tsx';
 
 interface ModernCalendarViewProps {
   schedules: Schedule[];
@@ -30,6 +31,10 @@ interface ModernCalendarViewProps {
   onCreateEvent?: (date?: string, time?: string) => void;
   onEditEvent?: (event: Schedule) => void;
   onDeleteEvent?: (eventId: number) => void;
+  // Optional: external selected event for controlled detail panel
+  selectedEventId?: number | null;
+  onSelectEvent?: (event: Schedule | null) => void;
+  onMarkComplete?: (eventId: number) => void;
 }
 
 const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
@@ -41,11 +46,49 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
   onViewModeChange,
   onCreateEvent,
   onEditEvent,
-  onDeleteEvent
+  onDeleteEvent,
+  selectedEventId,
+  onSelectEvent,
+  onMarkComplete
 }) => {
   const [hoveredEvent, setHoveredEvent] = useState<number | null>(null);
   const [calendarLayout, setCalendarLayout] = useState<'grid' | 'list'>('grid');
   const [showMiniCalendar, setShowMiniCalendar] = useState(true);
+  const [localSelectedEventId, setLocalSelectedEventId] = useState<number | null>(null);
+
+  const effectiveSelectedId = selectedEventId ?? localSelectedEventId;
+  const selectedEvent = useMemo(() => {
+    if (effectiveSelectedId == null) return null;
+    return schedules.find(s => s.id === effectiveSelectedId) || null;
+  }, [effectiveSelectedId, schedules]);
+
+  // Fit-to-viewport height calculations
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [availableHeight, setAvailableHeight] = useState<number>(560);
+  const recomputeHeight = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const bottomPadding = 16; // breathing space
+    const h = Math.max(420, window.innerHeight - rect.top - bottomPadding);
+    setAvailableHeight(h);
+  }, []);
+
+  useEffect(() => {
+    recomputeHeight();
+    const onResize = () => recomputeHeight();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [recomputeHeight]);
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(recomputeHeight);
+    return () => window.cancelAnimationFrame(id);
+  }, [showMiniCalendar, viewMode, calendarLayout, recomputeHeight]);
+
+  const weekHeaderPx = 64; // h-16 header row
+  const hourHeightWeek = Math.max(18, (availableHeight - weekHeaderPx) / 24);
+  const hourHeightDay = Math.max(18, availableHeight / 24);
+  const monthHeaderPx = 44; // approx header row height in month grid
 
   // Generate calendar days for different views
   const calendarDays = useMemo(() => {
@@ -174,6 +217,9 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
     
     return days;
   }, [selectedDate, schedules, viewMode]);
+
+  const monthWeeks = useMemo(() => Math.max(1, Math.ceil(calendarDays.length / 7)), [calendarDays]);
+  const monthDayCellHeight = Math.max(56, (availableHeight - monthHeaderPx) / monthWeeks);
 
   const navigateDate = useCallback((direction: 'prev' | 'next') => {
     const date = new Date(selectedDate);
@@ -385,10 +431,10 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
         )}
 
         {/* Main Calendar Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" ref={containerRef}>
           {/* Month View */}
           {viewMode === 'month' && calendarLayout === 'grid' && (
-            <div className="h-full">
+            <div className="h-full" style={{ height: availableHeight }}>
               {/* Month Grid View */}
               <div className="grid grid-cols-7 border-b border-gray-100">
                 {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
@@ -402,9 +448,10 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                 {calendarDays.map((day) => (
                   <div
                     key={day.date}
-                    className={`min-h-32 border-r border-b border-gray-100 last:border-r-0 p-2 cursor-pointer group relative ${
+                    className={`border-r border-b border-gray-100 last:border-r-0 p-2 cursor-pointer group relative ${
                       !day.isCurrentMonth ? 'bg-gray-50' : 'hover:bg-primary-50'
                     } ${day.isSelected ? 'bg-primary-100' : ''} ${day.isToday ? 'bg-gradient-to-br from-primary-50 to-primary-100' : ''}`}
+                    style={{ height: monthDayCellHeight }}
                     onClick={() => onDateChange(day.date)}
                     onDoubleClick={() => onCreateEvent?.(day.date)}
                   >
@@ -430,10 +477,11 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         <div
                           key={schedule.id}
                           className={`text-xs p-1 rounded cursor-pointer truncate border-l-2 transition-all duration-200 hover:shadow-sm modern-calendar-event ${getEventColorLight(schedule)}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditEvent?.(schedule);
-                          }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocalSelectedEventId(schedule.id);
+                              onSelectEvent?.(schedule);
+                            }}
                           title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
                         >
                           {formatTime(schedule.start_time)} {schedule.title}
@@ -464,12 +512,12 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
           {/* Week View */}
           {viewMode === 'week' && (
-            <div className="h-full flex" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
+            <div className="h-full flex" style={{ height: availableHeight }}>
               {/* Time Column */}
               <div className="w-20 border-r border-gray-100 bg-gray-50">
                 <div className="h-16"></div> {/* Header spacer */}
                 {Array.from({ length: 24 }, (_, i) => (
-                  <div key={i} className="h-16 px-3 py-2 text-sm text-gray-500 border-b border-gray-100">
+                  <div key={i} className="px-3 py-2 text-sm text-gray-500 border-b border-gray-100" style={{ height: hourHeightWeek }}>
                     {i.toString().padStart(2, '0')}:00
                   </div>
                 ))}
@@ -499,7 +547,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       {Array.from({ length: 24 }, (_, i) => (
                         <div 
                           key={i} 
-                          className="h-16 border-b border-gray-100 hover:bg-primary-50 cursor-pointer"
+                          className="border-b border-gray-100 hover:bg-primary-50 cursor-pointer"
+                          style={{ height: hourHeightWeek }}
                           onDoubleClick={() => onCreateEvent?.(day.date, `${i.toString().padStart(2, '0')}:00`)}
                         ></div>
                       ))}
@@ -507,18 +556,25 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                       {/* Events */}
                       {day.schedules.map((schedule) => {
                         const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
+                        const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
                         const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
-                        const duration = endHour - startHour;
+                        const endMinute = schedule.end_time ? parseInt(schedule.end_time.split(':')[1]) : 0;
+                        const startPx = startHour * hourHeightWeek + (startMinute / 60) * hourHeightWeek;
+                        const endPx = endHour * hourHeightWeek + (endMinute / 60) * hourHeightWeek;
+                        const barHeight = Math.max(endPx - startPx, 48);
                         return (
                           <div
                             key={schedule.id}
                             className={`absolute left-1 right-1 rounded-lg p-2 cursor-pointer text-white shadow-sm border-l-4 transition-all duration-200 hover:shadow-md modern-calendar-event ${getEventColor(schedule)}`}
                             style={{
-                              top: startHour * 64,
-                              height: Math.max(duration * 64, 48),
+                              top: startPx,
+                              height: barHeight,
                               zIndex: 10
                             }}
-                            onClick={() => onEditEvent?.(schedule)}
+                            onClick={() => {
+                              setLocalSelectedEventId(schedule.id);
+                              onSelectEvent?.(schedule);
+                            }}
                             title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
                           >
                             <div className="font-medium text-sm truncate">{schedule.title}</div>
@@ -543,11 +599,11 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
           {/* Day View */}
           {viewMode === 'day' && (
-            <div className="h-full flex" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
+            <div className="h-full flex" style={{ height: availableHeight }}>
               {/* Time Column */}
               <div className="w-24 border-r border-gray-100 bg-gray-50">
                 {Array.from({ length: 24 }, (_, i) => (
-                  <div key={i} className="h-16 px-4 py-2 text-sm text-gray-500 border-b border-gray-100">
+                  <div key={i} className="px-4 py-2 text-sm text-gray-500 border-b border-gray-100" style={{ height: hourHeightDay }}>
                     {i.toString().padStart(2, '0')}:00
                   </div>
                 ))}
@@ -559,7 +615,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                 {Array.from({ length: 24 }, (_, i) => (
                   <div 
                     key={i} 
-                    className="h-16 border-b border-gray-100 cursor-pointer hover:bg-primary-50"
+                    className="border-b border-gray-100 cursor-pointer hover:bg-primary-50"
+                    style={{ height: hourHeightDay }}
                     onDoubleClick={() => onCreateEvent?.(selectedDate, `${i.toString().padStart(2, '0')}:00`)}
                   ></div>
                 ))}
@@ -585,8 +642,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
                   const endMinute = schedule.end_time ? parseInt(schedule.end_time.split(':')[1]) : 0;
                   
-                  const startPosition = startHour * 64 + (startMinute / 60) * 64;
-                  const endPosition = endHour * 64 + (endMinute / 60) * 64;
+                  const startPosition = startHour * hourHeightDay + (startMinute / 60) * hourHeightDay;
+                  const endPosition = endHour * hourHeightDay + (endMinute / 60) * hourHeightDay;
                   const height = Math.max(endPosition - startPosition, 48);
                   
                   return (
@@ -598,7 +655,10 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         height: height,
                         zIndex: 10
                       }}
-                      onClick={() => onEditEvent?.(schedule)}
+                      onClick={() => {
+                        setLocalSelectedEventId(schedule.id);
+                        onSelectEvent?.(schedule);
+                      }}
                       title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
                     >
                       <div className="flex items-start justify-between">
@@ -648,6 +708,20 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Right Detail Panel (visible on large screens) */}
+        <div className="hidden xl:block w-96 border-l border-gray-100 bg-white">
+          <ScheduleDetailPanel
+            schedule={selectedEvent}
+            onClose={() => {
+              setLocalSelectedEventId(null);
+              onSelectEvent?.(null);
+            }}
+            onEdit={onEditEvent}
+            onDelete={onDeleteEvent}
+            onMarkComplete={onMarkComplete}
+          />
         </div>
       </div>
 

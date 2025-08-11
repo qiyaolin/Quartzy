@@ -3,13 +3,14 @@ import {
     Plus, Calendar, Clock, Users, Repeat, CheckCircle, AlertCircle, 
     Edit, Trash2, Settings, User, Bell, ArrowRight, PlayCircle, 
     UserCheck, MessageSquare, Timer, Archive, RefreshCw,
-    ClipboardList, Target, ArrowLeftRight
+    ClipboardList, Target, ArrowLeftRight, X
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import TaskCreationModal from '../modals/TaskCreationModal.tsx';
+import CancelTaskModal from '../modals/CancelTaskModal.tsx';
+import ConfirmDeleteModal from '../modals/ConfirmDeleteModal.tsx';
 import { groupMeetingApi } from '../services/groupMeetingApi.ts';
-import { periodicTaskApi, scheduleApi, type PeriodicTaskInstance } from '../services/scheduleApi.ts';
-import { buildApiUrl } from '../config/api.ts';
+import { periodicTaskApi, scheduleApi, type PeriodicTaskInstance, type TaskSwapRequest } from '../services/scheduleApi.ts';
 import TaskSwapRequestModal, { TaskSwapFormData } from '../modals/TaskSwapRequestModal.tsx';
 
 // Task Types aligned with backend models
@@ -69,6 +70,15 @@ const ImprovedTaskManager: React.FC = () => {
     const [selectedTaskType, setSelectedTaskType] = useState<'recurring' | 'one_time' | null>(null);
     const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(null);
 
+    // Cancel/Delete modals state
+    const [cancelModalOpen, setCancelModalOpen] = useState(false);
+    const [cancelSubmitting, setCancelSubmitting] = useState(false);
+    const [cancelTaskInfo, setCancelTaskInfo] = useState<{ id: number; name: string; period: string } | null>(null);
+
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+    const [deleteTaskInfo, setDeleteTaskInfo] = useState<{ id: number; name: string } | null>(null);
+
     // Load data on component mount
     useEffect(() => {
         loadData();
@@ -120,7 +130,7 @@ const ImprovedTaskManager: React.FC = () => {
             const minePending = (all || []).filter(r => r.from_user?.id === user?.id && r.status === 'pending');
             const ids = new Set<number>();
             minePending.forEach(r => {
-                if ((r as any).task_instance?.id) ids.add((r as any).task_instance.id);
+                if (r.task_instance?.id) ids.add(r.task_instance.id);
             });
             setPendingSwapTaskIds(ids);
         } catch (e) {
@@ -150,6 +160,48 @@ const ImprovedTaskManager: React.FC = () => {
         }
     };
 
+    const openCancelTask = (task: TaskInstance) => {
+        setCancelTaskInfo({ id: task.id, name: task.template_name, period: task.scheduled_period });
+        setCancelModalOpen(true);
+    };
+
+    const submitCancelTask = async (reason: string) => {
+        if (!cancelTaskInfo) return;
+        setCancelSubmitting(true);
+        try {
+            await periodicTaskApi.cancelTask(token, cancelTaskInfo.id, reason);
+            setCancelModalOpen(false);
+            setCancelTaskInfo(null);
+            await loadTaskInstances();
+        } catch (e) {
+            console.error('Error cancelling task:', e);
+            setError(e instanceof Error ? e.message : 'Failed to cancel task');
+        } finally {
+            setCancelSubmitting(false);
+        }
+    };
+
+    const openDeleteTask = (task: TaskInstance) => {
+        setDeleteTaskInfo({ id: task.id, name: task.template_name });
+        setDeleteModalOpen(true);
+    };
+
+    const submitDeleteTask = async () => {
+        if (!deleteTaskInfo) return;
+        setDeleteSubmitting(true);
+        try {
+            await periodicTaskApi.deleteTask(token, deleteTaskInfo.id);
+            setDeleteModalOpen(false);
+            setDeleteTaskInfo(null);
+            await loadTaskInstances();
+        } catch (e) {
+            console.error('Error deleting task:', e);
+            setError(e instanceof Error ? e.message : 'Failed to delete task');
+        } finally {
+            setDeleteSubmitting(false);
+        }
+    };
+
     const handleClaimTask = async (taskId: number) => {
         try {
             // Use the existing groupMeetingApi function
@@ -168,6 +220,11 @@ const ImprovedTaskManager: React.FC = () => {
     const [swapTaskTitle, setSwapTaskTitle] = useState<string | undefined>(undefined);
 
     const openSwapModal = (task: TaskInstance) => {
+        // Prevent opening modal if already disabled (double-click protection)
+        if (pendingSwapTaskIds.has(task.id)) {
+            return;
+        }
+        
         setSwapTaskId(task.id);
         setSwapTaskTitle(task.template_name);
         setSwapModalOpen(true);
@@ -182,25 +239,36 @@ const ImprovedTaskManager: React.FC = () => {
         if (!token || !user) return;
         setSwapSubmitting(true);
         try {
-            const response = await fetch(buildApiUrl('/api/schedule/task-swap-requests/'), {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Token ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    task_instance_id: taskId,
-                    request_type: 'swap',
-                    to_user_id: toUserId,
-                    reason
-                })
+            await scheduleApi.createTaskSwapRequest(token, {
+                task_instance_id: taskId,
+                request_type: 'swap',
+                to_user_id: toUserId,
+                reason
             });
-            if (!response.ok) {
-                const err = await response.json().catch(() => ({}));
-                throw new Error(err.detail || err.error || 'Failed to submit swap request');
-            }
+            
+            // Close modal first for better UX
             setSwapModalOpen(false);
+            setSwapTaskId(null);
+            setSwapTaskTitle(undefined);
+            
+            // Update pending swap request tracking immediately for instant UI feedback
+            setPendingSwapTaskIds(prev => new Set([...prev, taskId]));
+            
+            // Refresh data to ensure consistency
             await Promise.all([loadTaskInstances(), loadPendingSwapRequests()]);
+            
+            // Show success message
+            console.log(`Swap request submitted successfully for task ${taskId}`);
+        } catch (error) {
+            console.error('Error submitting swap request:', error);
+            setError(`Failed to submit swap request: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            
+            // Clear the optimistic update if request failed
+            setPendingSwapTaskIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(taskId);
+                return newSet;
+            });
         } finally {
             setSwapSubmitting(false);
         }
@@ -467,7 +535,9 @@ const ImprovedTaskManager: React.FC = () => {
                             users={users}
                             currentUser={user}
                             onCompleteTask={handleCompleteTask}
-                            onClaimTask={handleClaimTask}
+                             onClaimTask={handleClaimTask}
+                             onCancelTask={openCancelTask}
+                             onDeleteTask={isAdmin ? openDeleteTask : undefined}
                         />
                     )}
 
@@ -477,6 +547,7 @@ const ImprovedTaskManager: React.FC = () => {
                             tasks={myTasks}
                             onCompleteTask={handleCompleteTask}
                             onSwapTask={handleSwapTask}
+                             onCancelTask={openCancelTask}
                             disabledSwapTaskIds={pendingSwapTaskIds}
                         />
                     )}
@@ -505,6 +576,24 @@ const ImprovedTaskManager: React.FC = () => {
                 }}
             />
 
+            {/* Cancel Task Modal */}
+            <CancelTaskModal
+                isOpen={cancelModalOpen}
+                onClose={() => { if (!cancelSubmitting) { setCancelModalOpen(false); setCancelTaskInfo(null); } }}
+                onConfirm={submitCancelTask}
+                taskName={cancelTaskInfo?.name || ''}
+                taskPeriod={cancelTaskInfo?.period || ''}
+                isLoading={cancelSubmitting}
+            />
+
+            {/* Confirm Delete Modal */}
+            <ConfirmDeleteModal
+                isOpen={deleteModalOpen}
+                onClose={() => { if (!deleteSubmitting) { setDeleteModalOpen(false); setDeleteTaskInfo(null); } }}
+                onConfirm={() => { if (!deleteSubmitting) submitDeleteTask(); }}
+                itemName={deleteTaskInfo?.name || ''}
+            />
+
             {/* Task Swap Modal */}
             <TaskSwapRequestModal
                 isOpen={swapModalOpen}
@@ -528,7 +617,9 @@ const TaskInstancesView: React.FC<{
     currentUser: any;
     onCompleteTask: (taskId: number) => void;
     onClaimTask: (taskId: number) => void;
-}> = ({ instances, users, currentUser, onCompleteTask, onClaimTask }) => {
+    onCancelTask?: (task: TaskInstance) => void;
+    onDeleteTask?: (task: TaskInstance) => void;
+}> = ({ instances, users, currentUser, onCompleteTask, onClaimTask, onCancelTask, onDeleteTask }) => {
     const [filterStatus, setFilterStatus] = useState<string>('all');
     const [filterType, setFilterType] = useState<string>('all');
 
@@ -558,6 +649,17 @@ const TaskInstancesView: React.FC<{
 
     const canClaimTask = (task: TaskInstance) => {
         return task.template.task_type === 'one_time' && (task.status === 'pending' || task.status === 'scheduled') && task.current_assignees.length === 0;
+    };
+
+    const canCancelTask = (task: TaskInstance) => {
+        // assignee or admin, and not completed/cancelled
+        const isAssignee = currentUser && task.current_assignees.includes(currentUser.id);
+        return (isAssignee || currentUser?.is_staff) && !['completed', 'cancelled'].includes(task.status);
+    };
+
+    const canDeleteTask = (task: TaskInstance) => {
+        // admin only
+        return Boolean(currentUser?.is_staff);
     };
 
     if (filteredInstances.length === 0) {
@@ -700,6 +802,24 @@ const TaskInstancesView: React.FC<{
                                             Complete
                                         </button>
                                     )}
+                                    {onCancelTask && canCancelTask(task) && (
+                                        <button
+                                            onClick={() => onCancelTask(task)}
+                                            className="inline-flex items-center px-2 py-1 bg-orange-600 text-white text-xs rounded hover:bg-orange-700 transition-colors"
+                                        >
+                                            <X className="w-3 h-3 mr-1" />
+                                            Cancel
+                                        </button>
+                                    )}
+                                    {onDeleteTask && canDeleteTask(task) && (
+                                        <button
+                                            onClick={() => onDeleteTask(task)}
+                                            className="inline-flex items-center px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                                        >
+                                            <Trash2 className="w-3 h-3 mr-1" />
+                                            Delete
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -716,7 +836,8 @@ const MyTasksView: React.FC<{
     onCompleteTask: (taskId: number) => void;
     onSwapTask: (task: TaskInstance) => void;
     disabledSwapTaskIds?: Set<number>;
-}> = ({ tasks, onCompleteTask, onSwapTask, disabledSwapTaskIds }) => {
+    onCancelTask?: (task: TaskInstance) => void;
+}> = ({ tasks, onCompleteTask, onSwapTask, disabledSwapTaskIds, onCancelTask }) => {
     const pendingTasks = tasks.filter(t => t.status === 'pending');
     const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
     const completedTasks = tasks.filter(t => t.status === 'completed');
@@ -758,7 +879,8 @@ const MyTasksView: React.FC<{
                                 onCompleteTask={onCompleteTask}
                                 onSwapTask={onSwapTask}
                                 showCompleteButton={true}
-                                showSwapButton={true}
+                                 showSwapButton={true}
+                                 onCancelTask={onCancelTask}
                                 disabled={disabledSwapTaskIds?.has(task.id)}
                             />
                         ))}
@@ -779,7 +901,8 @@ const MyTasksView: React.FC<{
                                 key={task.id} 
                                 task={task} 
                                 onSwapTask={onSwapTask}
-                                showSwapButton={true}
+                                 showSwapButton={true}
+                                 onCancelTask={onCancelTask}
                                 disabled={disabledSwapTaskIds?.has(task.id)}
                             />
                         ))}
@@ -813,7 +936,8 @@ const TaskCard: React.FC<{
     showCompleteButton?: boolean;
     showSwapButton?: boolean;
     disabled?: boolean;
-}> = ({ task, onCompleteTask, onSwapTask, showCompleteButton = false, showSwapButton = false, disabled = false }) => {
+    onCancelTask?: (task: TaskInstance) => void;
+}> = ({ task, onCompleteTask, onSwapTask, showCompleteButton = false, showSwapButton = false, disabled = false, onCancelTask }) => {
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'completed': return 'bg-green-100 text-green-800';
@@ -863,7 +987,7 @@ const TaskCard: React.FC<{
                 )}
             </div>
 
-            {(showCompleteButton || showSwapButton) && (onCompleteTask || onSwapTask) && (
+            {(showCompleteButton || showSwapButton || onCancelTask) && (onCompleteTask || onSwapTask || onCancelTask) && (
                 <div className="mt-3 pt-3 border-t border-gray-200">
                     <div className="flex gap-2">
                         {showCompleteButton && onCompleteTask && (
@@ -879,10 +1003,20 @@ const TaskCard: React.FC<{
                             <button
                                 onClick={() => onSwapTask(task)}
                                 disabled={disabled}
-                                className={`flex-1 inline-flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${disabled ? 'bg-gray-300 text-white cursor-not-allowed' : 'bg-yellow-600 text-white hover:bg-yellow-700'}`}
+                                className={`flex-1 inline-flex items-center justify-center px-4 py-2 rounded-lg transition-colors ${disabled ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-yellow-600 text-white hover:bg-yellow-700'}`}
+                                title={disabled ? 'Swap request already submitted and pending approval' : 'Request to swap this task with another team member'}
                             >
                                 <ArrowLeftRight className="w-4 h-4 mr-1" />
-                                {disabled ? 'Requested' : 'Request Swap'}
+                                {disabled ? 'Swap Requested' : 'Request Swap'}
+                            </button>
+                        )}
+                        {onCancelTask && task.status !== 'completed' && task.status !== 'cancelled' && (
+                            <button
+                                onClick={() => onCancelTask(task)}
+                                className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                            >
+                                <X className="w-4 h-4 mr-1" />
+                                Cancel
                             </button>
                         )}
                     </div>
@@ -980,3 +1114,6 @@ const TaskTemplatesView: React.FC<{
 
 
 export default ImprovedTaskManager;
+
+// Modals mounted at the root of the component tree
+// Note: render after default export block is not allowed; integrate modals in the main component JSX above.

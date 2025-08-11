@@ -1,0 +1,27 @@
+{% extends "notifications/emails/base_email.html" %}
+{% load tz %}
+
+{% block title %}Task Swap Approved{% endblock %}
+
+{% block header_title %}Task Swap Request Approved{% endblock %}
+
+{% block content %}
+<h2>Your Task Swap Request Has Been Approved</h2>
+
+<p>Hello,</p>
+
+<p>Good news! Your task swap request for <strong>{{ swap_request.task_name }}</strong> has been approved by {{ swap_request.approver }}.</p>
+
+<div class="highlight">
+  <h3>Next Steps</h3>
+  <p>The task assignment has been updated. You can now view your updated task list in the schedule management system.</p>
+</div>
+
+{% if action_url %}
+<a href="{{ action_url }}" class="button">View My Tasks</a>
+{% endif %}
+
+<p>Thank you for using the task management system!</p>
+
+<p>Best regards,<br/>Hayer Lab Inventory System</p>
+{% endblock %}

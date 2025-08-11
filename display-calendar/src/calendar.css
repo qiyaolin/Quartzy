@@ -1,0 +1,122 @@
+/* Minimal, professional, modern calendar styles (light/dark aware) */
+
+:root {
+  --cal-bg: #0f172a; /* slate-900 */
+  --cal-panel: #111827; /* gray-900 */
+  --cal-border: #1f2937; /* gray-800 */
+  --cal-text: #e5e7eb; /* gray-200 */
+  --cal-muted: #6b7280; /* gray-500 */
+  --cal-accent: #4f46e5; /* indigo-600 */
+  --cal-accent-hover: #6366f1; /* indigo-500 */
+  --cal-today: #22c55e; /* emerald-500 */
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --cal-bg: #ffffff;
+    --cal-panel: #ffffff;
+    --cal-border: #e5e7eb; /* gray-200 */
+    --cal-text: #0f172a; /* slate-900 */
+    --cal-muted: #6b7280; /* gray-500 */
+    --cal-accent: #4f46e5;
+    --cal-accent-hover: #4338ca;
+    --cal-today: #16a34a; /* green-600 */
+  }
+}
+
+.cal-wrapper {
+  display: grid;
+  gap: 16px;
+  color: var(--cal-text);
+  background: var(--cal-bg);
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid var(--cal-border);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+}
+
+.cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cal-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.cal-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.cal-btn {
+  appearance: none;
+  border: 1px solid var(--cal-border);
+  background: var(--cal-panel);
+  color: var(--cal-text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.05s ease;
+}
+
+.cal-btn:hover {
+  border-color: var(--cal-accent);
+}
+
+.cal-btn:active { transform: translateY(1px); }
+
+.cal-btn-primary {
+  background: var(--cal-accent);
+  border-color: var(--cal-accent);
+}
+.cal-btn-primary:hover { background: var(--cal-accent-hover); }
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.cal-weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cal-muted);
+  padding: 6px 0;
+}
+
+.cal-cell {
+  border: 1px solid var(--cal-border);
+  border-radius: 12px;
+  min-height: 92px;
+  background: var(--cal-panel);
+  padding: 10px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.cal-cell.is-muted { opacity: 0.6; }
+
+.cal-date-badge {
+  justify-self: end;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cal-muted);
+}
+
+.cal-cell.today .cal-date-badge {
+  color: var(--cal-today);
+}
+
+/* Responsive tweaks */
+@media (max-width: 640px) {
+  .cal-wrapper { padding: 16px; }
+  .cal-title { font-size: 18px; }
+  .cal-cell { min-height: 72px; }
+}
+
+

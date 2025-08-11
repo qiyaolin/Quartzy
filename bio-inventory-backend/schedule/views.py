@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
 from django.db.models import Q
 from datetime import datetime, date
 from django.utils.dateparse import parse_date
@@ -1040,230 +1041,11 @@ class TaskTemplateViewSet(viewsets.ModelViewSet):
 
 
 
-class TaskRotationQueueViewSet(viewsets.ModelViewSet):
-    """Task rotation queue management API"""
-    queryset = TaskRotationQueue.objects.all()
-    serializer_class = TaskRotationQueueSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        return TaskRotationQueue.objects.select_related('template').prefetch_related(
-            'queue_members__user'
-        )
-    
-    @action(detail=True, methods=['post'])
-    def add_members(self, request, pk=None):
-        """Add members to rotation queue"""
-        queue = self.get_object()
-        user_ids = request.data.get('user_ids', [])
-        
-        if not user_ids:
-            return Response({
-                'error': 'No user IDs provided'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        added_members = []
-        errors = []
-        
-        for user_id in user_ids:
-            try:
-                user = User.objects.get(id=user_id)
-                member, created = QueueMember.objects.get_or_create(
-                    rotation_queue=queue,
-                    user=user
-                )
-                if created:
-                    added_members.append(user.username)
-                else:
-                    errors.append(f"User {user.username} already in queue")
-            except User.DoesNotExist:
-                errors.append(f"User with ID {user_id} not found")
-        
-        return Response({
-            'message': f'Added {len(added_members)} members to queue',
-            'added_members': added_members,
-            'errors': errors,
-            'queue': self.get_serializer(queue).data
-        })
-    
-    @action(detail=True, methods=['post'])
-    def recalculate_priorities(self, request, pk=None):
-        """Recalculate priority scores for all queue members"""
-        queue = self.get_object()
-        
-        updated_count = 0
-        for member in queue.queue_members.all():
-            old_priority = member.priority_score
-            new_priority = queue._calculate_member_priority(member, timezone.now().date())
-            member.priority_score = new_priority
-            member.save()
-            updated_count += 1
-        
-        return Response({
-            'message': f'Recalculated priorities for {updated_count} members',
-            'queue': self.get_serializer(queue).data
-        })
+# TaskRotationQueueViewSet removed - duplicate of line ~2891
+# The complete TaskRotationQueueViewSet implementation with enhanced permissions is located around line 2891
 
 
-class TaskSwapRequestViewSet(viewsets.ModelViewSet):
-    """Task swap request management API"""
-    queryset = TaskSwapRequest.objects.all()
-    serializer_class = TaskSwapRequestSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        queryset = TaskSwapRequest.objects.select_related(
-            'task_instance', 'from_user', 'to_user', 'admin_approved_by'
-        )
-        
-        # Filter by status
-        status_filter = self.request.query_params.get('status')
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        
-        # Filter by user involvement
-        user_id = self.request.query_params.get('user_id')
-        if user_id:
-            queryset = queryset.filter(
-                Q(from_user_id=user_id) | Q(to_user_id=user_id)
-            )
-        
-        # Filter public pool
-        public_pool = self.request.query_params.get('public_pool')
-        if public_pool is not None:
-            queryset = queryset.filter(is_public_pool=public_pool.lower() == 'true')
-        
-        return queryset.order_by('-created_at')
-    
-    def perform_create(self, serializer):
-        """Set requester when creating swap request"""
-        serializer.save(from_user=self.request.user)
-    
-    @action(detail=False, methods=['get'])
-    def my_requests(self, request):
-        """Get current user's swap requests"""
-        # Requests made by current user
-        my_requests = self.get_queryset().filter(from_user=request.user)
-        
-        # Requests targeting current user
-        target_requests = self.get_queryset().filter(
-            to_user=request.user,
-            status='pending'
-        )
-        
-        # Public pool requests that user can claim
-        pool_requests = self.get_queryset().filter(
-            is_public_pool=True,
-            status='pending'
-        ).exclude(from_user=request.user)
-        
-        return Response({
-            'my_requests': self.get_serializer(my_requests, many=True).data,
-            'target_requests': self.get_serializer(target_requests, many=True).data,
-            'pool_requests': self.get_serializer(pool_requests, many=True).data,
-            'counts': {
-                'my_requests': my_requests.count(),
-                'target_requests': target_requests.count(),
-                'pool_requests': pool_requests.count()
-            }
-        })
-    
-    @action(detail=True, methods=['post'])
-    def approve_by_target(self, request, pk=None):
-        """Approve swap request by target user"""
-        swap_request = self.get_object()
-        
-        if swap_request.to_user != request.user:
-            return Response({
-                'error': 'You are not the target user for this request'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        try:
-            swap_request.approve_by_target_user()
-            return Response({
-                'message': 'Swap request approved by target user',
-                'swap_request': self.get_serializer(swap_request).data
-            })
-        except ValueError as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['post'])
-    def approve_by_admin(self, request, pk=None):
-        """Approve swap request by admin"""
-        if not request.user.is_staff:
-            return Response({
-                'error': 'Admin permission required'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        swap_request = self.get_object()
-        swap_request.approve_by_admin(request.user)
-        
-        return Response({
-            'message': 'Swap request approved by admin',
-            'swap_request': self.get_serializer(swap_request).data
-        })
-    
-    @action(detail=True, methods=['post'])
-    def reject(self, request, pk=None):
-        """Reject swap request"""
-        if not request.user.is_staff:
-            return Response({
-                'error': 'Admin permission required'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        swap_request = self.get_object()
-        reason = request.data.get('reason', 'Rejected by admin')
-        swap_request.reject(reason)
-        
-        return Response({
-            'message': 'Swap request rejected',
-            'swap_request': self.get_serializer(swap_request).data
-        })
-    
-    @action(detail=True, methods=['post'])
-    def publish_to_pool(self, request, pk=None):
-        """Publish request to public swap pool"""
-        swap_request = self.get_object()
-        
-        if swap_request.from_user != request.user:
-            return Response({
-                'error': 'You can only publish your own requests'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        swap_request.publish_to_pool()
-        
-        return Response({
-            'message': 'Request published to public pool',
-            'swap_request': self.get_serializer(swap_request).data
-        })
-    
-    @action(detail=True, methods=['post'])
-    def claim_from_pool(self, request, pk=None):
-        """Claim request from public pool"""
-        swap_request = self.get_object()
-        
-        if not swap_request.is_public_pool:
-            return Response({
-                'error': 'Request is not in public pool'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if swap_request.from_user == request.user:
-            return Response({
-                'error': 'You cannot claim your own request'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            swap_request.claim_from_pool(request.user)
-            return Response({
-                'message': 'Request claimed successfully',
-                'swap_request': self.get_serializer(swap_request).data
-            })
-        except ValueError as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+# Duplicate TaskSwapRequestViewSet removed - using enhanced version at line 2762
 
 
 # ===============================================
@@ -2305,76 +2087,8 @@ class EquipmentStatusView(APIView):
 # Enhanced Periodic Task Management Views
 # ===============================================
 
-class TaskTemplateViewSet(viewsets.ModelViewSet):
-    """Task template management API"""
-    queryset = TaskTemplate.objects.all()
-    serializer_class = TaskTemplateSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        """Filter templates based on user permissions"""
-        queryset = TaskTemplate.objects.all()
-        
-        # Filter by category
-        category = self.request.query_params.get('category')
-        if category:
-            queryset = queryset.filter(category=category)
-        
-        # Filter by active status
-        is_active = self.request.query_params.get('is_active')
-        if is_active is not None:
-            queryset = queryset.filter(is_active=is_active.lower() == 'true')
-        
-        return queryset.order_by('name')
-    
-    def perform_create(self, serializer):
-        """Set current user as creator"""
-        serializer.save(created_by=self.request.user)
-    
-    @action(detail=True, methods=['post'])
-    def activate(self, request, pk=None):
-        """Activate/deactivate template"""
-        template = self.get_object()
-        is_active = request.data.get('is_active', True)
-        template.is_active = is_active
-        template.save()
-        
-        return Response({
-            'status': 'success',
-            'is_active': template.is_active
-        })
-    
-    @action(detail=True, methods=['post'])
-    def clone(self, request, pk=None):
-        """Clone template with new name"""
-        template = self.get_object()
-        new_name = request.data.get('name', f"{template.name} (Copy)")
-        
-        # Create new template
-        new_template = TaskTemplate.objects.create(
-            name=new_name,
-            description=template.description,
-            task_type=template.task_type,
-            category='custom',  # Cloned templates are always custom
-            frequency=template.frequency,
-            interval=template.interval,
-            start_date=template.start_date,
-            end_date=template.end_date,
-            min_people=template.min_people,
-            max_people=template.max_people,
-            default_people=template.default_people,
-            estimated_hours=template.estimated_hours,
-            window_type=template.window_type,
-            fixed_start_day=template.fixed_start_day,
-            fixed_end_day=template.fixed_end_day,
-            flexible_position=template.flexible_position,
-            flexible_duration=template.flexible_duration,
-            priority=template.priority,
-            created_by=request.user,
-            is_active=False  # Start as inactive
-        )
-        
-        return Response(TaskTemplateSerializer(new_template).data)
+# TaskTemplateViewSet removed - duplicate of line 926
+# The complete TaskTemplateViewSet implementation is located at line 926
 
 
 class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
@@ -2640,8 +2354,111 @@ class PeriodicTaskInstanceViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 logging.error(f"Failed to update task {task.id} in Google Calendar: {e}")
     
+    @action(detail=True, methods=['post'])
+    def start_task(self, request, pk=None):
+        """Start task (change status to in_progress)"""
+        task = self.get_object()
+        
+        # Check permissions
+        if not (request.user.id in task.current_assignees or request.user.is_staff):
+            return Response(
+                {'error': 'You are not assigned to this task'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check current status
+        if task.status not in ['scheduled', 'pending']:
+            return Response(
+                {'error': f'Cannot start task with status: {task.status}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        task.status = 'in_progress'
+        task.save()
+        
+        # Send notification to all assignees
+        try:
+            from schedule.services.notification_service import TaskNotificationService
+            assignees = [User.objects.get(id=user_id) for user_id in task.current_assignees]
+            TaskNotificationService.notify_task_status_change(
+                task_instance=task,
+                assignees=assignees,
+                new_status='in_progress',
+                changed_by=request.user
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send task started notification for task {task.id}: {e}")
+        
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def cancel_task(self, request, pk=None):
+        """Cancel task (change status to cancelled)"""
+        task = self.get_object()
+        
+        # Check permissions - assignees or admin can cancel
+        if not (request.user.id in task.current_assignees or request.user.is_staff):
+            return Response(
+                {'error': 'You do not have permission to cancel this task'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if task can be cancelled
+        if task.status in ['completed', 'cancelled']:
+            return Response(
+                {'error': f'Cannot cancel task with status: {task.status}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get cancellation reason from request
+        cancellation_reason = request.data.get('reason', 'No reason provided')
+        
+        task.status = 'cancelled'
+        task.assignment_metadata = task.assignment_metadata or {}
+        task.assignment_metadata.update({
+            'cancelled_at': timezone.now().isoformat(),
+            'cancelled_by': request.user.id,
+            'cancellation_reason': cancellation_reason
+        })
+        task.save()
+        
+        # Send cancellation notifications to all assignees
+        try:
+            from schedule.services.notification_service import TaskNotificationService
+            assignees = [User.objects.get(id=user_id) for user_id in task.current_assignees if user_id != request.user.id]
+            if assignees:  # Only send if there are other assignees
+                TaskNotificationService.notify_task_cancellation(
+                    task_instance=task,
+                    assignees=assignees,
+                    cancelled_by=request.user,
+                    reason=cancellation_reason
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send task cancellation notification for task {task.id}: {e}")
+        
+        serializer = self.get_serializer(task)
+        return Response(serializer.data)
+
     def perform_destroy(self, instance):
         """Handle task deletion with Google Calendar sync"""
+        # Check if task should be deleted (admin only and specific statuses)
+        if not self.request.user.is_staff:
+            raise PermissionDenied("Only administrators can delete tasks")
+        
+        # Send deletion notification before deleting
+        try:
+            if instance.current_assignees:
+                from schedule.services.notification_service import TaskNotificationService
+                assignees = [User.objects.get(id=user_id) for user_id in instance.current_assignees]
+                TaskNotificationService.notify_task_deletion(
+                    task_instance=instance,
+                    assignees=assignees,
+                    deleted_by=self.request.user
+                )
+        except Exception as e:
+            logger.warning(f"Failed to send task deletion notification for task {instance.id}: {e}")
+        
         # Remove from Google Calendar if enabled and task syncing is enabled
         if (self.sync_service and 
             getattr(settings, 'GOOGLE_CALENDAR_AUTO_SYNC', True) and 
@@ -2746,6 +2563,49 @@ class TaskSwapRequestViewSet(viewsets.ModelViewSet):
         if is_public and not to_user_id:
             swap_request.publish_to_pool()
         
+        # Send email notifications for swap request
+        try:
+            from notifications.email_service import EmailNotificationService
+            
+            # Determine recipients based on request type
+            if to_user_id:
+                # Direct swap request to specific user
+                to_user = User.objects.get(id=to_user_id)
+                recipients = [to_user]
+                subject = f"Task Swap Request: {task.template_name}"
+                template_name = 'task_swap_request_notification'
+            else:
+                # Public pool request - notify admins
+                recipients = list(User.objects.filter(is_staff=True, is_active=True))
+                subject = f"Public Task Swap Request: {task.template_name}"
+                template_name = 'task_swap_request_notification'
+            
+            if recipients:
+                success = EmailNotificationService.send_email_notification(
+                    recipients=recipients,
+                    subject=subject,
+                    template_name=template_name,
+                    context={
+                        'swap_request': {
+                            'id': swap_request.id,
+                            'task_name': task.template_name,
+                            'from_user': request.user.get_full_name() or request.user.username,
+                            'to_user': to_user.get_full_name() or to_user.username if to_user_id else 'Public Pool',
+                            'reason': reason,
+                            'is_public': is_public and not to_user_id
+                        },
+                        'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/swap-requests"
+                    }
+                )
+                
+                if not success:
+                    logger.warning(f"Failed to send swap request notification emails for swap request {swap_request.id}")
+                else:
+                    logger.info(f"Successfully sent swap request notification emails for swap request {swap_request.id}")
+                    
+        except Exception as e:
+            logger.error(f"Error sending swap request notification emails for swap request {swap_request.id}: {e}")
+        
         return Response(TaskSwapRequestSerializer(swap_request).data)
     
     @action(detail=True, methods=['post'])
@@ -2760,6 +2620,32 @@ class TaskSwapRequestViewSet(viewsets.ModelViewSet):
             )
         
         swap_request.approve_by_target_user()
+        
+        # Send approval notification to requester
+        try:
+            from notifications.email_service import EmailNotificationService
+            
+            success = EmailNotificationService.send_email_notification(
+                recipients=[swap_request.from_user],
+                subject=f"Task Swap Approved: {swap_request.task_instance.template_name}",
+                template_name='task_swap_approved_notification',
+                context={
+                    'swap_request': {
+                        'task_name': swap_request.task_instance.template_name,
+                        'approver': request.user.get_full_name() or request.user.username
+                    },
+                    'action_url': f"{EmailNotificationService.get_base_context()['base_url']}/schedule/my-tasks"
+                }
+            )
+            
+            if not success:
+                logger.warning(f"Failed to send swap approval notification for swap request {swap_request.id}")
+            else:
+                logger.info(f"Successfully sent swap approval notification for swap request {swap_request.id}")
+                
+        except Exception as e:
+            logger.error(f"Error sending swap approval notification for swap request {swap_request.id}: {e}")
+        
         return Response(TaskSwapRequestSerializer(swap_request).data)
     
     @action(detail=True, methods=['post'])
@@ -2887,6 +2773,19 @@ class TaskGenerationView(APIView):
                                 }
                             )
                             generated_tasks.append(task)
+                            
+                            # Send task assignment notifications
+                            if assignees:
+                                try:
+                                    from schedule.services.notification_service import TaskNotificationService
+                                    TaskNotificationService.notify_task_assignment(
+                                        task_instance=task,
+                                        assignees=assignees,
+                                        is_new_assignment=True
+                                    )
+                                    logger.info(f"Sent task assignment notifications for task {task.id} to {len(assignees)} assignees")
+                                except Exception as e:
+                                    logger.warning(f"Failed to send task assignment notifications for task {task.id}: {e}")
             
             response_data = {
                 'preview': preview_data,
