@@ -1,6 +1,8 @@
 // Email Notification Service for Group Meetings
 // This service integrates with the existing email notification system in the project
 
+import { EASTERN_TIME_ZONE } from '../utils/timezone.ts';
+
 export interface EmailTemplate {
     id: string;
     name: string;
@@ -710,6 +712,7 @@ export class GroupMeetingNotificationService {
 
     private formatDate(dateString: string): string {
         return new Date(dateString).toLocaleDateString('en-US', {
+            timeZone: EASTERN_TIME_ZONE,
             weekday: 'long',
             year: 'numeric',
             month: 'long',

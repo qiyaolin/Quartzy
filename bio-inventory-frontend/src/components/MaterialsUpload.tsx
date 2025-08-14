@@ -37,7 +37,7 @@ interface GroupMeeting {
 
 interface MaterialsUploadProps {
     meeting: GroupMeeting;
-    onUpload?: (meetingId: number, files: File[], url?: string) => Promise<void>;
+    onUpload?: (meetingId: number, url: string) => Promise<void>;
     onRemove?: (meetingId: number, fileId: number) => Promise<void>;
     onSubmit?: (meetingId: number) => Promise<void>;
     canEdit?: boolean;
@@ -57,7 +57,7 @@ const MaterialsUpload: React.FC<MaterialsUploadProps> = ({
     // State
     const [uploading, setUploading] = useState(false);
     const [materialsUrl, setMaterialsUrl] = useState(meeting.materials_url || '');
-    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    // File upload removed; URL only
     const [dragOver, setDragOver] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -73,17 +73,12 @@ const MaterialsUpload: React.FC<MaterialsUploadProps> = ({
         new Date(meeting.materials_deadline).getTime() - new Date().getTime() < 24 * 60 * 60 * 1000;
 
     // Handle file selection
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        validateAndAddFiles(files);
-    };
+    const handleFileSelect = (_e: React.ChangeEvent<HTMLInputElement>) => {};
 
     // Handle drag and drop
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setDragOver(false);
-        const files = Array.from(e.dataTransfer.files);
-        validateAndAddFiles(files);
     };
 
     const handleDragOver = (e: React.DragEvent) => {
@@ -96,70 +91,27 @@ const MaterialsUpload: React.FC<MaterialsUploadProps> = ({
     };
 
     // Validate and add files
-    const validateAndAddFiles = (files: File[]) => {
-        const allowedTypes = [
-            'application/pdf',
-            'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-powerpoint',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            'text/plain'
-        ];
-
-        const maxSize = 50 * 1024 * 1024; // 50MB
-        const validFiles: File[] = [];
-        const errors: string[] = [];
-
-        files.forEach(file => {
-            if (!allowedTypes.includes(file.type)) {
-                errors.push(`${file.name}: File type not allowed`);
-                return;
-            }
-            
-            if (file.size > maxSize) {
-                errors.push(`${file.name}: File size exceeds 50MB limit`);
-                return;
-            }
-            
-            validFiles.push(file);
-        });
-
-        if (errors.length > 0) {
-            setError(errors.join(', '));
-            return;
-        }
-
-        setSelectedFiles(prev => [...prev, ...validFiles]);
-        setError(null);
-    };
+    const validateAndAddFiles = (_files: File[]) => {};
 
     // Remove selected file
-    const removeSelectedFile = (index: number) => {
-        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    };
+    const removeSelectedFile = (_index: number) => {};
 
     // Upload materials
     const handleUpload = async () => {
         if (!onUpload) return;
-
-        if (selectedFiles.length === 0 && !materialsUrl.trim()) {
-            setError('Please select files or provide a URL');
+        if (!materialsUrl.trim()) {
+            setError('Please provide a URL');
             return;
         }
-
         setUploading(true);
         setError(null);
-        
         try {
-            await onUpload(meeting.id, selectedFiles, materialsUrl.trim() || undefined);
-            setSuccess('Materials uploaded successfully');
-            setSelectedFiles([]);
+            await onUpload(meeting.id, materialsUrl.trim());
+            setSuccess('URL submitted successfully');
             setMaterialsUrl('');
-            
-            // Clear success message after 3 seconds
             setTimeout(() => setSuccess(null), 3000);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Upload failed');
+            setError(err instanceof Error ? err.message : 'Submit failed');
         } finally {
             setUploading(false);
         }
@@ -311,7 +263,7 @@ const MaterialsUpload: React.FC<MaterialsUploadProps> = ({
                 </div>
             )}
 
-            {/* File Upload */}
+            {/* File Upload (removed) and URL only */}
             {canEdit && !meeting.is_materials_submitted && (
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
                     <h4 className="text-lg font-medium text-gray-900 mb-4">Upload Files</h4>
@@ -343,39 +295,10 @@ const MaterialsUpload: React.FC<MaterialsUploadProps> = ({
                                 PDF, DOC, DOCX, PPT, PPTX, TXT files up to 50MB
                             </p>
                         </div>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
-                            onChange={handleFileSelect}
-                            className="hidden"
-                        />
+                        {/* File input removed */}
                     </div>
 
-                    {/* Selected Files */}
-                    {selectedFiles.length > 0 && (
-                        <div className="mt-4 space-y-2">
-                            <h5 className="text-sm font-medium text-gray-700">Selected Files:</h5>
-                            {selectedFiles.map((file, index) => (
-                                <div key={index} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
-                                    <div className="flex items-center">
-                                        <File className="w-4 h-4 text-gray-500 mr-2" />
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                                            <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => removeSelectedFile(index)}
-                                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    {/* Selected files section removed */}
 
                     {/* Upload Button */}
                     {(selectedFiles.length > 0 || materialsUrl.trim()) && (

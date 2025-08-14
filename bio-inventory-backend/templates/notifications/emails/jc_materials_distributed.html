@@ -19,14 +19,35 @@
             <h1>Journal Club Materials Available</h1>
         </div>
         <div class="content">
-            <p>Dear {{ recipient.first_name|default:recipient.username }},</p>
+            <p>Dear all,</p>
             <p>The materials for the upcoming Journal Club on {{ meeting.date }} have been submitted by the presenter and are now available for your review.</p>
             <div class="details">
                 <h3>Materials</h3>
-                <p><strong>Title:</strong> {{ materials.title }}</p>
-                <p><strong>Link:</strong> <a href="{{ materials.url }}">{{ materials.url }}</a></p>
-                {% if materials.file %}
-                <p><strong>PDF:</strong> <a href="{{ materials.file }}">Download PDF</a></p>
+                {% if papers %}
+                    {% for p in papers %}
+                    <div style="margin-bottom: 12px;">
+                        {% if p.presenter %}
+                        <p><strong>Presenter:</strong> {{ p.presenter }}</p>
+                        {% endif %}
+                        {% if p.title %}
+                        <p><strong>Title:</strong> {{ p.title }}</p>
+                        {% endif %}
+                        {% if p.url %}
+                        <p><strong>Link:</strong> <a href="{{ p.url }}">{{ p.url }}</a></p>
+                        {% endif %}
+                        {% if p.file %}
+                        <p><strong>PDF:</strong> <a href="{{ p.file }}">Download PDF</a></p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% elif materials %}
+                    <p><strong>Title:</strong> {{ materials.title }}</p>
+                    <p><strong>Link:</strong> <a href="{{ materials.url }}">{{ materials.url }}</a></p>
+                    {% if materials.file %}
+                    <p><strong>PDF:</strong> <a href="{{ materials.file }}">Download PDF</a></p>
+                    {% endif %}
+                {% else %}
+                    <p>No materials attached.</p>
                 {% endif %}
             </div>
             <p>Please review the materials before the meeting.</p>

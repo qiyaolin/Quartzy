@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { formatDateET, isTodayET, formatDateForInput } from '../utils/timezone.ts';
+import { formatDateET, isTodayET, formatDateForInput, formatTimeET, formatDateTimeET, EASTERN_TIME_ZONE, getCurrentDateET } from '../utils/timezone.ts';
+import '../styles/enhanced-calendar.css';
 import { 
   Calendar, 
   Clock, 
@@ -108,13 +109,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     startOfWeek.setDate(date.getDate() - date.getDay()); // Start from Sunday
     
     const days: CalendarDay[] = [];
-    const today = new Date();
-    const selected = new Date(selectedDate + 'T00:00:00');
+    const todayET = getCurrentDateET();
     
     for (let i = 0; i < 7; i++) {
       const currentDate = new Date(startOfWeek);
       currentDate.setDate(startOfWeek.getDate() + i);
-      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateStr = formatDateET(currentDate);
       const daySchedules = schedules
         .filter(s => s.date === dateStr)
         .reduce((unique: Schedule[], schedule) => {
@@ -134,8 +134,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       days.push({
         date: dateStr,
         isCurrentMonth: true,
-        isToday: currentDate.toDateString() === today.toDateString(),
-        isSelected: currentDate.toDateString() === selected.toDateString(),
+        isToday: isTodayET(currentDate),
+        isSelected: formatDateET(currentDate) === selectedDate,
         schedules: daySchedules
       });
     }
@@ -166,16 +166,26 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       date.setMonth(date.getMonth() + (direction === 'next' ? 1 : -1));
     }
     
-    onDateChange(date.toISOString().split('T')[0]);
+    onDateChange(formatDateET(date));
   }, [selectedDate, viewMode, onDateChange]);
 
   const formatDate = useCallback((date: string) => {
     const d = new Date(date);
     return {
-      dayName: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      dayNumber: d.getDate(),
-      monthName: d.toLocaleDateString('en-US', { month: 'short' }),
+      dayName: d.toLocaleDateString('en-US', { 
+        timeZone: EASTERN_TIME_ZONE,
+        weekday: 'short' 
+      }),
+      dayNumber: d.toLocaleDateString('en-US', { 
+        timeZone: EASTERN_TIME_ZONE,
+        day: 'numeric' 
+      }),
+      monthName: d.toLocaleDateString('en-US', { 
+        timeZone: EASTERN_TIME_ZONE,
+        month: 'short' 
+      }),
       fullDate: d.toLocaleDateString('en-US', { 
+        timeZone: EASTERN_TIME_ZONE,
         weekday: 'long', 
         year: 'numeric', 
         month: 'long', 
@@ -218,7 +228,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden" style={{ height: 'calc(100vh - 240px)', minHeight: '600px', marginBottom: '80px' }}>
       {/* Calendar Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center gap-4">
@@ -245,7 +255,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
               `Week of ${formatDate(weekDays[0]?.date || selectedDate).monthName} ${formatDate(weekDays[0]?.date || selectedDate).dayNumber}`
             )}
             {viewMode === 'month' && (
-              new Date(selectedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+              new Date(selectedDate).toLocaleDateString('en-US', { 
+                timeZone: EASTERN_TIME_ZONE,
+                year: 'numeric', 
+                month: 'long' 
+              })
             )}
           </div>
         </div>
@@ -284,37 +298,48 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             {calendarDays.map((day, index) => (
               <div
                 key={day.date}
-                className={`min-h-[80px] p-1 border-r border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors ${
+                className={`min-h-[140px] p-4 border-r border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors overflow-hidden ${
                   !day.isCurrentMonth ? 'bg-gray-50' : ''
                 } ${day.isSelected ? 'bg-blue-50' : ''} ${day.isToday ? 'bg-yellow-50' : ''}`}
                 onClick={() => onDateChange(day.date)}
                 onDoubleClick={() => onCreateEvent?.(day.date)}
               >
                 {/* Day Number */}
-                <div className={`text-sm font-medium mb-1 ${
+                <div className={`text-sm font-semibold mb-3 flex items-center justify-between ${
                   !day.isCurrentMonth ? 'text-gray-400' : 
                   day.isToday ? 'text-blue-600' : 'text-gray-900'
                 }`}>
-                  {formatDate(day.date).dayNumber}
+                  <span className={day.isToday ? 'bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold' : 'text-lg font-bold'}>
+                    {formatDate(day.date).dayNumber}
+                  </span>
+                  {day.schedules.length > 0 && (
+                    <span className="text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full font-medium">
+                      {day.schedules.length}
+                    </span>
+                  )}
                 </div>
                 
                 {/* Events */}
-                <div className="space-y-1">
+                <div className="space-y-2 overflow-hidden flex-1">
                   {day.schedules.slice(0, 3).map((schedule) => (
                     <div
                       key={schedule.id}
-                      className={`text-xs p-1 rounded cursor-pointer truncate border-l-2 ${scheduleHelpers.getEventColorLight(scheduleHelpers.getEventType(schedule), schedule.status)}`}
+                      className={`text-xs p-2 rounded-lg cursor-pointer border-l-3 transition-all duration-200 hover:shadow-sm ${scheduleHelpers.getEventColorLight(scheduleHelpers.getEventType(schedule), schedule.status)}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEditEvent?.(schedule);
                       }}
                       title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
+                      style={{ maxHeight: '32px', minHeight: '32px' }}
                     >
-                      {formatTime(schedule.start_time)} {schedule.title}
+                      <div className="truncate leading-tight">
+                        <span className="font-bold text-xs mr-1">{formatTime(schedule.start_time)}</span>
+                        <span className="text-xs">{schedule.title}</span>
+                      </div>
                     </div>
                   ))}
                   {day.schedules.length > 3 && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 font-medium px-2 py-1 bg-gray-100 rounded-lg truncate">
                       +{day.schedules.length - 3} more
                     </div>
                   )}
@@ -326,9 +351,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
         {/* Week View */}
         {viewMode === 'week' && (
-          <div className="flex h-full">
+          <div className="flex" style={{ height: 'calc(100vh - 320px)', minHeight: '500px' }}>
             {/* Time Column */}
-            <div className="w-16 border-r border-gray-200 flex-shrink-0">
+            <div className="w-20 border-r border-gray-200 flex-shrink-0">
               <div className="h-12 sticky top-0 bg-white z-10"></div> {/* Header spacer */}
               {timeSlots.filter((_, index) => index % 4 === 0).map((time) => (
                 <div key={time} className="h-16 px-2 py-1 text-xs text-gray-500 border-b border-gray-100">
@@ -338,7 +363,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             </div>
             
             {/* Week Days */}
-            <div className="flex-1 grid grid-cols-7">
+            <div className="flex-1 grid grid-cols-7 min-w-0">
               {/* Day Headers */}
               {weekDays.map((day) => (
                 <div key={`header-${day.date}`} className="h-12 p-2 border-r border-b border-gray-200 text-center sticky top-0 bg-white z-10">
@@ -362,10 +387,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   {/* Events */}
                   {day.schedules.map((schedule) => {
                     const position = getEventPosition(schedule);
+                    const eventWidth = 160; // Week view column width approximation
                     return (
                       <div
                         key={schedule.id}
-                        className={`absolute left-1 right-1 rounded p-1 cursor-pointer text-xs border-l-2 ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
+                        className={`absolute left-2 right-2 rounded-lg cursor-pointer text-xs border-l-3 modern-calendar-event ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
                         style={{
                           top: position.top + 48, // Offset for header
                           height: position.height,
@@ -376,8 +402,32 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                         onMouseLeave={() => setHoveredEvent(null)}
                         title={`${schedule.title} (${scheduleHelpers.getEventType(schedule)})`}
                       >
-                        <div className="font-medium truncate">{schedule.title}</div>
-                        <div className="truncate">{formatTime(schedule.start_time)}</div>
+                        <div className="h-full flex p-2 relative overflow-hidden">
+                          {/* Single Horizontal Row - All Components */}
+                          <div className="flex items-center gap-1.5 flex-1 min-h-0">
+                            {/* Event Type Badge */}
+                            <div className="flex-shrink-0 text-xs event-type-badge rounded-full w-4 h-4 flex items-center justify-center">
+                              {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
+                            </div>
+                            
+                            {/* Title and Time Combined */}
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <div className="event-title text-xs leading-tight truncate font-semibold">
+                                {schedule.title}
+                              </div>
+                              <div className="event-time text-xs leading-tight opacity-90">
+                                {formatTime(schedule.start_time)}
+                              </div>
+                            </div>
+
+                            {/* Location - Horizontal if space */}
+                            {schedule.location && eventWidth > 120 && (
+                              <div className="event-location text-xs leading-tight truncate flex-shrink-0 max-w-16">
+                                {schedule.location}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -389,9 +439,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
         {/* Day View */}
         {viewMode === 'day' && (
-          <div className="flex h-full">
+          <div className="flex" style={{ height: 'calc(100vh - 320px)', minHeight: '500px' }}>
             {/* Time Column */}
-            <div className="w-20 border-r border-gray-200 flex-shrink-0">
+            <div className="w-24 border-r border-gray-200 flex-shrink-0">
               {timeSlots.filter((_, index) => index % 4 === 0).map((time) => (
                 <div key={time} className="h-16 px-3 py-2 text-sm text-gray-500 border-b border-gray-100">
                   {formatTime(time)}
@@ -400,7 +450,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             </div>
             
             {/* Day Content */}
-            <div className="flex-1 relative overflow-y-auto" style={{ height: 'calc(100vh - 300px)', minHeight: '400px' }}>
+            <div className="flex-1 relative overflow-y-auto min-w-0" style={{ height: '100%' }}>
               {/* Time Grid */}
               {timeSlots.filter((_, index) => index % 4 === 0).map((time) => (
                 <div 
@@ -430,10 +480,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                 return (
                   <div
                     key={schedule.id}
-                    className={`absolute left-2 right-2 rounded-lg p-3 cursor-pointer shadow-sm border-l-4 ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
+                    className={`absolute left-3 right-3 rounded-lg cursor-pointer shadow-md border-l-4 modern-calendar-event ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
                     style={{
                       top: position.top,
-                      height: Math.max(position.height, 60),
+                      height: Math.max(position.height, 80),
                       zIndex: 10
                     }}
                     onClick={() => onEditEvent?.(schedule)}
@@ -441,58 +491,79 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                     onMouseLeave={() => setHoveredEvent(null)}
                     title={`${schedule.title} (${scheduleHelpers.getEventType(schedule)})`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{schedule.title}</div>
-                        <div className="text-xs text-gray-600 mt-1">
-                          {formatTime(schedule.start_time)}
-                          {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                    <div className="h-full flex flex-col p-3 relative overflow-hidden">
+                      {/* Main Horizontal Row - All Key Components */}
+                      <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+                        {/* Event Type Badge */}
+                        <div className="flex-shrink-0 text-xs event-type-badge rounded-full w-6 h-6 flex items-center justify-center">
+                          {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
                         </div>
+                        
+                        {/* Title and Time Combined Column */}
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="event-title text-sm leading-tight truncate font-semibold">
+                            {schedule.title}
+                          </div>
+                          <div className="event-time text-xs leading-tight">
+                            {formatTime(schedule.start_time)}
+                            {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                          </div>
+                        </div>
+
+                        {/* Location - Horizontal if there's space */}
                         {schedule.location && (
-                          <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
-                            <MapPin className="w-3 h-3" />
-                            <span className="truncate">{schedule.location}</span>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <MapPin className="w-2.5 h-2.5 icon flex-shrink-0" />
+                            <span className="event-location text-xs leading-tight truncate max-w-20">
+                              {schedule.location}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Action Buttons - Horizontal */}
+                        {hoveredEvent === schedule.id && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditEvent?.(schedule);
+                              }}
+                              className="p-1 hover:bg-white hover:bg-opacity-20 rounded icon"
+                              title="Edit event"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (schedule.status !== 'cancelled' && schedule.status !== 'completed') {
+                                  console.log('Cancel event:', schedule.id);
+                                }
+                              }}
+                              className="p-1 hover:bg-white hover:bg-opacity-20 rounded text-orange-400 icon"
+                              title="Cancel event"
+                              disabled={schedule.status === 'cancelled' || schedule.status === 'completed'}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteEvent?.(schedule.id);
+                              }}
+                              className="p-1 hover:bg-white hover:bg-opacity-20 rounded text-red-600 icon"
+                              title="Delete event"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
                         )}
                       </div>
-                      
-                      {hoveredEvent === schedule.id && (
-                        <div className="flex items-center gap-1 ml-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditEvent?.(schedule);
-                            }}
-                            className="p-1 hover:bg-white hover:bg-opacity-20 rounded"
-                            title="Edit event"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Call cancel API instead of delete
-                              if (schedule.status !== 'cancelled' && schedule.status !== 'completed') {
-                                // TODO: Add cancel functionality
-                                console.log('Cancel event:', schedule.id);
-                              }
-                            }}
-                            className="p-1 hover:bg-white hover:bg-opacity-20 rounded text-orange-400"
-                            title="Cancel event"
-                            disabled={schedule.status === 'cancelled' || schedule.status === 'completed'}
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteEvent?.(schedule.id);
-                            }}
-                            className="p-1 hover:bg-white hover:bg-opacity-20 rounded text-red-600"
-                            title="Delete event"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+
+                      {/* Status Badge - Secondary Row if needed */}
+                      {schedule.status && schedule.status !== 'scheduled' && (
+                        <div className="status-badge text-xs px-2 py-1 rounded-full self-start">
+                          {schedule.status.replace('_', ' ').toUpperCase()}
                         </div>
                       )}
                     </div>

@@ -65,7 +65,7 @@ class Equipment(models.Model):
     name = models.CharField(max_length=255, help_text="Equipment name, e.g., Microscope, BSC")
     description = models.TextField(blank=True, null=True, help_text="Equipment description")
     is_bookable = models.BooleanField(default=True, help_text="Whether equipment can be booked")
-    location = models.CharField(max_length=255, blank=True, help_text="Equipment location")
+    location = models.CharField(max_length=255, blank=True, null=True, help_text="Equipment location")
     
     # Current usage tracking
     current_user = models.ForeignKey(

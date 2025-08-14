@@ -1,4 +1,5 @@
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
+import { EASTERN_TIME_ZONE, formatTimeET, formatDateET, formatDateTimeET, getCurrentDateET } from '../utils/timezone.ts';
 
 // Schedule Types
 export interface Schedule {
@@ -251,7 +252,7 @@ export const scheduleApi = {
 
   // Get today's schedules
   getTodaySchedules: async (token: string): Promise<Schedule[]> => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getCurrentDateET();
     const params: ScheduleParams = {
       date: today
     };
@@ -622,12 +623,12 @@ export const equipmentApi = {
     // Default to current date range if not provided
     if (!startDate) {
       const today = new Date();
-      startDate = today.toISOString().split('T')[0];
+      startDate = formatDateET(today);
     }
     if (!endDate) {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 30); // Get next 30 days
-      endDate = futureDate.toISOString().split('T')[0];
+      endDate = formatDateET(futureDate);
     }
 
     const params = new URLSearchParams({
@@ -681,36 +682,46 @@ export const equipmentApi = {
 
 // Helper functions
 export const scheduleHelpers = {
-  // Format schedule time for display
+  // Format schedule time for display in Eastern Time
   formatScheduleTime: (startTime: string | null, endTime: string | null = null): string => {
     if (!startTime) return '';
     
-    const start = new Date(`2000-01-01T${startTime}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    // Parse time string directly without creating a Date object to avoid timezone conversion
+    const formatTimeString = (timeStr: string): string => {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+      return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+    };
+    
+    const start = formatTimeString(startTime);
     
     if (endTime) {
-      const end = new Date(`2000-01-01T${endTime}`).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
+      const end = formatTimeString(endTime);
       return `${start} - ${end}`;
     }
     
     return start;
   },
 
-  // Format schedule date for display
+  // Format schedule date for display in Eastern Time
   formatScheduleDate: (dateString: string): string => {
     return new Date(dateString).toLocaleDateString('en-US', {
+      timeZone: EASTERN_TIME_ZONE,
       weekday: 'short',
       year: 'numeric',
       month: 'short',
       day: 'numeric'
     });
+  },
+
+  // Format full datetime for display in Eastern Time
+  formatScheduleDateTime: (dateString: string, timeString?: string): string => {
+    if (timeString) {
+      const dateTime = new Date(`${dateString}T${timeString}`);
+      return formatDateTimeET(dateTime);
+    }
+    return formatDateET(dateString);
   },
 
   // Get status display color
@@ -836,8 +847,8 @@ export const scheduleHelpers = {
 
   // Check if schedule is today
   isToday: (dateString: string): boolean => {
-    const today = new Date().toISOString().split('T')[0];
-    return dateString === today;
+    const todayET = getCurrentDateET();
+    return dateString === todayET;
   },
 
   // Check if schedule is past

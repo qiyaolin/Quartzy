@@ -36,7 +36,16 @@
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "max-age=0, s-maxage=86400"
+            "value": "max-age=0, s-maxage=0"
+          }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
           }
         ]
       }

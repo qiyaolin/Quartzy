@@ -12,6 +12,7 @@ from django.utils.dateparse import parse_date
 from datetime import datetime, date, timedelta
 from typing import List, Dict
 import logging
+from django.conf import settings
 
 from .models import (
     # Meeting Management Models
@@ -353,57 +354,16 @@ class GenerateMeetingsView(APIView):
 
 
 class UploadPaperView(APIView):
-    """Upload paper for Journal Club"""
+    """Deprecated: File upload for Journal Club papers is disabled. Use URL submission instead."""
     permission_classes = [permissions.IsAuthenticated]
-    
+
     def post(self, request, meeting_id):
-        """Upload paper file for Journal Club"""
-        try:
-            meeting = MeetingInstance.objects.get(id=meeting_id)
-        except MeetingInstance.DoesNotExist:
-            return Response(
-                {'error': 'Meeting not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Find presenter for this user and meeting
-        try:
-            presenter = Presenter.objects.get(
-                meeting_instance=meeting,
-                user=request.user
-            )
-        except Presenter.DoesNotExist:
-            return Response(
-                {'error': 'You are not a presenter for this meeting'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        if meeting.meeting_type != 'journal_club':
-            return Response(
-                {'error': 'Paper upload is only for Journal Club meetings'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Process file upload
-        paper_file = request.FILES.get('paper_file')
-        paper_title = request.data.get('paper_title', '')
-        
-        if not paper_file:
-            return Response(
-                {'error': 'Paper file is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        presenter.paper_file = paper_file
-        presenter.paper_title = paper_title
-        presenter.materials_submitted_at = timezone.now()
-        presenter.status = 'confirmed'
-        presenter.save()
-        
-        return Response({
-            'message': 'Paper uploaded successfully',
-            'presenter': PresenterSerializer(presenter).data
-        })
+        return Response(
+            {
+                'error': 'File uploads are disabled. Please submit paper URL via /api/schedule/meetings/<id>/submit-paper-url/.'
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class SubmitPaperUrlView(APIView):
@@ -443,15 +403,100 @@ class SubmitPaperUrlView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
-        presenter.paper_url = data.get('paper_url')
-        presenter.paper_title = data.get('paper_title', presenter.paper_title)
+        # Handle both new and legacy field names
+        presenter.paper_url = data.get('url') or data.get('paper_url')
+        presenter.paper_title = data.get('title') or data.get('paper_title', presenter.paper_title)
         presenter.materials_submitted_at = timezone.now()
         presenter.status = 'confirmed'
         presenter.save()
         
+        # Send email notification to all active members about paper submission
+        try:
+            from notifications.email_service import EmailNotificationService
+            from django.contrib.auth.models import User
+            
+            # Get all active users to notify
+            active_users = User.objects.filter(is_active=True)
+            
+            context = {
+                'meeting_date': meeting.date,
+                'presenter_name': presenter.user.get_full_name() or presenter.user.username,
+                'paper_title': presenter.paper_title,
+                'paper_url': presenter.paper_url,
+                'meeting_type': meeting.meeting_type.replace('_', ' ').title(),
+                'site_url': settings.FRONTEND_URL if hasattr(settings, 'FRONTEND_URL') else 'https://lab-inventory-467021.nn.r.appspot.com'
+            }
+            
+            # Send notification to all active users
+            for user in active_users:
+                try:
+                    success = EmailNotificationService.send_email_notification(
+                        recipients=[user.email] if user.email else [],
+                        subject=f'Journal Club Paper Submitted - {presenter.paper_title}',
+                        template_name='notifications/emails/journal_club_paper_submitted.html',
+                        context=context
+                    )
+                    if success:
+                        logger.info(f"Paper submission notification sent to {user.email}")
+                    else:
+                        logger.warning(f"Failed to send paper submission notification to {user.email}")
+                except Exception as e:
+                    logger.error(f"Error sending paper submission notification to {user.email}: {str(e)}")
+        
+        except Exception as e:
+            logger.error(f"Error sending paper submission notifications: {str(e)}")
+            # Don't fail the submission if email fails
+        
+        # Check if auto-distribution is requested
+        auto_distribute = request.data.get('auto_distribute', False)
+        distribution_message = ''
+        
+        if auto_distribute:
+            try:
+                # Use the same logic as DistributePaperView
+                from .models import MeetingConfiguration
+                config = MeetingConfiguration.objects.first()
+                
+                if config and config.active_members.exists():
+                    recipients = list(config.active_members.all())
+                    
+                    # Send paper distribution email
+                    context = {
+                        'meeting': meeting,
+                        'presenters': [presenter],
+                        'papers': [{
+                            'presenter': presenter.user.get_full_name() or presenter.user.username,
+                            'title': presenter.paper_title,
+                            'file': presenter.paper_file,
+                            'url': presenter.paper_url
+                        }]
+                    }
+                    
+                    success = EmailNotificationService.send_email_notification(
+                        recipients=recipients,
+                        subject=f'Journal Club Papers - {meeting.date}',
+                        template_name='jc_materials_distributed',
+                        context=context
+                    )
+                    
+                    if success:
+                        distribution_message = f' Paper automatically distributed to {len(recipients)} members.'
+                        logger.info(f"Auto-distributed paper for meeting {meeting.id} to {len(recipients)} members")
+                    else:
+                        distribution_message = ' Note: Auto-distribution failed, please use manual distribution.'
+                        logger.error(f"Auto-distribution failed for meeting {meeting.id}")
+                else:
+                    distribution_message = ' Note: Auto-distribution skipped - no active members configured.'
+                    logger.warning(f"Auto-distribution skipped for meeting {meeting.id} - no active members")
+                    
+            except Exception as e:
+                distribution_message = f' Note: Auto-distribution failed - {str(e)}'
+                logger.error(f"Auto-distribution error for meeting {meeting.id}: {str(e)}")
+        
         return Response({
-            'message': 'Paper URL submitted successfully',
-            'presenter': PresenterSerializer(presenter).data
+            'message': f'Paper URL submitted successfully.{distribution_message}',
+            'presenter': PresenterSerializer(presenter).data,
+            'auto_distributed': auto_distribute and 'failed' not in distribution_message
         })
 
 
@@ -509,6 +554,62 @@ class PaperSubmissionView(APIView):
             'meeting': MeetingInstanceSerializer(meeting).data,
             'submission_status': submission_status
         })
+    
+    def delete(self, request, meeting_id):
+        """Withdraw/remove paper submission"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            meeting = MeetingInstance.objects.get(id=meeting_id)
+        except MeetingInstance.DoesNotExist:
+            logger.error(f"Meeting {meeting_id} not found for paper withdrawal")
+            return Response(
+                {'error': 'Meeting not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        if meeting.meeting_type != 'journal_club':
+            return Response(
+                {'error': 'Paper withdrawal is only available for Journal Club meetings'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Find presenter for current user
+        try:
+            presenter = meeting.presenters.get(user=request.user)
+        except Presenter.DoesNotExist:
+            return Response(
+                {'error': 'You are not assigned as a presenter for this meeting'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Check if there's actually something to withdraw
+        has_submitted = (presenter.paper_file or presenter.paper_url) and presenter.materials_submitted_at
+        if not has_submitted:
+            return Response(
+                {'error': 'No paper submission found to withdraw'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Clear the submission
+        old_title = presenter.paper_title
+        presenter.paper_file = None
+        presenter.paper_url = None
+        presenter.paper_title = None
+        presenter.paper_authors = None
+        presenter.paper_journal = None
+        presenter.paper_year = None
+        presenter.paper_doi = None
+        presenter.materials_submitted_at = None
+        presenter.save()
+        
+        logger.info(f"User {request.user.username} withdrew paper '{old_title}' for meeting {meeting_id}")
+        
+        return Response({
+            'message': f'Paper submission "{old_title}" has been successfully withdrawn',
+            'presenter': PresenterSerializer(presenter).data
+        })
 
 
 class DistributePaperView(APIView):
@@ -517,21 +618,26 @@ class DistributePaperView(APIView):
     
     def post(self, request, meeting_id):
         """Distribute paper to all active members"""
-        if not request.user.is_staff:
-            return Response(
-                {'error': 'Admin permission required'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
+        import logging
+        logger = logging.getLogger(__name__)
         
+        # Allow admins or the presenter(s) of this meeting to distribute
         try:
             meeting = MeetingInstance.objects.get(id=meeting_id)
         except MeetingInstance.DoesNotExist:
+            logger.error(f"Meeting {meeting_id} not found for paper distribution")
+            return Response({'error': 'Meeting not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        is_presenter = meeting.presenters.filter(user=request.user).exists()
+        if not (request.user.is_staff or is_presenter):
+            logger.warning(f"User {request.user.username} attempted to distribute papers for meeting {meeting_id} without permission")
             return Response(
-                {'error': 'Meeting not found'}, 
-                status=status.HTTP_404_NOT_FOUND
+                {'error': 'Permission denied: only admins or assigned presenters can distribute papers'},
+                status=status.HTTP_403_FORBIDDEN
             )
         
         if meeting.meeting_type != 'journal_club':
+            logger.error(f"Paper distribution attempted for non-Journal Club meeting {meeting_id} (type: {meeting.meeting_type})")
             return Response(
                 {'error': 'Paper distribution is only for Journal Club meetings'}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -544,6 +650,7 @@ class DistributePaperView(APIView):
         )
         
         if not presenters_with_papers.exists():
+            logger.error(f"No papers submitted for meeting {meeting_id}")
             return Response(
                 {'error': 'No papers have been submitted for this meeting'}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -552,16 +659,27 @@ class DistributePaperView(APIView):
         try:
             from notifications.email_service import EmailNotificationService
             from .models import MeetingConfiguration
+            logger.info(f"Starting paper distribution for meeting {meeting_id}")
             
             config = MeetingConfiguration.objects.first()
             if not config:
+                logger.error("No MeetingConfiguration found in database")
                 return Response(
-                    {'error': 'Meeting configuration not found'}, 
+                    {'error': 'Meeting configuration not found. Please ask an admin to set up the meeting configuration.'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Get all active members
-            recipients = list(config.active_members.all())
+            # Get all active members with valid email addresses
+            all_members = list(config.active_members.all())
+            recipients = [u for u in all_members if u.email]
+            logger.info(f"Found {len(all_members)} active members; {len(recipients)} with valid email for distribution")
+            
+            if not recipients:
+                logger.error("No active members with valid email configured in MeetingConfiguration")
+                return Response(
+                    {'error': 'No active members with email configured. Please add members with valid email to meeting configuration.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Send paper distribution email
             context = {
@@ -578,6 +696,7 @@ class DistributePaperView(APIView):
                 ]
             }
             
+            logger.info(f"Sending paper distribution emails to {len(recipients)} recipients for meeting {meeting_id}")
             success = EmailNotificationService.send_email_notification(
                 recipients=recipients,
                 subject=f'Journal Club Papers - {meeting.date}',
@@ -586,18 +705,27 @@ class DistributePaperView(APIView):
             )
             
             if success:
+                logger.info(f"Successfully distributed papers for meeting {meeting_id} to {len(recipients)} members")
                 return Response({
                     'message': f'Papers distributed to {len(recipients)} members',
                     'recipients_count': len(recipients),
                     'papers_count': presenters_with_papers.count()
                 })
             else:
+                logger.error(f"Email service returned False for meeting {meeting_id} distribution")
                 return Response(
-                    {'error': 'Failed to send distribution emails'}, 
+                    {'error': 'Failed to send distribution emails. Please check email service configuration.'}, 
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         
+        except ImportError as e:
+            logger.error(f"Import error in paper distribution: {str(e)}")
+            return Response(
+                {'error': f'Email service import failed: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         except Exception as e:
+            logger.error(f"Unexpected error in paper distribution for meeting {meeting_id}: {str(e)}")
             return Response(
                 {'error': f'Failed to distribute papers: {str(e)}'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

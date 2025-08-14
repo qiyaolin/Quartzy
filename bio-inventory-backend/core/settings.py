@@ -169,10 +169,15 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Static files directories
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+# Static files directories  
+# Only include if the directory exists to avoid warnings in App Engine
+import os
+if os.path.exists(BASE_DIR / 'static'):
+    STATICFILES_DIRS = [
+        BASE_DIR / 'static',
+    ]
+else:
+    STATICFILES_DIRS = []
 
 # Static files finders
 STATICFILES_FINDERS = [
@@ -254,6 +259,9 @@ EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '60'))
 # Frontend URL for email links
 # Default to production hosting URL if not set
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://lab-inventory-467021.web.app')
+
+# Admin token for managed cron endpoints (do not hardcode; set via env)
+ADMIN_MANAGE_TOKEN = os.environ.get('ADMIN_MANAGE_TOKEN', '')
 
 # Remove auto-create superuser code from settings.py
 # This should be handled by a startup script or management command instead

@@ -154,6 +154,14 @@ module.exports = {
         '112': '28rem',
         '128': '32rem',
       },
+      borderWidth: {
+        '0': '0px',
+        '2': '2px',
+        '3': '3px',
+        '4': '4px',
+        '6': '6px',
+        '8': '8px',
+      },
       borderRadius: {
         'none': '0px',
         'sm': '0.125rem',

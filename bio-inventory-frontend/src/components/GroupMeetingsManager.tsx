@@ -3,7 +3,7 @@ import {
     Calendar, Clock, Users, MapPin, Plus, Edit3, Trash2, Search, 
     Settings, FileText, User, ChevronLeft, ChevronRight, Filter,
     BookOpen, RotateCcw, Upload, Download, Mail, AlertCircle,
-    CheckCircle, XCircle, ArrowUpDown, Eye, MoreHorizontal, X
+    CheckCircle, XCircle, ArrowUpDown, Eye, MoreHorizontal, X, Archive
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import { API_BASE_URL } from '../config/api.ts';
@@ -50,12 +50,14 @@ interface GroupMeetingsManagerProps {
     onCreateMeeting?: () => void;
     onEditMeeting?: (meeting: GroupMeeting) => void;
     isAdmin?: boolean;
+    onOpenJournalClubHub?: (meetingId?: number | string, initialTab?: 'current' | 'archive' | 'upload') => void;
 }
 
 const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     onCreateMeeting,
     onEditMeeting,
-    isAdmin = false
+    isAdmin = false,
+    onOpenJournalClubHub
 }) => {
     const authContext = useContext(AuthContext);
     const { token } = authContext || {};
@@ -131,7 +133,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
             // Use intelligent meeting API to get MeetingInstance data
             const [meetingsResponse, configurationsData] = await Promise.all([
                 intelligentMeetingApiService.meetingInstanceApi.getMeetings(token, {
-                    ordering: '-date',
+                    ordering: 'date',
                     page_size: 100
                 }),
                 groupMeetingApi.getConfigurations(token)
@@ -188,11 +190,26 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                 });
             });
 
-            // Ensure meetings are sorted by date (most recent first)
+            // Sort meetings by date (nearest dates first, then farthest)
             const sortedMeetings = adaptedMeetings.sort((a, b) => {
                 const dateA = new Date(a.date);
                 const dateB = new Date(b.date);
-                return dateB.getTime() - dateA.getTime();
+                const now = new Date();
+                
+                // Get upcoming meetings first (sorted by nearest date first)
+                const aIsFuture = dateA >= now;
+                const bIsFuture = dateB >= now;
+                
+                if (aIsFuture && !bIsFuture) return -1; // a is future, b is past - a comes first
+                if (!aIsFuture && bIsFuture) return 1;  // a is past, b is future - b comes first
+                
+                if (aIsFuture && bIsFuture) {
+                    // Both are future - sort by nearest first (ascending)
+                    return dateA.getTime() - dateB.getTime();
+                } else {
+                    // Both are past - sort by most recent first (descending)
+                    return dateB.getTime() - dateA.getTime();
+                }
             });
             
             setMeetings(sortedMeetings);
@@ -277,6 +294,12 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     };
 
     const handleMaterialsUpload = (meeting: GroupMeeting) => {
+        // For Journal Club, open the centralized paper management hub
+        if (meeting.meeting_type === 'journal_club' && onOpenJournalClubHub) {
+            onOpenJournalClubHub(meeting.id, 'upload');
+            return;
+        }
+        // Fallback to legacy materials upload modal
         setSelectedMeeting(meeting);
         setShowMaterialsModal(true);
     };
@@ -531,6 +554,14 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                     </div>
                     
                     <div className="flex items-center gap-3">
+                        {/* Paper Archive quick access */}
+                        <button
+                            onClick={() => onOpenJournalClubHub && onOpenJournalClubHub(undefined, 'archive')}
+                            className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                            <Archive className="w-4 h-4 mr-2" />
+                            Paper Archive
+                        </button>
                         {isAdmin && (
                             <button
                                 onClick={() => setShowRotationModal(true)}

@@ -80,6 +80,7 @@ urlpatterns = [
     path('api/schedule/next-available-date/<str:preferred_date>/', additional_views.NextAvailableDateView.as_view(), name='api-schedule-next-available-date'),
     
     # Meetings paper management
+    # File upload disabled: keep endpoint to avoid 404, but backend returns 400 with guidance
     path('api/schedule/meetings/<int:meeting_id>/upload-paper/', additional_views.UploadPaperView.as_view(), name='api-schedule-upload-paper'),
     path('api/schedule/meetings/<int:meeting_id>/submit-paper-url/', additional_views.SubmitPaperUrlView.as_view(), name='api-schedule-submit-paper-url'),
     path('api/schedule/meetings/<int:meeting_id>/paper-submission/', additional_views.PaperSubmissionView.as_view(), name='api-schedule-paper-submission'),

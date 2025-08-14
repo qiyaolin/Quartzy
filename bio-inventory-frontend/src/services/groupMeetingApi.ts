@@ -1,4 +1,5 @@
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
+import { EASTERN_TIME_ZONE } from '../utils/timezone.ts';
 
 // Group Meeting Types
 export interface GroupMeeting {
@@ -511,6 +512,7 @@ export const groupMeetingHelpers = {
     formatScheduleDate: (dateString: string): string => {
         const date = new Date(dateString);
         return date.toLocaleDateString('en-US', { 
+            timeZone: EASTERN_TIME_ZONE,
             weekday: 'short', 
             year: 'numeric', 
             month: 'short', 
@@ -520,14 +522,10 @@ export const groupMeetingHelpers = {
 
     formatScheduleTime: (startTime: string, endTime?: string): string => {
         const formatTime = (timeString: string) => {
-            const [hours, minutes] = timeString.split(':');
-            const date = new Date();
-            date.setHours(parseInt(hours), parseInt(minutes));
-            return date.toLocaleTimeString('en-US', { 
-                hour: 'numeric', 
-                minute: '2-digit',
-                hour12: true 
-            });
+            const [hours, minutes] = timeString.split(':').map(Number);
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
+            return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
         };
 
         if (endTime) {

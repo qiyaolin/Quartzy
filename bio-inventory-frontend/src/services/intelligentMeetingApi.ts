@@ -83,30 +83,80 @@ export const meetingInstanceApi = {
     params: MeetingSearchParams = {}
   ): Promise<PaginatedResponse<MeetingInstance>> => {
     const queryParams = new URLSearchParams();
+    // Map frontend params to backend expectations
+    const mappedEntries: Record<string, any> = {};
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
+      if (value === undefined || value === null) return;
+      switch (key) {
+        case 'dateFrom':
+          mappedEntries['start_date'] = value;
+          break;
+        case 'dateTo':
+          mappedEntries['end_date'] = value;
+          break;
+        case 'type': {
+          const v = value as string;
+          const normalized = v === 'Journal Club' ? 'journal_club' : v === 'Research Update' ? 'research_update' : v;
+          mappedEntries['meeting_type'] = normalized;
+          break;
+        }
+        case 'presenterId':
+          mappedEntries['presenter_id'] = value;
+          break;
+        case 'searchTerm':
+          mappedEntries['search'] = value;
+          break;
+        case 'pageSize':
+          mappedEntries['page_size'] = value;
+          break;
+        default:
+          mappedEntries[key] = value;
       }
     });
+    Object.entries(mappedEntries).forEach(([k, v]) => queryParams.append(k, v.toString()));
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('schedule/meetings/')}?${queryParams.toString()}`
-      : buildApiUrl('schedule/meetings/');
+      ? `${buildApiUrl('/api/schedule/meetings/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/meetings/');
       
-    const response = await fetch(url, {
-      headers: { 'Authorization': `Token ${token}` }
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch meetings: ${response.statusText}`);
+    try {
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Token ${token}` },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch meetings: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      // Normalize to paginated-like structure
+      if (Array.isArray(data)) {
+        return { results: data, count: data.length, next: null, previous: null } as PaginatedResponse<MeetingInstance>;
+      }
+      // If backend already paginated
+      if (data && typeof data === 'object' && 'results' in data) {
+        return data as PaginatedResponse<MeetingInstance>;
+      }
+      // Fallback safe structure
+      return { results: [], count: 0, next: null, previous: null } as PaginatedResponse<MeetingInstance>;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out - please try again');
+      }
+      throw error;
     }
-    
-    return response.json();
   },
 
   // Get specific meeting by ID
   getMeeting: async (token: string, meetingId: string): Promise<MeetingInstance> => {
-    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/`), {
+    const response = await fetch(buildApiUrl(`/api/schedule/meetings/${meetingId}/`), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -432,9 +482,10 @@ export const journalClubApi = {
       journal?: string;
       year?: number;
       doi?: string;
+      auto_distribute?: boolean;
     }
   ): Promise<PaperSubmission> => {
-    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/submit-paper-url/`), {
+    const response = await fetch(buildApiUrl(`/api/schedule/meetings/${meetingId}/submit-paper-url/`), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -456,7 +507,7 @@ export const journalClubApi = {
     token: string,
     meetingId: string
   ): Promise<PaperSubmission | null> => {
-    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/paper-submission/`), {
+    const response = await fetch(buildApiUrl(`/api/schedule/meetings/${meetingId}/paper-submission/`), {
       headers: { 'Authorization': `Token ${token}` }
     });
     
@@ -467,8 +518,25 @@ export const journalClubApi = {
     if (!response.ok) {
       throw new Error(`Failed to get paper submission: ${response.statusText}`);
     }
-    
-    return response.json();
+    const raw = await response.json();
+    const statusList = Array.isArray(raw?.submission_status) ? raw.submission_status : [];
+    const submitted = statusList.find((s: any) => s?.has_submitted);
+    if (!submitted) return null;
+    const result: PaperSubmission = {
+      meetingInstanceId: meetingId,
+      presenterId: String(submitted.presenter?.id ?? ''),
+      title: submitted.paper_title || 'Submitted Paper',
+      url: undefined,
+      file: undefined,
+      submittedAt: submitted.submitted_at ? new Date(submitted.submitted_at) : new Date(),
+      isApproved: true,
+      authors: undefined,
+      journal: undefined,
+      year: undefined,
+      doi: undefined,
+      adminNotes: undefined,
+    };
+    return result;
   },
 
   // Distribute paper to all members
@@ -477,7 +545,7 @@ export const journalClubApi = {
     meetingId: string,
     customMessage?: string
   ): Promise<ApiResponse<any>> => {
-    const response = await fetch(buildApiUrl(`schedule/meetings/${meetingId}/distribute-paper/`), {
+    const response = await fetch(buildApiUrl(`/api/schedule/meetings/${meetingId}/distribute-paper/`), {
       method: 'POST',
       headers: {
         'Authorization': `Token ${token}`,
@@ -494,6 +562,27 @@ export const journalClubApi = {
     return response.json();
   },
 
+  // Withdraw paper submission
+  withdrawPaper: async (
+    token: string,
+    meetingId: string
+  ): Promise<ApiResponse<any>> => {
+    const response = await fetch(buildApiUrl(`/api/schedule/meetings/${meetingId}/paper-submission/`), {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || errorData.error || `Failed to withdraw paper: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
   // Get paper archive
   getPaperArchive: async (
     token: string,
@@ -505,25 +594,51 @@ export const journalClubApi = {
     } = {}
   ): Promise<PaginatedResponse<PaperSubmission>> => {
     const queryParams = new URLSearchParams();
+    const mapped: Record<string, any> = {};
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        queryParams.append(key, value.toString());
+      if (value === undefined || value === null) return;
+      switch (key) {
+        case 'dateFrom':
+          mapped['start_date'] = value; break;
+        case 'dateTo':
+          mapped['end_date'] = value; break;
+        case 'presenterId':
+          mapped['presenter_id'] = value; break;
+        case 'searchTerm':
+          mapped['search'] = value; break;
+        default:
+          mapped[key] = value; break;
       }
     });
+    Object.entries(mapped).forEach(([k, v]) => queryParams.append(k, v.toString()));
     
     const url = queryParams.toString() 
-      ? `${buildApiUrl('schedule/paper-archive/')}?${queryParams.toString()}`
-      : buildApiUrl('schedule/paper-archive/');
+      ? `${buildApiUrl('/api/schedule/paper-archive/')}?${queryParams.toString()}`
+      : buildApiUrl('/api/schedule/paper-archive/');
       
-    const response = await fetch(url, {
-      headers: { 'Authorization': `Token ${token}` }
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch paper archive: ${response.statusText}`);
+    try {
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Token ${token}` },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch paper archive: ${response.statusText}`);
+      }
+      
+      return response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out - please try again');
+      }
+      throw error;
     }
-    
-    return response.json();
   }
 };
 

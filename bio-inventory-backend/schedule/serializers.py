@@ -839,17 +839,29 @@ class IntelligentMeetingDashboardSerializer(serializers.Serializer):
 
 class JournalClubSubmissionSerializer(serializers.Serializer):
     """Serializer for Journal Club paper submission"""
-    presentation_id = serializers.IntegerField()
-    paper_title = serializers.CharField(max_length=500)
+    title = serializers.CharField(max_length=500)
+    url = serializers.URLField()
+    authors = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    journal = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    year = serializers.IntegerField(required=False, allow_null=True)
+    doi = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    
+    # Legacy fields for backward compatibility
+    presentation_id = serializers.IntegerField(required=False)
+    paper_title = serializers.CharField(max_length=500, required=False)
     paper_url = serializers.URLField(required=False, allow_blank=True)
     paper_file = serializers.FileField(required=False, allow_null=True)
     
     def validate(self, data):
-        """Ensure either URL or file is provided"""
-        if not data.get('paper_url') and not data.get('paper_file'):
-            raise serializers.ValidationError(
-                "Either paper URL or paper file must be provided"
-            )
+        """Ensure title and URL are provided"""
+        title = data.get('title') or data.get('paper_title')
+        url = data.get('url') or data.get('paper_url')
+        
+        if not title:
+            raise serializers.ValidationError("Paper title is required")
+        if not url:
+            raise serializers.ValidationError("Paper URL is required")
+            
         return data
 
 

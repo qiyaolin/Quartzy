@@ -71,9 +71,9 @@ firebase hosting:channel:deploy staging --expires 30d
 
 ### 缓存策略
 
-- **静态资源** (JS/CSS/图片): 1年缓存
-- **HTML/JSON**: 不缓存，CDN缓存1天
-- **根文件**: 实时更新
+- **静态资源** (JS/CSS/图片): 1年缓存（文件名带内容哈希）
+- **/index.html**: `no-cache, no-store, must-revalidate`（确保发布后立刻取最新入口）
+- **其他 HTML/JSON**: `max-age=0, s-maxage=0`（每次到源站校验）
 
 ## 常用命令
 

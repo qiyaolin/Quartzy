@@ -313,7 +313,7 @@ const MobileDashboardPage: React.FC<MobileDashboardPageProps> = ({
             <Activity size={20} className="text-gray-400" />
           </div>
           <div className="space-y-4">
-            {stats.recentActivity.map((activity) => {
+            {stats.recentActivity.slice(0, 6).map((activity) => {
               const Icon = getActivityIcon(activity.type);
               const colorClass = getActivityColor(activity.type);
               

@@ -96,9 +96,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         name: formData.name,
         description: formData.description,
         location: formData.location,
-        is_bookable: formData.is_bookable,
-        requires_qr_checkin: formData.requires_qr_checkin,
-        qr_code: formData.requires_qr_checkin ? `EQ-${Date.now()}` : undefined
+        is_bookable: formData.is_bookable
       });
 
       // Update local state
@@ -109,8 +107,7 @@ const EquipmentManagement: React.FC<EquipmentManagementProps> = ({
         name: '',
         description: '',
         location: '',
-        is_bookable: true,
-        requires_qr_checkin: false
+        is_bookable: true
       });
       setFormErrors({});
       setShowAddForm(false);

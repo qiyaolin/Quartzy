@@ -32,6 +32,15 @@ def drop_conflicting_indexes():
                 FROM pg_indexes 
                 WHERE indexname LIKE 'schedule_eq_equipme_%_idx'
                 OR indexname LIKE 'schedule_equipmentusagelog_%_idx'
+                OR indexname LIKE 'schedule_ca_content_%_idx'
+                OR indexname LIKE 'schedule_ca_google_%_idx'
+                OR indexname LIKE 'schedule_ca_sync_st_%_idx'
+                OR indexname LIKE 'schedule_pe_schedul_%_idx'
+                OR indexname LIKE 'schedule_pe_status_%_idx'
+                OR indexname LIKE 'schedule_pe_executi_%_idx'
+                OR indexname LIKE 'schedule_wa_equipme_%_idx'
+                OR indexname LIKE 'schedule_wa_user_id_%_idx'
+                OR indexname LIKE 'schedule_wa_expires_%_idx'
             """)
             indexes = cursor.fetchall()
             
@@ -140,6 +149,13 @@ def test_unified_dashboard_endpoint():
 
 def create_safe_migration_script():
     """Create a safe migration script for cloud deployment"""
+    print("📝 Safe migration script creation...")
+    
+    # Don't create files in App Engine environment (read-only filesystem)
+    if os.environ.get('GAE_ENV'):
+        print("✓ Running in App Engine environment - skipping script creation (read-only filesystem)")
+        return True
+    
     script_content = '''#!/bin/bash
 # Safe migration script for Google App Engine
 
@@ -170,10 +186,13 @@ test_unified_dashboard_endpoint()
 echo "✅ Safe migration completed"
 '''
     
-    with open('safe_migrate.sh', 'w') as f:
-        f.write(script_content)
-    
-    print("✓ Created safe_migrate.sh script")
+    try:
+        with open('safe_migrate.sh', 'w') as f:
+            f.write(script_content)
+        print("✓ Created safe_migrate.sh script")
+    except OSError as e:
+        print(f"⚠️ Cannot create script file (read-only filesystem): {e}")
+        return True  # Don't fail deployment for this
 
 def main():
     """Main fix function"""

@@ -8,6 +8,7 @@ from .calendar_sync_service import CalendarSyncService
 from .google_calendar_service import GoogleCalendarService
 from .quebec_holidays import QuebecHolidayService
 from .fair_rotation import FairRotationAlgorithm
+from .meeting_notification_service import MeetingNotificationService
 
 __all__ = [
     'MeetingGenerationService',
@@ -18,4 +19,5 @@ __all__ = [
     'GoogleCalendarService',
     'QuebecHolidayService',
     'FairRotationAlgorithm',
+    'MeetingNotificationService',
 ]

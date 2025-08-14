@@ -57,6 +57,7 @@ class EventViewSet(viewsets.ModelViewSet):
     """事件管理API"""
     queryset = Event.objects.all()
     serializer_class = EventSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -194,6 +195,7 @@ class EquipmentViewSet(viewsets.ModelViewSet):
     """设备管理API"""
     queryset = Equipment.objects.all()
     serializer_class = EquipmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = Equipment.objects.all()
@@ -327,6 +329,7 @@ class BookingViewSet(viewsets.ModelViewSet):
     """预约管理API"""
     queryset = Booking.objects.all()
     serializer_class = BookingSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = Booking.objects.select_related('event', 'user', 'equipment')
@@ -427,6 +430,7 @@ class GroupMeetingViewSet(viewsets.ModelViewSet):
     """组会管理API"""
     queryset = GroupMeeting.objects.all()
     serializer_class = GroupMeetingSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         return GroupMeeting.objects.select_related('event', 'presenter')
@@ -436,6 +440,7 @@ class MeetingPresenterRotationViewSet(viewsets.ModelViewSet):
     """轮值管理API"""
     queryset = MeetingPresenterRotation.objects.all()
     serializer_class = MeetingPresenterRotationSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = MeetingPresenterRotation.objects.prefetch_related('user_list')
@@ -473,6 +478,7 @@ class RecurringTaskViewSet(viewsets.ModelViewSet):
     """周期性任务管理API"""
     queryset = RecurringTask.objects.all()
     serializer_class = RecurringTaskSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = RecurringTask.objects.select_related('created_by').prefetch_related('assignee_group')
@@ -507,6 +513,7 @@ class TaskInstanceViewSet(viewsets.ModelViewSet):
     """任务实例管理API"""
     queryset = TaskInstance.objects.all()
     serializer_class = TaskInstanceSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = TaskInstance.objects.select_related(
@@ -551,6 +558,7 @@ class EquipmentUsageLogViewSet(viewsets.ModelViewSet):
     """Equipment usage log management API"""
     queryset = EquipmentUsageLog.objects.all()
     serializer_class = EquipmentUsageLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = EquipmentUsageLog.objects.select_related('equipment', 'user', 'booking')
@@ -657,6 +665,7 @@ class WaitingQueueEntryViewSet(viewsets.ModelViewSet):
     """Waiting queue management API"""
     queryset = WaitingQueueEntry.objects.all()
     serializer_class = WaitingQueueEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         queryset = WaitingQueueEntry.objects.select_related(
@@ -3111,7 +3120,7 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
             )
 
     def _get_today_events(self, user, today):
-        """Get all events for today"""
+        """Get all events for today with deduplication"""
         events = Event.objects.filter(
             start_time__date=today
         ).select_related(
@@ -3123,7 +3132,24 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
         ).order_by('start_time')
 
         today_events = []
+        seen_events = set()  # Track seen events to prevent duplicates
+        
         for event in events:
+            # Create a unique identifier for the event to prevent duplicates
+            event_identifier = (
+                event.title, 
+                event.start_time, 
+                event.event_type,
+                event.meeting_instance.id if hasattr(event, 'meeting_instance') and event.meeting_instance else None,
+                event.booking.id if hasattr(event, 'booking') and event.booking else None,
+                event.task_instance.id if hasattr(event, 'task_instance') and event.task_instance else None
+            )
+            
+            # Skip if we've already processed this event
+            if event_identifier in seen_events:
+                continue
+            seen_events.add(event_identifier)
+            
             event_data = {
                 'id': event.id,
                 'title': event.title,

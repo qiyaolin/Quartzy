@@ -5,7 +5,7 @@ Usage: python manage.py generate_group_meetings --start-date 2024-03-01 --end-da
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import datetime, date
-from schedule.services import MeetingGenerationService
+from schedule.services.meeting_generation import MeetingGenerationService
 from schedule.models import MeetingConfiguration
 
 

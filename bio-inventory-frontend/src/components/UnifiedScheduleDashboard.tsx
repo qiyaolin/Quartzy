@@ -243,6 +243,147 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
         });
     };
 
+    // Helper function to check if an event is completed
+    const isEventCompleted = (event: TodayEvent) => {
+        const now = new Date();
+        const eventEndTime = new Date(`${now.toDateString()} ${event.end_time}`);
+        return eventEndTime < now;
+    };
+
+    // Helper function to get event status (ongoing, upcoming, completed)
+    const getEventStatus = (event: TodayEvent) => {
+        const now = new Date();
+        const eventStartTime = new Date(`${now.toDateString()} ${event.start_time}`);
+        const eventEndTime = new Date(`${now.toDateString()} ${event.end_time}`);
+        
+        if (eventEndTime < now) return 'completed';
+        if (eventStartTime <= now && eventEndTime >= now) return 'ongoing';
+        return 'upcoming';
+    };
+
+    // Helper function to get color scheme for different event types and equipment
+    const getEventColorScheme = (event: TodayEvent) => {
+        const status = getEventStatus(event);
+        
+        // Base colors by event type
+        const typeColors = {
+            meeting: {
+                bg: 'bg-blue-50',
+                border: 'border-blue-200',
+                hover: 'hover:bg-blue-100',
+                icon: 'text-blue-600',
+                accent: 'text-blue-800'
+            },
+            booking: {
+                bg: 'bg-green-50', 
+                border: 'border-green-200',
+                hover: 'hover:bg-green-100',
+                icon: 'text-green-600',
+                accent: 'text-green-800'
+            },
+            task: {
+                bg: 'bg-purple-50',
+                border: 'border-purple-200', 
+                hover: 'hover:bg-purple-100',
+                icon: 'text-purple-600',
+                accent: 'text-purple-800'
+            }
+        };
+
+        // Equipment-specific colors (for booking events)
+        const equipmentColors: { [key: string]: any } = {
+            'Microscope': {
+                bg: 'bg-indigo-50',
+                border: 'border-indigo-200',
+                hover: 'hover:bg-indigo-100',
+                icon: 'text-indigo-600',
+                accent: 'text-indigo-800'
+            },
+            'PCR Machine': {
+                bg: 'bg-orange-50',
+                border: 'border-orange-200', 
+                hover: 'hover:bg-orange-100',
+                icon: 'text-orange-600',
+                accent: 'text-orange-800'
+            },
+            'Centrifuge': {
+                bg: 'bg-teal-50',
+                border: 'border-teal-200',
+                hover: 'hover:bg-teal-100', 
+                icon: 'text-teal-600',
+                accent: 'text-teal-800'
+            },
+            'Incubator': {
+                bg: 'bg-red-50',
+                border: 'border-red-200',
+                hover: 'hover:bg-red-100',
+                icon: 'text-red-600', 
+                accent: 'text-red-800'
+            },
+            'Autoclave': {
+                bg: 'bg-gray-50',
+                border: 'border-gray-200',
+                hover: 'hover:bg-gray-100',
+                icon: 'text-gray-600',
+                accent: 'text-gray-800'
+            }
+        };
+
+        // Get base color scheme
+        let colorScheme = typeColors[event.event_type as keyof typeof typeColors] || typeColors.meeting;
+        
+        // Override with equipment-specific colors for booking events
+        if (event.event_type === 'booking' && event.equipment_name) {
+            const equipmentKey = Object.keys(equipmentColors).find(key => 
+                event.equipment_name?.toLowerCase().includes(key.toLowerCase())
+            );
+            if (equipmentKey) {
+                colorScheme = equipmentColors[equipmentKey];
+            }
+        }
+
+        // Modify colors based on status
+        if (status === 'ongoing') {
+            // Add animated border for ongoing events
+            colorScheme = {
+                ...colorScheme,
+                border: colorScheme.border + ' border-2 animate-pulse',
+                bg: colorScheme.bg.replace('-50', '-100')
+            };
+        }
+
+        return colorScheme;
+    };
+
+    // Helper function to get status indicator
+    const getStatusIndicator = (event: TodayEvent) => {
+        const status = getEventStatus(event);
+        
+        switch (status) {
+            case 'ongoing':
+                return (
+                    <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full border border-green-200 flex items-center gap-1">
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        Ongoing
+                    </span>
+                );
+            case 'upcoming':
+                return (
+                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full border border-blue-200">
+                        Upcoming
+                    </span>
+                );
+            case 'completed':
+                return (
+                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full border border-gray-200">
+                        Completed
+                    </span>
+                );
+            default:
+                return null;
+        }
+    };
+
     const getEventTypeIcon = (eventType: string) => {
         switch (eventType) {
             case 'meeting': return <Users className="w-4 h-4" />;
@@ -351,46 +492,56 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                 </div>
 
                 {/* Quick Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="card p-3 bg-blue-50">
-                        <div className="flex items-center gap-2">
-                            <BookOpen className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm text-blue-700">Presentations</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="card p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-md transition-all duration-200">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="p-2 bg-blue-100 rounded-lg">
+                                <BookOpen className="w-4 h-4 text-blue-700" />
+                            </div>
+                            <span className="text-sm font-medium text-blue-800">Presentations</span>
                         </div>
-                        <p className="text-lg font-bold text-blue-900">{stats.presentations_total}</p>
-                        <p className="text-xs text-blue-600">total</p>
+                        <p className="text-2xl font-bold text-blue-900 mb-1">{stats.presentations_total}</p>
+                        <p className="text-xs text-blue-600 font-medium">total</p>
                     </div>
-                    <div className="card p-3 bg-green-50">
-                        <div className="flex items-center gap-2">
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-sm text-green-700">Tasks</span>
+                    <div className="card p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200 hover:shadow-md transition-all duration-200">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="p-2 bg-green-100 rounded-lg">
+                                <CheckCircle className="w-4 h-4 text-green-700" />
+                            </div>
+                            <span className="text-sm font-medium text-green-800">Tasks</span>
                         </div>
-                        <p className="text-lg font-bold text-green-900">{stats.tasks_completed_this_year}</p>
-                        <p className="text-xs text-green-600">completed</p>
+                        <p className="text-2xl font-bold text-green-900 mb-1">{stats.tasks_completed_this_year}</p>
+                        <p className="text-xs text-green-600 font-medium">completed</p>
                     </div>
-                    <div className="card p-3 bg-purple-50">
-                        <div className="flex items-center gap-2">
-                            <Timer className="w-4 h-4 text-purple-600" />
-                            <span className="text-sm text-purple-700">Equipment</span>
+                    <div className="card p-4 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 hover:shadow-md transition-all duration-200">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="p-2 bg-purple-100 rounded-lg">
+                                <Timer className="w-4 h-4 text-purple-700" />
+                            </div>
+                            <span className="text-sm font-medium text-purple-800">Equipment</span>
                         </div>
-                        <p className="text-lg font-bold text-purple-900">{stats.equipment_hours_this_month}h</p>
-                        <p className="text-xs text-purple-600">this month</p>
+                        <p className="text-2xl font-bold text-purple-900 mb-1">{stats.equipment_hours_this_month}h</p>
+                        <p className="text-xs text-purple-600 font-medium">this month</p>
                     </div>
-                    <div className="card p-3 bg-orange-50">
-                        <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-orange-600" />
-                            <span className="text-sm text-orange-700">Bookings</span>
+                    <div className="card p-4 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 hover:shadow-md transition-all duration-200">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="p-2 bg-orange-100 rounded-lg">
+                                <Calendar className="w-4 h-4 text-orange-700" />
+                            </div>
+                            <span className="text-sm font-medium text-orange-800">Bookings</span>
                         </div>
-                        <p className="text-lg font-bold text-orange-900">{stats.active_bookings}</p>
-                        <p className="text-xs text-orange-600">active</p>
+                        <p className="text-2xl font-bold text-orange-900 mb-1">{stats.active_bookings}</p>
+                        <p className="text-xs text-orange-600 font-medium">active</p>
                     </div>
-                    <div className="card p-3 bg-yellow-50">
-                        <div className="flex items-center gap-2">
-                            <Bell className="w-4 h-4 text-yellow-600" />
-                            <span className="text-sm text-yellow-700">Pending</span>
+                    <div className="card p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200 hover:shadow-md transition-all duration-200">
+                        <div className="flex items-center gap-3 mb-3">
+                            <div className="p-2 bg-yellow-100 rounded-lg">
+                                <Bell className="w-4 h-4 text-yellow-700" />
+                            </div>
+                            <span className="text-sm font-medium text-yellow-800">Pending</span>
                         </div>
-                        <p className="text-lg font-bold text-yellow-900">{pending_actions.length}</p>
-                        <p className="text-xs text-yellow-600">actions</p>
+                        <p className="text-2xl font-bold text-yellow-900 mb-1">{pending_actions.length}</p>
+                        <p className="text-xs text-yellow-600 font-medium">actions</p>
                     </div>
                 </div>
                 </div>
@@ -576,44 +727,60 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                             <p className="text-gray-500">No events scheduled for today</p>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             {today_events
-                              .filter((e) => (e.status ? e.status !== 'cancelled' : true))
+                              .filter((e) => {
+                                  // Filter out cancelled events
+                                  if (e.status && e.status === 'cancelled') return false;
+                                  // Filter out completed events
+                                  return !isEventCompleted(e);
+                              })
+                              .sort((a, b) => {
+                                  // Sort by status (ongoing first, then upcoming)
+                                  const statusA = getEventStatus(a);
+                                  const statusB = getEventStatus(b);
+                                  if (statusA === 'ongoing' && statusB !== 'ongoing') return -1;
+                                  if (statusB === 'ongoing' && statusA !== 'ongoing') return 1;
+                                  // Then sort by start time
+                                  return a.start_time.localeCompare(b.start_time);
+                              })
                               .map((event) => (
                                 <div 
                                     key={event.id}
                                     onClick={() => handleEventClick(event)}
-                                    className={`border rounded-lg p-3 cursor-pointer hover:shadow-md transition-all duration-200 ${
-                                        event.is_mine ? 'bg-blue-50 border-blue-200 hover:bg-blue-100' : 'border-gray-200 hover:bg-gray-50'
+                                    className={`border-2 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] ${
+                                        event.is_mine 
+                                            ? `${getEventColorScheme(event).bg} ${getEventColorScheme(event).border} ${getEventColorScheme(event).hover} ring-2 ring-blue-300 ring-opacity-60 shadow-sm`
+                                            : `${getEventColorScheme(event).bg} ${getEventColorScheme(event).border} ${getEventColorScheme(event).hover} shadow-sm`
                                     }`}
                                 >
-                                    <div className="flex items-start gap-3">
-                                        {getEventTypeIcon(event.event_type)}
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h4 className="font-medium text-gray-900">{event.title}</h4>
+                                    <div className="flex items-start gap-4">
+                                        <div className={`p-2 rounded-lg ${getEventColorScheme(event).icon}`}>
+                                            {getEventTypeIcon(event.event_type)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                <h4 className="font-semibold text-gray-900 text-base truncate">{event.title}</h4>
+                                                {getStatusIndicator(event)}
                                                 {event.is_mine && (
-                                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                                                        Mine
+                                                    <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium border border-blue-200">
+                                                        My Event
+                                                    </span>
+                                                )}
+                                                {event.equipment_name && (
+                                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getEventColorScheme(event).accent} ${getEventColorScheme(event).border}`}>
+                                                        {event.equipment_name}
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-4 text-sm text-gray-600 mb-1">
-                                                <div className="flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" />
-                                                    <span>
-                                                        {formatTime(event.start_time)} - {formatTime(event.end_time)}
-                                                    </span>
-                                                </div>
-                                                {event.equipment_name && (
-                                                    <div className="flex items-center gap-1">
-                                                        <Monitor className="w-3 h-3" />
-                                                        <span>{event.equipment_name}</span>
-                                                    </div>
-                                                )}
+                                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                                <span className="font-medium">
+                                                    {formatTime(event.start_time)} - {formatTime(event.end_time)}
+                                                </span>
                                             </div>
                                             {event.description && (
-                                                <p className="text-sm text-gray-600">{event.description}</p>
+                                                <p className="text-sm text-gray-600 leading-relaxed">{event.description}</p>
                                             )}
                                         </div>
                                     </div>

@@ -18,7 +18,7 @@ python -c "import rest_framework; print('DRF可用')" || echo "DRF导入失败"
 
 # 智能迁移修复 - 专门处理索引冲突
 echo "🔄 处理数据库迁移和索引冲突..."
-python fix_index_conflict.py || echo "索引冲突修复跳过"
+python fix_deployment_issues.py || echo "部署修复跳过"
 
 # 运行迁移（使用安全模式）
 python manage.py migrate --fake-initial || echo "初始迁移跳过"

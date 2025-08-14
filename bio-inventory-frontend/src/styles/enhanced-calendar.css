@@ -1,0 +1,321 @@
+/* Enhanced Calendar Styles for Better Space Utilization */
+
+/* Calendar container improvements */
+.modern-calendar-container {
+  height: calc(100vh - 180px);
+  min-height: 600px;
+  transition: all 0.3s ease;
+}
+
+/* Enhanced calendar events */
+.modern-calendar-event {
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.modern-calendar-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Event card content styling */
+.modern-calendar-event .event-header {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.modern-calendar-event .event-badge {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modern-calendar-event .event-action-btn {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modern-calendar-event .event-action-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.1);
+}
+
+/* Month view enhancements */
+.calendar-month-cell {
+  transition: background-color 0.2s ease;
+  min-height: 140px;
+}
+
+.calendar-month-cell:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Week/Day view time slots */
+.calendar-time-slot {
+  transition: background-color 0.2s ease;
+}
+
+.calendar-time-slot:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+  .modern-calendar-container {
+    height: calc(100vh - 120px);
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 640px) {
+  .calendar-month-cell {
+    min-height: 120px;
+    padding: 0.75rem;
+  }
+}
+
+/* Event overflow handling */
+.calendar-event-container {
+  max-height: calc(100% - 3rem);
+  overflow: hidden;
+}
+
+/* Sidebar animation and spacing */
+.calendar-sidebar {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.calendar-sidebar.hidden {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+/* Ensure sidebar content has proper spacing */
+.calendar-sidebar .space-y-6 > *:last-child {
+  margin-bottom: 2rem;
+}
+
+/* Quick action buttons */
+.calendar-quick-action {
+  transition: all 0.2s ease;
+}
+
+.calendar-quick-action:hover {
+  transform: scale(1.05);
+}
+
+/* Time column optimization */
+.calendar-time-column {
+  border-right: 1px solid rgb(229, 231, 235);
+  background: rgb(249, 250, 251);
+  flex-shrink: 0;
+}
+
+/* Day column optimizations */
+.calendar-day-column {
+  min-width: 0;
+  position: relative;
+}
+
+/* Event positioning improvements */
+.calendar-event-positioned {
+  min-width: 120px;
+  max-width: calc(100% - 8px);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  position: absolute;
+  transform: translateZ(0); /* Force hardware acceleration */
+}
+
+/* Enhanced event card typography with better readability */
+.modern-calendar-event .event-title {
+  line-height: 1.2;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.modern-calendar-event .event-time {
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.modern-calendar-event .event-location {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Ensure good contrast for badges and buttons */
+.modern-calendar-event .event-type-badge {
+  background: rgba(255, 255, 255, 0.3);
+  color: rgba(0, 0, 0, 0.8);
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.modern-calendar-event .status-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Icon styling for better visibility */
+.modern-calendar-event .icon {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Improved spacing for different event heights */
+.event-card-compact {
+  padding: 0.5rem;
+  gap: 0.25rem;
+}
+
+.event-card-normal {
+  padding: 0.75rem;
+  gap: 0.5rem;
+}
+
+.event-card-large {
+  padding: 1rem;
+  gap: 0.75rem;
+}
+
+/* Fix for events moving during scroll */
+.calendar-day-column {
+  position: relative;
+  transform: translateZ(0); /* Force hardware acceleration */
+}
+
+.modern-calendar-event {
+  position: absolute !important;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Enhanced scrolling */
+.calendar-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  scroll-behavior: smooth;
+  overflow-anchor: none; /* Prevent scroll anchoring issues */
+}
+
+.calendar-scroll-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+.calendar-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
+
+/* Prevent layout thrashing during scroll */
+.calendar-scroll-container * {
+  pointer-events: auto;
+}
+
+/* Optimized rendering for calendar events */
+.modern-calendar-event {
+  contain: layout style;
+  isolation: isolate;
+}
+
+/* Horizontal-first layout optimizations */
+.calendar-event-horizontal {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  min-height: 0;
+}
+
+.calendar-event-horizontal > * {
+  flex-shrink: 0;
+}
+
+.calendar-event-horizontal .flex-1 {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* Ensure proper spacing for horizontal arrangements */
+.modern-calendar-event .flex {
+  align-items: center;
+}
+
+.modern-calendar-event .gap-1\.5 {
+  gap: 0.375rem;
+}
+
+.modern-calendar-event .gap-2 {
+  gap: 0.5rem;
+}
+
+/* Improve text truncation in horizontal layouts */
+.modern-calendar-event .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Enhanced badge styling for horizontal layouts */
+.modern-calendar-event .event-type-badge {
+  background: rgba(255, 255, 255, 0.3);
+  color: rgba(0, 0, 0, 0.8);
+  font-weight: 700;
+  text-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Adaptive font sizing for horizontal layouts */
+@media (max-width: 1024px) {
+  .modern-calendar-event .event-title {
+    font-size: 0.75rem;
+  }
+  
+  .modern-calendar-event .event-time {
+    font-size: 0.625rem;
+  }
+  
+  .modern-calendar-event .event-location {
+    font-size: 0.625rem;
+  }
+}
+
+/* Improved button spacing in horizontal layouts */
+.modern-calendar-event button {
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.modern-calendar-event button:hover {
+  transform: scale(1.1);
+}
+
+/* Ensure icons don't shrink in horizontal layouts */
+.modern-calendar-event .icon {
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+  color: rgba(255, 255, 255, 0.9);
+}

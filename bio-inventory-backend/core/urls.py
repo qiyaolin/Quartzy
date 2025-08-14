@@ -20,6 +20,7 @@ from users.views import CustomAuthToken # Import our new view
 from .health import health_check, readiness_check
 # Temporarily comment out emergency migrate views to fix import error
 # from .emergency_migrate_view import emergency_migrate_barcode, check_barcode_status
+from .cron_views import send_meeting_reminders
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -35,6 +36,8 @@ urlpatterns = [
     path('api/schedule/', include('schedule.urls')),
     # Frontend-compatible schedule API endpoints
     path('', include('schedule.compatibility_urls')),
+    # Cron endpoints (protected by App Engine header or ADMIN_MANAGE_TOKEN)
+    path('manage/send_meeting_reminders', send_meeting_reminders),
     # Temporarily comment out emergency migrate endpoints
     # path('admin/emergency-migrate-barcode/', emergency_migrate_barcode, name='emergency_migrate_barcode'),
     # path('admin/check-barcode-status/', check_barcode_status, name='check_barcode_status'),

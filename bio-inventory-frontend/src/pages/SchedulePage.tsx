@@ -29,6 +29,7 @@ import MyScheduleView from '../components/MyScheduleView.tsx';
 import QuickTourModal from '../components/QuickTourModal.tsx';
 import SmartWelcomeBanner from '../components/SmartWelcomeBanner.tsx';
 import KeyboardShortcutsModal from '../components/KeyboardShortcutsModal.tsx';
+import { getCurrentDateET } from '../utils/timezone.ts';
 import TaskSwapRequestModal, { TaskSwapFormData } from '../modals/TaskSwapRequestModal.tsx';
 
 type TabType = 'dashboard' | 'calendar' | 'equipment' | 'meetings' | 'tasks' | 'my-schedule';
@@ -99,7 +100,7 @@ const SchedulePage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     
     // Calendar state
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(getCurrentDateET());
     const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
@@ -1175,6 +1176,14 @@ const SchedulePage: React.FC = () => {
                             setIsMeetingEditModalOpen(true);
                         }}
                         isAdmin={isAdmin}
+                        onOpenJournalClubHub={(meetingId, initialTab) => {
+                            setJournalClubMeetingId(meetingId ? String(meetingId) : null);
+                            setIsJournalClubHubOpen(true);
+                            // store desired initial tab in URL hash to pass to Hub (simple approach)
+                            if (initialTab) {
+                                window.location.hash = `jc-tab=${initialTab}`;
+                            }
+                        }}
                     />
                 )}
 
@@ -1471,7 +1480,10 @@ const SchedulePage: React.FC = () => {
                             <button onClick={() => setIsJournalClubHubOpen(false)} className="btn btn-ghost btn-xs">✕</button>
                         </div>
                         <div className="card-body">
-                            <JournalClubHub meetingId={journalClubMeetingId || undefined} />
+                            <JournalClubHub 
+                                meetingId={journalClubMeetingId || undefined}
+                                initialTab={(window.location.hash.match(/jc-tab=(current|archive|upload)/)?.[1] as any) || 'current'}
+                            />
                         </div>
                     </div>
                 </div>

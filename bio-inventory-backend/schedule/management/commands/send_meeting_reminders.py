@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 from django.contrib.auth.models import User
 from schedule.models import MeetingInstance, Presenter, MeetingConfiguration
 from schedule.services import MeetingNotificationService
+from notifications.email_service import EmailNotificationService
 
 
 class Command(BaseCommand):
@@ -115,18 +116,94 @@ class Command(BaseCommand):
                 reminder_type = 'submission'
             
             if should_send:
+                meeting_date = presenter.meeting_instance.date
+                submission_deadline = deadline_info['submission_deadline']
+                final_deadline = deadline_info['final_deadline']
+                presenter_user = presenter.user
+                
                 if self.dry_run:
                     self.stdout.write(
-                        f"  Would send {reminder_type} reminder to {presenter.user.username} "
-                        f"for {presenter.meeting_instance.date} JC (urgency: {urgency})"
+                        f"  Would send {reminder_type} reminder to {presenter_user.username} "
+                        f"for {meeting_date} JC (urgency: {urgency})"
                     )
                 else:
-                    self.stdout.write(
-                        f"  Sending {reminder_type} reminder to {presenter.user.username} "
-                        f"for {presenter.meeting_instance.date} JC"
-                    )
-                    # Here would be the actual email sending logic
-                    # self.send_journal_club_reminder(presenter, reminder_type, deadline_info)
+                    # Build context depending on reminder_type
+                    if reminder_type == 'submission':
+                        subject = f"Journal Club Paper Submission Request - {meeting_date}"
+                        template = 'jc_materials_submission_request'
+                        context = {
+                            'presenter': presenter_user,
+                            'meeting': {'date': meeting_date},
+                            'deadline': {'date': submission_deadline},
+                        }
+                        EmailNotificationService.send_email_notification(
+                            recipients=[presenter_user],
+                            subject=subject,
+                            template_name=template,
+                            context=context,
+                        )
+                    elif reminder_type in ['approaching', 'urgent']:
+                        # Use JC-specific reminder template, display the most relevant deadline
+                        subject = (
+                            f"Reminder: JC Paper Due by {submission_deadline}" if reminder_type == 'approaching'
+                            else f"Urgent: JC Paper Final Due {final_deadline}"
+                        )
+                        template = 'jc_materials_submission_reminder'
+                        context = {
+                            'presenter': presenter_user,
+                            'meeting': {'date': meeting_date},
+                            'deadline': {'date': (final_deadline if reminder_type == 'urgent' else submission_deadline)},
+                        }
+                        EmailNotificationService.send_email_notification(
+                            recipients=[presenter_user],
+                            subject=subject,
+                            template_name=template,
+                            context=context,
+                        )
+                    elif reminder_type == 'final':
+                        subject = f"URGENT: JC Paper Final Reminder - {meeting_date}"
+                        template = 'materials_deadline_reminder'
+                        context = {
+                            'recipient': presenter_user,
+                            'meeting': {'date': meeting_date, 'type': 'Journal Club'},
+                            'deadline': {'date': final_deadline},
+                        }
+                        EmailNotificationService.send_email_notification(
+                            recipients=[presenter_user],
+                            subject=subject,
+                            template_name=template,
+                            context=context,
+                        )
+                    elif reminder_type == 'overdue':
+                        # Send to presenter
+                        subject = f"OVERDUE: JC Paper - {meeting_date}"
+                        template = 'materials_deadline_reminder'
+                        context = {
+                            'recipient': presenter_user,
+                            'meeting': {'date': meeting_date, 'type': 'Journal Club'},
+                            'deadline': {'date': final_deadline},
+                        }
+                        EmailNotificationService.send_email_notification(
+                            recipients=[presenter_user],
+                            subject=subject,
+                            template_name=template,
+                            context=context,
+                        )
+                        # Escalate to admins
+                        admin_users = User.objects.filter(is_staff=True, is_active=True)
+                        if admin_users.exists():
+                            admin_subject = f"OVERDUE (CC): {presenter_user.get_full_name() or presenter_user.username} - JC {meeting_date}"
+                            admin_context = {
+                                'recipient': None,  # Not used in template for admin copy
+                                'meeting': {'date': meeting_date, 'type': 'Journal Club'},
+                                'deadline': {'date': final_deadline},
+                            }
+                            EmailNotificationService.send_email_notification(
+                                recipients=list(admin_users),
+                                subject=admin_subject,
+                                template_name=template,
+                                context=admin_context,
+                            )
                 
                 notifications_sent += 1
         
@@ -152,12 +229,22 @@ class Command(BaseCommand):
                     f"for {presenter.meeting_instance.date}"
                 )
             else:
-                self.stdout.write(
-                    f"  Sending RU reminder to {presenter.user.username} "
-                    f"for {presenter.meeting_instance.date}"
+                meeting_date = presenter.meeting_instance.date
+                subject = f"Research Update Reminder - {meeting_date}"
+                template = 'presenter_special_reminder'
+                context = {
+                    'presenter': presenter.user,
+                    'meeting': {
+                        'date': meeting_date,
+                        'type': 'Research Update',
+                    },
+                }
+                EmailNotificationService.send_email_notification(
+                    recipients=[presenter.user],
+                    subject=subject,
+                    template_name=template,
+                    context=context,
                 )
-                # Here would be the actual email sending logic
-                # self.send_research_update_reminder(presenter)
             
             notifications_sent += 1
         
@@ -179,12 +266,30 @@ class Command(BaseCommand):
                     f"on {meeting.date} to all members"
                 )
             else:
-                self.stdout.write(
-                    f"  Sending 24h reminder for {meeting.get_meeting_type_display()} "
-                    f"on {meeting.date} to all members"
+                # Determine recipients: meeting configuration's active members else all active users
+                config = MeetingConfiguration.objects.first()
+                recipients = list(config.active_members.all()) if config else list(User.objects.filter(is_active=True))
+                # Build meeting context
+                start_time = getattr(getattr(meeting, 'event', None), 'start_time', None)
+                time_str = start_time.strftime('%H:%M') if start_time else ''
+                meeting_context = {
+                    'date': meeting.date,
+                    'time': time_str,
+                    'location': getattr(getattr(meeting, 'event', None), 'location', ''),
+                    'type': meeting.get_meeting_type_display(),
+                }
+                subject = f"Meeting Reminder: {meeting_context['type']} on {meeting.date}"
+                template = 'meeting_reminder'
+                context = {
+                    'meeting': meeting_context,
+                    'reminder_minutes': 24 * 60,
+                }
+                EmailNotificationService.send_email_notification(
+                    recipients=recipients,
+                    subject=subject,
+                    template_name=template,
+                    context=context,
                 )
-                # Here would be the actual email sending logic
-                # self.send_general_meeting_reminder(meeting, presenters)
             
             notifications_sent += 1
         
@@ -206,12 +311,36 @@ class Command(BaseCommand):
                     f"({days_overdue} days overdue)"
                 )
             else:
-                self.stdout.write(
-                    f"  Sending overdue notification to {presenter.user.username} "
-                    f"({days_overdue} days overdue)"
+                meeting_date = presenter.meeting_instance.date
+                # Presenter email
+                subject = f"OVERDUE: JC Paper - {meeting_date}"
+                template = 'materials_deadline_reminder'
+                context = {
+                    'recipient': presenter.user,
+                    'meeting': {'date': meeting_date, 'type': 'Journal Club'},
+                    'deadline': {'date': overdue_info.get('meeting_date') - timedelta(days=MeetingConfiguration.objects.first().jc_final_deadline_days) if MeetingConfiguration.objects.first() else None},
+                }
+                EmailNotificationService.send_email_notification(
+                    recipients=[presenter.user],
+                    subject=subject,
+                    template_name=template,
+                    context=context,
                 )
-                # Here would be the actual email sending logic
-                # self.send_overdue_notification(presenter, overdue_info)
+                # Admin escalation
+                admin_users = User.objects.filter(is_staff=True, is_active=True)
+                if admin_users.exists():
+                    admin_subject = f"OVERDUE (CC): {presenter.user.get_full_name() or presenter.user.username} - JC {meeting_date}"
+                    admin_context = {
+                        'recipient': None,
+                        'meeting': {'date': meeting_date, 'type': 'Journal Club'},
+                        'deadline': {'date': overdue_info.get('meeting_date')},
+                    }
+                    EmailNotificationService.send_email_notification(
+                        recipients=list(admin_users),
+                        subject=admin_subject,
+                        template_name=template,
+                        context=admin_context,
+                    )
             
             notifications_sent += 1
         

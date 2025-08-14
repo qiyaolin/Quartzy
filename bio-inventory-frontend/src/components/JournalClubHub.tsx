@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
-  FileText, Upload, Download, Search, Filter, Calendar,
+  FileText, Download, Search, Calendar,
   Clock, User, CheckCircle, AlertTriangle, Send, Eye,
-  Archive, Link, Trash2, RefreshCw, BookOpen, Globe
+  Archive, Link, RefreshCw, BookOpen, Globe
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import {
@@ -24,9 +24,10 @@ import {
 interface JournalClubHubProps {
   className?: string;
   meetingId?: string; // Optional specific meeting focus
+  initialTab?: 'current' | 'archive' | 'upload';
 }
 
-const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meetingId }) => {
+const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meetingId, initialTab }) => {
   const authContext = useContext(AuthContext);
   if (!authContext) {
     throw new Error('JournalClubHub must be used within an AuthProvider');
@@ -34,7 +35,7 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
   const { token } = authContext;
 
   // State management
-  const [activeTab, setActiveTab] = useState<'current' | 'archive' | 'upload'>('current');
+  const [activeTab, setActiveTab] = useState<'current' | 'archive' | 'upload'>(initialTab || 'current');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -45,9 +46,7 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
   const [paperArchive, setPaperArchive] = useState<PaperSubmission[]>([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
 
-  // Upload state
-  const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // Upload state (URL-only mode)
   const [uploading, setUploading] = useState(false);
   const [urlForm, setUrlForm] = useState({
     title: '',
@@ -55,7 +54,8 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
     authors: '',
     journal: '',
     year: new Date().getFullYear(),
-    doi: ''
+    doi: '',
+    auto_distribute: false
   });
 
   // Search and filter state
@@ -82,9 +82,18 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
         type: 'Journal Club'
       });
 
+      // Safety check for API response structure
+      if (!meetingsResponse || !meetingsResponse.results) {
+        console.warn('Invalid meetings response structure:', meetingsResponse);
+        return;
+      }
+
+      const results = meetingsResponse.results || [];
       const nextJournalClub = meetingId
-        ? meetingsResponse.results.find(m => m.id === meetingId)
-        : meetingsResponse.results[0];
+        ? results.find(m => (m as any).id == meetingId)
+        : results
+            .slice()
+            .sort((a, b) => new Date((a as any).date).getTime() - new Date((b as any).date).getTime())[0];
 
       if (nextJournalClub) {
         setCurrentMeeting(nextJournalClub);
@@ -113,7 +122,18 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
       };
 
       const archiveData = await journalClubApi.getPaperArchive(token, params);
-      setPaperArchive(archiveData.results);
+      
+      // Handle both legacy and new response formats
+      if (archiveData.papers) {
+        // New format from backend
+        setPaperArchive(archiveData.papers);
+      } else if (archiveData.results) {
+        // Legacy format
+        setPaperArchive(archiveData.results);
+      } else {
+        console.warn('Unexpected archive response format:', archiveData);
+        setPaperArchive([]);
+      }
 
     } catch (err) {
       console.error('Error loading paper archive:', err);
@@ -122,35 +142,6 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
     }
   };
 
-  // Handle file upload
-  const handleFileUpload = async () => {
-    if (!selectedFile || !currentMeeting) return;
-
-    try {
-      setUploading(true);
-      setError(null);
-
-      const metadata = {
-        title: selectedFile.name.replace(/\.[^/.]+$/, ""), // Remove file extension
-        authors: '',
-        journal: '',
-      };
-
-      const result = await journalClubApi.uploadPaper(token, currentMeeting.id, selectedFile, metadata);
-      setCurrentSubmission(result);
-      setSelectedFile(null);
-      setSuccess('Paper uploaded successfully!');
-      setTimeout(() => setSuccess(null), 3000);
-
-      // Switch to current tab to show uploaded paper
-      setActiveTab('current');
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload paper');
-    } finally {
-      setUploading(false);
-    }
-  };
 
   // Handle URL submission
   const handleUrlSubmission = async (e: React.FormEvent) => {
@@ -171,7 +162,8 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
         authors: '',
         journal: '',
         year: new Date().getFullYear(),
-        doi: ''
+        doi: '',
+        auto_distribute: false
       });
 
       setSuccess('Paper URL submitted successfully!');
@@ -199,6 +191,29 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to distribute paper');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle paper withdrawal
+  const handleWithdrawPaper = async () => {
+    if (!currentMeeting || !currentSubmission) return;
+
+    // Confirm withdrawal
+    if (!window.confirm('Are you sure you want to withdraw your paper submission? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await journalClubApi.withdrawPaper(token, currentMeeting.id);
+      setCurrentSubmission(null); // Clear the submission from state
+      setSuccess('Paper submission has been withdrawn successfully. You can now submit a new paper.');
+      setTimeout(() => setSuccess(null), 5000);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to withdraw paper');
     } finally {
       setLoading(false);
     }
@@ -272,10 +287,9 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
               <div className="flex items-center">
                 <User className="w-4 h-4 mr-2" />
                 <span>
-                  Presenter: {currentMeeting.presenters.length > 0 
-                    ? `${currentMeeting.presenters[0].user.first_name} ${currentMeeting.presenters[0].user.last_name}`
-                    : 'Not assigned'
-                  }
+                  Presenter: {Array.isArray((currentMeeting as any).presenters) && (currentMeeting as any).presenters.length > 0 
+                    ? `${(currentMeeting as any).presenters[0].user.first_name} ${(currentMeeting as any).presenters[0].user.last_name}`
+                    : 'Not assigned'}
                 </span>
               </div>
             </div>
@@ -302,16 +316,26 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
                 </div>
               </div>
 
-              {currentSubmission.isApproved && (
+              <div className="flex gap-3">
+                {currentSubmission.isApproved && (
+                  <button
+                    onClick={handleDistributePaper}
+                    disabled={loading}
+                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Distribute to All
+                  </button>
+                )}
                 <button
-                  onClick={handleDistributePaper}
+                  onClick={handleWithdrawPaper}
                   disabled={loading}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
-                  <Send className="w-4 h-4 mr-2" />
-                  Distribute to All
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  Withdraw Paper
                 </button>
-              )}
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -394,8 +418,8 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
                   onClick={() => setActiveTab('upload')}
                   className="inline-flex items-center px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
                 >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload Now
+                  <Link className="w-4 h-4 mr-2" />
+                  Submit Now
                 </button>
               </div>
             </div>
@@ -412,93 +436,9 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
         {/* Upload Mode Selection */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Submit Journal Club Paper</h3>
-          
-          <div className="flex rounded-md border border-gray-300 overflow-hidden mb-6">
-            <button
-              onClick={() => setUploadMode('file')}
-              className={`flex-1 px-4 py-2 text-sm font-medium ${
-                uploadMode === 'file'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Upload className="w-4 h-4 inline mr-2" />
-              Upload PDF File
-            </button>
-            <button
-              onClick={() => setUploadMode('url')}
-              className={`flex-1 px-4 py-2 text-sm font-medium ${
-                uploadMode === 'url'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Link className="w-4 h-4 inline mr-2" />
-              Submit URL
-            </button>
-          </div>
+          <p className="text-sm text-gray-600 mb-6">Submit a URL link to your paper for the upcoming Journal Club meeting. The paper will be automatically distributed to all participants once submitted.</p>
 
-          {/* File Upload */}
-          {uploadMode === 'file' && (
-            <div className="space-y-4">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-                <div className="text-center">
-                  <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <div className="text-sm text-gray-600 mb-4">
-                    <label htmlFor="file-upload" className="cursor-pointer">
-                      <span className="font-medium text-blue-600 hover:text-blue-500">
-                        Click to upload
-                      </span>
-                      <span> or drag and drop</span>
-                      <input
-                        id="file-upload"
-                        name="file-upload"
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                        className="sr-only"
-                      />
-                    </label>
-                  </div>
-                  <p className="text-xs text-gray-500">PDF, DOC, DOCX up to 10MB</p>
-                </div>
-              </div>
-
-              {selectedFile && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <FileText className="w-5 h-5 text-blue-600 mr-2" />
-                      <span className="text-sm font-medium text-blue-800">{selectedFile.name}</span>
-                      <span className="text-xs text-blue-600 ml-2">
-                        ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setSelectedFile(null)}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <button
-                  onClick={handleFileUpload}
-                  disabled={!selectedFile || uploading || !currentMeeting}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  {uploading ? 'Uploading...' : 'Upload Paper'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* URL Submission */}
-          {uploadMode === 'url' && (
+          {/* URL Submission Form */}
             <form onSubmit={handleUrlSubmission} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -583,6 +523,20 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
                 </div>
               </div>
 
+              {/* Auto-distribution option */}
+              <div className="flex items-center space-x-2 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <input
+                  type="checkbox"
+                  id="auto-distribute"
+                  checked={urlForm.auto_distribute}
+                  onChange={(e) => setUrlForm(prev => ({...prev, auto_distribute: e.target.checked}))}
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="auto-distribute" className="text-sm text-gray-700">
+                  <span className="font-medium">Auto-distribute paper</span> - Automatically send paper to all members once submitted
+                </label>
+              </div>
+
               <div className="flex justify-end">
                 <button
                   type="submit"
@@ -594,7 +548,6 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
                 </button>
               </div>
             </form>
-          )}
         </div>
       </div>
     );
@@ -658,13 +611,18 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
           ) : (
             <div className="space-y-4">
               {paperArchive.map((paper, index) => (
-                <div key={paper.meetingInstanceId || index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <div key={paper.id || paper.meetingInstanceId || index} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <h5 className="font-medium text-gray-900 mb-1">{paper.title}</h5>
+                      <h5 className="font-medium text-gray-900 mb-1">
+                        {paper.title || paper.paper_title}
+                      </h5>
                       
-                      {paper.authors && (
-                        <p className="text-sm text-gray-600 mb-1">Authors: {paper.authors}</p>
+                      {(paper.authors || paper.presenter) && (
+                        <p className="text-sm text-gray-600 mb-1">
+                          {paper.authors ? `Authors: ${paper.authors}` : 
+                           paper.presenter ? `Presenter: ${paper.presenter.full_name || paper.presenter.username}` : ''}
+                        </p>
                       )}
                       
                       {paper.journal && (
@@ -676,7 +634,16 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <div className="flex items-center">
                           <Calendar className="w-3 h-3 mr-1" />
-                          <span>{new Date(paper.submittedAt).toLocaleDateString()}</span>
+                          <span>
+                            {paper.meeting_date 
+                              ? new Date(paper.meeting_date).toLocaleDateString()
+                              : paper.submittedAt 
+                                ? new Date(paper.submittedAt).toLocaleDateString()
+                                : paper.submitted_at
+                                  ? new Date(paper.submitted_at).toLocaleDateString()
+                                  : 'Unknown date'
+                            }
+                          </span>
                         </div>
                         
                         {paper.doi && (
@@ -689,9 +656,9 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
                     </div>
                     
                     <div className="flex gap-2 ml-4">
-                      {paper.url && (
+                      {(paper.url || paper.paper_url) && (
                         <a
-                          href={paper.url}
+                          href={paper.url || paper.paper_url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded hover:bg-blue-50"
@@ -701,11 +668,16 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
                         </a>
                       )}
                       
-                      {paper.file && (
-                        <button className="inline-flex items-center px-3 py-1.5 text-sm text-green-600 border border-green-200 rounded hover:bg-green-50">
+                      {(paper.file || paper.has_file || paper.file_download_url) && (
+                        <a
+                          href={paper.file_download_url || (paper.file && typeof paper.file === 'string' ? paper.file : '#')}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-3 py-1.5 text-sm text-green-600 border border-green-200 rounded hover:bg-green-50"
+                        >
                           <Download className="w-4 h-4 mr-1" />
                           Download
-                        </button>
+                        </a>
                       )}
                     </div>
                   </div>
@@ -728,7 +700,7 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
 
   const tabs = [
     { id: 'current', label: 'Current Submission', icon: FileText },
-    { id: 'upload', label: 'Upload Paper', icon: Upload },
+    { id: 'upload', label: 'Submit Paper', icon: Link },
     { id: 'archive', label: 'Paper Archive', icon: Archive }
   ] as const;
 

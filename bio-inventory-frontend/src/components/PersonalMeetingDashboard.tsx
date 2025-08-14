@@ -41,9 +41,10 @@ const PersonalMeetingDashboard: React.FC<PersonalMeetingDashboardProps> = ({ cla
   const [dashboardData, setDashboardData] = useState<PersonalDashboardData | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'todos' | 'upcoming' | 'history'>('overview');
 
-  // File upload state
+  // URL submission state
   const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [paperUrl, setPaperUrl] = useState<string>('');
+  const [paperTitle, setPaperTitle] = useState<string>('');
 
   // Load dashboard data
   useEffect(() => {
@@ -92,29 +93,23 @@ const PersonalMeetingDashboard: React.FC<PersonalMeetingDashboardProps> = ({ cla
     }
   };
 
-  // Handle file upload for journal club
-  const handleFileUpload = async (meetingId: string) => {
-    if (!selectedFile) return;
-    
+  // Handle URL submission for journal club
+  const handleUrlSubmit = async (meetingId: string) => {
+    if (!paperUrl) return;
     try {
       setUploading(true);
       setError(null);
-      
-      await journalClubApi.uploadPaper(token, meetingId, selectedFile, {
-        title: 'Paper for Journal Club',
-        authors: '',
-        journal: '',
-      });
-      
-      setSuccess('Paper uploaded successfully!');
+      await journalClubApi.submitPaperUrl(token, meetingId, {
+        url: paperUrl,
+        title: paperTitle || 'Journal Club Paper'
+      } as any);
+      setSuccess('Paper URL submitted successfully!');
       setTimeout(() => setSuccess(null), 3000);
-      setSelectedFile(null);
-      
-      // Refresh dashboard data
+      setPaperUrl('');
+      setPaperTitle('');
       await loadDashboardData();
-      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload paper');
+      setError(err instanceof Error ? err.message : 'Failed to submit paper URL');
     } finally {
       setUploading(false);
     }
@@ -270,21 +265,28 @@ const PersonalMeetingDashboard: React.FC<PersonalMeetingDashboardProps> = ({ cla
           {/* Quick Actions */}
           {meetingType === 'Journal Club' && !nextPresentation.preparationStatus.materialsSubmitted && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-yellow-800 mb-2">Quick Upload</h4>
-              <div className="flex items-center gap-2">
+              <h4 className="text-sm font-medium text-yellow-800 mb-2">Quick Submit URL</h4>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                  className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-yellow-100 file:text-yellow-800"
+                  type="url"
+                  value={paperUrl}
+                  onChange={(e) => setPaperUrl(e.target.value)}
+                  placeholder="https://journal.org/article"
+                  className="flex-1 text-xs px-2 py-1 border rounded"
+                />
+                <input
+                  type="text"
+                  value={paperTitle}
+                  onChange={(e) => setPaperTitle(e.target.value)}
+                  placeholder="Optional title"
+                  className="flex-1 text-xs px-2 py-1 border rounded"
                 />
                 <button
-                  onClick={() => handleFileUpload(nextPresentation.meeting.id)}
-                  disabled={!selectedFile || uploading}
+                  onClick={() => handleUrlSubmit(nextPresentation.meeting.id)}
+                  disabled={!paperUrl || uploading}
                   className="inline-flex items-center px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 disabled:opacity-50"
                 >
-                  <Upload className="w-3 h-3 mr-1" />
-                  {uploading ? 'Uploading...' : 'Upload'}
+                  {uploading ? 'Submitting...' : 'Submit URL'}
                 </button>
               </div>
             </div>

@@ -480,7 +480,7 @@ const ReportsPage = ({
                 <div className="bg-white p-6 rounded-xl shadow-soft border border-secondary-200">
                     <h3 className="text-lg font-semibold text-secondary-900 mb-4">Recent Activity</h3>
                     <div className="space-y-4">
-                        {recentActivity.length > 0 ? recentActivity.map((activity, index) => {
+                        {recentActivity.length > 0 ? recentActivity.slice(0, 6).map((activity, index) => {
                             const getStatusIcon = (status) => {
                                 switch(status) {
                                     case 'NEW': return { icon: FileText, bg: 'bg-primary-100', color: 'text-primary-600' };
