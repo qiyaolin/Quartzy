@@ -385,17 +385,33 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   ))}
                   
                   {/* Events */}
-                  {day.schedules.map((schedule) => {
+                  {day.schedules.map((schedule, eventIndex) => {
                     const position = getEventPosition(schedule);
-                    const eventWidth = 160; // Week view column width approximation
+                    
+                    // Calculate overlaps with other events in the same day
+                    const overlappingEvents = day.schedules.filter((otherSchedule, otherIndex) => {
+                      if (otherIndex >= eventIndex) return false; // Only check previous events
+                      const otherPosition = getEventPosition(otherSchedule);
+                      
+                      // Check if events overlap in time
+                      return position.top < otherPosition.top + otherPosition.height && 
+                             position.top + position.height > otherPosition.top;
+                    });
+                    
+                    const overlapCount = overlappingEvents.length;
+                    // Use percentage-based width that adapts based on overlaps
+                    const eventWidthPercent = Math.max(30, 92 - (overlapCount * 8));
+                    const leftOffsetPercent = overlapCount * 3;
                     return (
                       <div
                         key={schedule.id}
-                        className={`absolute left-2 right-2 rounded-lg cursor-pointer text-xs border-l-3 modern-calendar-event ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
+                        className={`absolute rounded-lg cursor-pointer text-xs border-l-3 modern-calendar-event ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
                         style={{
                           top: position.top + 48, // Offset for header
                           height: position.height,
-                          zIndex: 10
+                          left: `${leftOffsetPercent}%`,
+                          width: `${eventWidthPercent}%`,
+                          zIndex: 10 + eventIndex
                         }}
                         onClick={() => onEditEvent?.(schedule)}
                         onMouseEnter={() => setHoveredEvent(schedule.id)}
@@ -421,7 +437,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                             </div>
 
                             {/* Location - Horizontal if space */}
-                            {schedule.location && eventWidth > 120 && (
+                            {schedule.location && eventWidthPercent > 60 && (
                               <div className="event-location text-xs leading-tight truncate flex-shrink-0 max-w-16">
                                 {schedule.location}
                               </div>
@@ -475,16 +491,32 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   }
                   return unique;
                 }, [])
-                .map((schedule) => {
+                .map((schedule, eventIndex, allEvents) => {
                 const position = getEventPosition(schedule);
+                
+                // Calculate overlaps with other events
+                const overlappingEvents = allEvents.filter((otherSchedule, otherIndex) => {
+                  if (otherIndex >= eventIndex) return false; // Only check previous events
+                  const otherPosition = getEventPosition(otherSchedule);
+                  
+                  // Check if events overlap in time
+                  return position.top < otherPosition.top + otherPosition.height && 
+                         position.top + position.height > otherPosition.top;
+                });
+                
+                const overlapCount = overlappingEvents.length;
+                const eventWidthPercent = Math.max(35, 90 - (overlapCount * 6));
+                const leftOffsetPercent = overlapCount * 2;
                 return (
                   <div
                     key={schedule.id}
-                    className={`absolute left-3 right-3 rounded-lg cursor-pointer shadow-md border-l-4 modern-calendar-event ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
+                    className={`absolute rounded-lg cursor-pointer shadow-md border-l-4 modern-calendar-event ${scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status)}`}
                     style={{
                       top: position.top,
                       height: Math.max(position.height, 80),
-                      zIndex: 10
+                      left: `${leftOffsetPercent}%`,
+                      width: `${eventWidthPercent}%`,
+                      zIndex: 10 + eventIndex
                     }}
                     onClick={() => onEditEvent?.(schedule)}
                     onMouseEnter={() => setHoveredEvent(schedule.id)}

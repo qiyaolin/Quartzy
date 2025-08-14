@@ -13,6 +13,10 @@ export interface Schedule {
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
   event_type?: 'meeting' | 'booking' | 'task' | 'equipment' | 'personal';
   attendees_count?: number;
+  // Optional fields that may be present depending on event type
+  equipment?: string | { id?: number; name: string; location?: string };
+  assigned_user?: string;
+  created_by?: { id?: number; username?: string; first_name?: string; last_name?: string };
   created_at: string;
   updated_at: string;
 }

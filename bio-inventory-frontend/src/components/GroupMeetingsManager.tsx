@@ -50,7 +50,7 @@ interface GroupMeetingsManagerProps {
     onCreateMeeting?: () => void;
     onEditMeeting?: (meeting: GroupMeeting) => void;
     isAdmin?: boolean;
-    onOpenJournalClubHub?: (meetingId?: number | string, initialTab?: 'current' | 'archive' | 'upload') => void;
+    onOpenJournalClubHub?: (meetingId?: number | string, initialTab?: 'current' | 'archive' | 'upload', onUpdate?: () => void) => void;
 }
 
 const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
@@ -93,6 +93,30 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     // Load data from API
     // Data adapter to convert MeetingInstance to GroupMeeting format
     const adaptMeetingInstanceToGroupMeeting = (meetingInstance: any): GroupMeeting => {
+        // Check if any presenter has submitted materials for Journal Club meetings
+        const isJournalClub = meetingInstance.meeting_type === 'journal_club';
+        
+        // Debug: Log presenter data for Journal Club meetings (can be removed in production)
+        if (isJournalClub && process.env.NODE_ENV === 'development') {
+            console.log(`🔍 Journal Club meeting ${meetingInstance.date}:`, {
+                id: meetingInstance.id,
+                presenterCount: meetingInstance.presenters?.length || 0,
+                materialsStatus: meetingInstance.presenters?.map((p: any) => ({
+                    id: p.id,
+                    materials_submitted: p.materials_submitted,
+                    materials_submitted_at: p.materials_submitted_at
+                }))
+            });
+        }
+        
+        const hasMaterialsSubmitted = isJournalClub && meetingInstance.presenters?.some((p: any) => 
+            p.materials_submitted || p.materials_submitted_at
+        );
+        
+        if (isJournalClub && process.env.NODE_ENV === 'development') {
+            console.log(`✅ Materials status for ${meetingInstance.date}: ${hasMaterialsSubmitted ? 'SUBMITTED' : 'PENDING'}`);
+        }
+
         return {
             id: meetingInstance.id,
             title: `${meetingInstance.meeting_type?.replace('_', ' ')?.replace(/\b\w/g, (l: string) => l.toUpperCase())} - ${meetingInstance.date}`,
@@ -117,6 +141,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
             materials_url: undefined,
             materials_file: undefined,
             materials_deadline: undefined,
+            is_materials_submitted: hasMaterialsSubmitted,
             created_at: meetingInstance.created_at || new Date().toISOString(),
             updated_at: meetingInstance.updated_at || new Date().toISOString(),
             attendees_count: meetingInstance.attendees_count
@@ -296,7 +321,10 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
     const handleMaterialsUpload = (meeting: GroupMeeting) => {
         // For Journal Club, open the centralized paper management hub
         if (meeting.meeting_type === 'journal_club' && onOpenJournalClubHub) {
-            onOpenJournalClubHub(meeting.id, 'upload');
+            onOpenJournalClubHub(meeting.id, 'upload', () => {
+                // Refresh data when JournalClubHub closes after successful submission
+                loadData();
+            });
             return;
         }
         // Fallback to legacy materials upload modal
@@ -556,7 +584,7 @@ const GroupMeetingsManager: React.FC<GroupMeetingsManagerProps> = ({
                     <div className="flex items-center gap-3">
                         {/* Paper Archive quick access */}
                         <button
-                            onClick={() => onOpenJournalClubHub && onOpenJournalClubHub(undefined, 'archive')}
+                            onClick={() => onOpenJournalClubHub && onOpenJournalClubHub(undefined, 'archive', loadData)}
                             className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                         >
                             <Archive className="w-4 h-4 mr-2" />

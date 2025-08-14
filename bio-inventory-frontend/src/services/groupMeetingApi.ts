@@ -69,6 +69,8 @@ export interface RecurringTask {
     // Backend-compatible fields
     cron_schedule?: string;
     assignee_group?: User[]; // returned by backend serializer
+    // Creation-time field for backend compatibility (IDs for rotation queue)
+    assignee_group_ids?: number[];
     is_active?: boolean;
     // Legacy/UI fields (optional)
     task_type?: 'cell_culture_room_cleaning' | 'cell_culture_incubator_cleaning';

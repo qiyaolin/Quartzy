@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { formatDateET, isTodayET, formatDateForInput, formatTimeET, formatDateTimeET, EASTERN_TIME_ZONE, getCurrentDateET } from '../utils/timezone.ts';
+import { formatDateET, isTodayET, formatDateForInput, formatTimeET, formatDateTimeET, EASTERN_TIME_ZONE, getCurrentDateET, parseDateET } from '../utils/timezone.ts';
 import { 
   Calendar, 
   Clock, 
@@ -97,7 +97,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
   // Generate calendar days for different views
   const calendarDays = useMemo(() => {
-    const date = new Date(selectedDate);
+    const date = parseDateET(selectedDate);
     const year = date.getFullYear();
     const month = date.getMonth();
     
@@ -226,7 +226,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
   const monthDayCellHeight = Math.max(140, (availableHeight - monthHeaderPx) / monthWeeks);
 
   const navigateDate = useCallback((direction: 'prev' | 'next') => {
-    const date = new Date(selectedDate);
+    const date = parseDateET(selectedDate);
     
     if (viewMode === 'day') {
       date.setDate(date.getDate() + (direction === 'next' ? 1 : -1));
@@ -240,7 +240,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
   }, [selectedDate, viewMode, onDateChange]);
 
   const formatDate = useCallback((date: string) => {
-    const d = new Date(date);
+    const d = parseDateET(date);
     return {
       dayName: d.toLocaleDateString('en-US', { 
         timeZone: EASTERN_TIME_ZONE,
@@ -277,13 +277,202 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
     return scheduleHelpers.formatScheduleTime(timeString, null);
   }, []);
 
+  // Helpers for optional fields coming from different APIs
+  const getEquipmentName = useCallback((schedule: Schedule): string | null => {
+    const s: any = schedule as any;
+    const eq: any = s.equipment ?? s.equipment_name ?? s.equipmentName ?? s.resource ?? s.resource_name ?? s.resourceName ?? s.device ?? s.device_name ?? s.instrument ?? s.instrument_name;
+    if (eq) {
+      if (typeof eq === 'string') return eq;
+      if (typeof eq === 'object' && (eq.name || eq.title)) return String(eq.name || eq.title);
+      return String(eq);
+    }
+    // Fallback: extract equipment from title like "Ti2E Booking" => "Ti2E"
+    if (typeof s.title === 'string') {
+      const lower = s.title.toLowerCase();
+      const idx = lower.indexOf('booking');
+      if (idx > 0) {
+        const name = s.title.slice(0, idx).trim();
+        if (name) return name;
+      }
+    }
+    return null;
+  }, []);
+
+  const getAssignedUserName = useCallback((schedule: Schedule): string | null => {
+    const u: any = (schedule as any).assigned_user || (schedule as any).assignee || (schedule as any).user;
+    if (!u) return null;
+    if (typeof u === 'string') return u;
+    if (typeof u === 'object') return String(u.username || u.name || u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim());
+    return String(u);
+  }, []);
+
+  // Deterministic equipment color mapping (stable per equipment name)
+  const EQUIPMENT_COLOR_MAP: Record<string, { solid: string; light: string; border: string }> = {
+    blue:    { solid: 'bg-blue-600',    light: 'bg-blue-50 text-blue-900 border-blue-200',       border: 'border-blue-600'    },
+    indigo:  { solid: 'bg-indigo-600',  light: 'bg-indigo-50 text-indigo-900 border-indigo-200', border: 'border-indigo-600'  },
+    amber:   { solid: 'bg-amber-600',   light: 'bg-amber-50 text-amber-900 border-amber-200',    border: 'border-amber-600'   },
+    emerald: { solid: 'bg-emerald-600', light: 'bg-emerald-50 text-emerald-900 border-emerald-200', border: 'border-emerald-600' },
+    cyan:    { solid: 'bg-cyan-600',    light: 'bg-cyan-50 text-cyan-900 border-cyan-200',       border: 'border-cyan-600'    },
+    red:     { solid: 'bg-red-600',     light: 'bg-red-50 text-red-900 border-red-200',          border: 'border-red-600'     },
+    violet:  { solid: 'bg-violet-600',  light: 'bg-violet-50 text-violet-900 border-violet-200', border: 'border-violet-600'  },
+    teal:    { solid: 'bg-teal-600',    light: 'bg-teal-50 text-teal-900 border-teal-200',       border: 'border-teal-600'    },
+    rose:    { solid: 'bg-rose-600',    light: 'bg-rose-50 text-rose-900 border-rose-200',       border: 'border-rose-600'    },
+    fuchsia: { solid: 'bg-fuchsia-600', light: 'bg-fuchsia-50 text-fuchsia-900 border-fuchsia-200', border: 'border-fuchsia-600' },
+    lime:    { solid: 'bg-lime-600',    light: 'bg-lime-50 text-lime-900 border-lime-200',       border: 'border-lime-600'    },
+    sky:     { solid: 'bg-sky-600',     light: 'bg-sky-50 text-sky-900 border-sky-200',          border: 'border-sky-600'     },
+    orange:  { solid: 'bg-orange-600',  light: 'bg-orange-50 text-orange-900 border-orange-200', border: 'border-orange-600'  },
+    pink:    { solid: 'bg-pink-600',    light: 'bg-pink-50 text-pink-900 border-pink-200',       border: 'border-pink-600'    }
+  };
+  const EQUIPMENT_COLOR_KEYS = Object.keys(EQUIPMENT_COLOR_MAP);
+  // Explicit override keywords -> color keys to guarantee distinct colors for common equipment
+  const EQUIPMENT_COLOR_OVERRIDES: Array<{ keywords: string[]; colorKey: keyof typeof EQUIPMENT_COLOR_MAP }> = [
+    { keywords: ['bsc', 'biosafety', 'hood'], colorKey: 'blue' },
+    { keywords: ['ti2e', 'ti-e', 'nikon', 'microscope', 'scope', 'confocal'], colorKey: 'violet' },
+    { keywords: ['incubator'], colorKey: 'amber' },
+    { keywords: ['centrifuge'], colorKey: 'emerald' },
+    { keywords: ['freezer', 'fridge'], colorKey: 'cyan' },
+    { keywords: ['pcr', 'rt-pcr', 'thermocycler'], colorKey: 'red' },
+    { keywords: ['spectrometer', 'spectro'], colorKey: 'fuchsia' },
+    { keywords: ['shaker', 'mixer'], colorKey: 'teal' }
+  ];
+  const hashStringToNumber = (input: string): number => {
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+      hash = (hash << 5) - hash + input.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  };
+  const resolveEquipmentColorKey = (equipmentName: string): keyof typeof EQUIPMENT_COLOR_MAP => {
+    const name = equipmentName.toLowerCase();
+    for (const rule of EQUIPMENT_COLOR_OVERRIDES) {
+      if (rule.keywords.some(k => name.includes(k))) return rule.colorKey;
+    }
+    return EQUIPMENT_COLOR_KEYS[hashStringToNumber(name) % EQUIPMENT_COLOR_KEYS.length] as keyof typeof EQUIPMENT_COLOR_MAP;
+  };
+  const getEquipmentColorVariant = (equipmentName: string, variant: 'solid' | 'light' | 'border' = 'solid'): string => {
+    const key = resolveEquipmentColorKey(equipmentName);
+    return EQUIPMENT_COLOR_MAP[key][variant];
+  };
+
   const getEventColor = (schedule: Schedule) => {
-    return scheduleHelpers.getEventColor(scheduleHelpers.getEventType(schedule), schedule.status);
+    const eventType = scheduleHelpers.getEventType(schedule);
+    const equipmentName = getEquipmentName(schedule);
+    if ((eventType === 'booking' || eventType === 'equipment') && equipmentName) {
+      return getEquipmentColorVariant(equipmentName, 'solid');
+    }
+    return scheduleHelpers.getEventColor(eventType, schedule.status);
   };
 
   const getEventColorLight = (schedule: Schedule) => {
-    return scheduleHelpers.getEventColorLight(scheduleHelpers.getEventType(schedule), schedule.status);
+    const eventType = scheduleHelpers.getEventType(schedule);
+    const equipmentName = getEquipmentName(schedule);
+    if ((eventType === 'booking' || eventType === 'equipment') && equipmentName) {
+      return getEquipmentColorVariant(equipmentName, 'light');
+    }
+    return scheduleHelpers.getEventColorLight(eventType, schedule.status);
   };
+
+  // Render overlapping events for a week day column (0-24h grid)
+  const renderWeekColumnEvents = useCallback((day: { schedules: Schedule[] }) => {
+    // Pre-process events to calculate positions and overlaps
+    const processedEvents = day.schedules.map((schedule: any, eventIndex: number) => {
+      const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
+      const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
+      const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
+      const endMinute = schedule.end_time ? parseInt(schedule.end_time.split(':')[1]) : 0;
+      const startPx = startHour * hourHeightWeek + (startMinute / 60) * hourHeightWeek;
+      const endPx = endHour * hourHeightWeek + (endMinute / 60) * hourHeightWeek;
+      const barHeight = Math.max(endPx - startPx, 56);
+      return { ...schedule, eventIndex, startPx, endPx, barHeight } as any;
+    });
+
+    // Group overlapping events
+    const eventGroups: any[][] = [];
+    const processed = new Set<number>();
+
+    processedEvents.forEach((event, index) => {
+      if (processed.has(index)) return;
+      const group = [event];
+      processed.add(index);
+      for (let i = index + 1; i < processedEvents.length; i++) {
+        if (processed.has(i)) continue;
+        const otherEvent = processedEvents[i];
+        const hasOverlap = group.some(groupEvent => groupEvent.startPx < otherEvent.endPx && groupEvent.endPx > otherEvent.startPx);
+        if (hasOverlap) {
+          group.push(otherEvent);
+          processed.add(i);
+        }
+      }
+      eventGroups.push(group);
+    });
+
+    // Render with proper positioning
+    return eventGroups.flatMap(group => {
+      const groupWidth = Math.max(30, 96 / group.length);
+      return group.map((schedule: any, groupIndex: number) => {
+        const leftOffset = groupIndex * groupWidth;
+        return (
+          <div
+            key={schedule.id}
+            className={`absolute rounded-lg p-2 cursor-pointer text-white shadow-sm transition-all duration-200 hover:shadow-lg hover:scale-105 modern-calendar-event ${getEventColor(schedule)}`}
+            style={{
+              top: schedule.startPx,
+              height: schedule.barHeight,
+              left: `${leftOffset}%`,
+              width: `${groupWidth - 1}%`,
+              zIndex: 10 + schedule.eventIndex,
+              minWidth: 'max(60px, 15%)',
+              maxWidth: 'calc(100% - 4px)'
+            }}
+            onClick={() => {
+              setLocalSelectedEventId(schedule.id);
+              onSelectEvent?.(schedule);
+            }}
+            title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
+          >
+            <div className="h-full flex flex-col p-1 relative overflow-hidden">
+              <div className="flex items-center gap-1 flex-1 min-h-0">
+                <div className="flex-shrink-0 text-xs font-bold event-type-badge rounded-full w-4 h-4 flex items-center justify-center">
+                  {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="event-title text-xs leading-tight truncate font-semibold">{schedule.title}</div>
+                  <div className="event-time text-xs leading-tight opacity-90">{formatTime(schedule.start_time)}</div>
+                </div>
+                {group.length <= 2 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditEvent?.(schedule);
+                    }}
+                    className="flex-shrink-0 p-0.5 hover:bg-white hover:bg-opacity-25 rounded transition-all bg-white bg-opacity-10 icon"
+                    title="Edit event"
+                  >
+                    <Edit3 className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
+              {schedule.location && schedule.barHeight > 70 && (
+                <div className="flex items-center gap-1 mt-1 flex-shrink-0">
+                  <MapPin className="w-2 h-2 icon flex-shrink-0" />
+                  <span className="event-location text-xs truncate">{schedule.location}</span>
+                </div>
+              )}
+              {schedule.status !== 'scheduled' && schedule.barHeight > 60 && (
+                <div className="absolute bottom-1 right-1">
+                  <span className="text-xs font-medium px-1.5 py-0.5 bg-white bg-opacity-20 rounded text-white">
+                    {schedule.status.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white bg-opacity-50"></div>
+            </div>
+          </div>
+        );
+      });
+    });
+  }, [hourHeightWeek, getEventColor, formatTime, onEditEvent, onSelectEvent]);
 
   if (loading) {
     return (
@@ -435,31 +624,46 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
               {/* Today's Summary */}
               <div className="card p-4">
-                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Zap className="w-4 h-4 text-yellow-500" />
                   Today's Overview
                 </h3>
                 {schedules.filter(s => s.date === getCurrentDateET()).length === 0 ? (
                   <p className="text-gray-500 text-sm">No events today</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {schedules
                       .filter(s => s.date === getCurrentDateET())
-                      .slice(0, 3)
+                      .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
                       .map(schedule => (
-                        <div key={schedule.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors">
-                          <div className={`w-3 h-3 rounded-full shadow-sm ${
-                            scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-gradient-to-r from-purple-500 to-purple-600' :
-                            scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
-                            scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
-                            scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' :
-                            'bg-gradient-to-r from-indigo-500 to-indigo-600'
+                        <div key={schedule.id} className="flex items-center gap-2.5 p-1.5 rounded-md hover:bg-gray-50 transition-colors">
+                          <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${
+                            (['booking','equipment'].includes(scheduleHelpers.getEventType(schedule)) && getEquipmentName(schedule))
+                              ? getEquipmentColorVariant(getEquipmentName(schedule) as string, 'solid')
+                              : scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-purple-500' :
+                                scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-blue-500' :
+                                scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-orange-500' :
+                                scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-emerald-500' :
+                                'bg-indigo-500'
                           }`} />
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm text-gray-900 truncate" title={`${schedule.title} (${scheduleHelpers.getEventType(schedule)})`}>
-                              {schedule.title}
-                            </p>
-                            <p className="text-xs text-gray-500">{formatTime(schedule.start_time)}</p>
+                            <div className="flex items-center gap-1 text-xs text-gray-700">
+                              <Clock className="w-3 h-3" />
+                              <span className="font-medium">
+                                {formatTime(schedule.start_time)}
+                                {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-medium text-sm text-gray-900 truncate" title={`${schedule.title} (${scheduleHelpers.getEventType(schedule)})`}>
+                                {schedule.title}
+                              </p>
+                              {getEquipmentName(schedule) && (
+                                <span className="text-[10px] px-1 py-0.5 bg-white bg-opacity-70 text-gray-700 rounded">
+                                  {getEquipmentName(schedule)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))
@@ -476,7 +680,7 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
 
         {/* Main Calendar Area - maximized space utilization */}
         <div className="flex-1 overflow-hidden min-w-0" ref={containerRef}>
-          {/* Month View - Expanded */}
+          {/* Month View - Grid Layout */}
           {viewMode === 'month' && calendarLayout === 'grid' && (
             <div className="h-full overflow-hidden" style={{ height: availableHeight }}>
               {/* Month Grid View */}
@@ -531,16 +735,20 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         >
                           {/* Event type indicator dot */}
                           <div className={`absolute left-2 top-1/2 transform -translate-y-1/2 w-2 h-2 rounded-full flex-shrink-0 ${
-                            scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-purple-500' :
-                            scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-blue-500' :
-                            scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-orange-500' :
-                            scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-emerald-500' :
-                            'bg-indigo-500'
+                            (['booking','equipment'].includes(scheduleHelpers.getEventType(schedule)) && getEquipmentName(schedule))
+                              ? getEquipmentColorVariant(getEquipmentName(schedule) as string, 'solid')
+                              : scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-purple-500' :
+                                scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-blue-500' :
+                                scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-orange-500' :
+                                scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-emerald-500' :
+                                'bg-indigo-500'
                           }`}></div>
                           
                           <div className="pl-5 overflow-hidden">
                             <div className="font-medium truncate leading-tight">
-                              <span className="text-xs font-bold mr-1">{formatTime(schedule.start_time)}</span>
+                              <span className="text-xs font-bold mr-1">
+                                {formatTime(schedule.start_time)}{schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                              </span>
                               <span className="text-xs">{schedule.title}</span>
                             </div>
                             {schedule.status !== 'scheduled' && (
@@ -574,8 +782,359 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
             </div>
           )}
 
-          {/* Week View - Enhanced */}
-          {viewMode === 'week' && (
+          {/* Month View - List Layout */}
+          {viewMode === 'month' && calendarLayout === 'list' && (
+            <div className="h-full overflow-hidden" style={{ height: availableHeight }}>
+              <div className="h-full overflow-y-auto calendar-scroll-container p-6">
+                <div className="space-y-6">
+                  {calendarDays
+                    .filter(day => day.schedules.length > 0 && day.isCurrentMonth)
+                    .map((day) => (
+                      <div key={day.date} className="card p-6">
+                        {/* Day Header */}
+                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
+                              day.isToday 
+                                ? 'bg-primary-600 text-white' 
+                                : day.isWeekend 
+                                ? 'bg-gray-200 text-gray-700' 
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {day.dayNumber}
+                            </div>
+                            <div>
+                              <h3 className={`text-lg font-semibold ${
+                                day.isToday ? 'text-primary-700' : 'text-gray-900'
+                              }`}>
+                                {formatDate(day.date).dayName}, {formatDate(day.date).monthName} {day.dayNumber}
+                              </h3>
+                              <p className="text-sm text-gray-500">
+                                {day.schedules.length} event{day.schedules.length !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => onCreateEvent?.(day.date)}
+                            className="btn btn-sm btn-outline"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Event
+                          </button>
+                        </div>
+
+                        {/* Compact Events Grid */}
+                        <div className="grid gap-2">
+                          {day.schedules
+                            .sort((a, b) => {
+                              if (!a.start_time || !b.start_time) return 0;
+                              return a.start_time.localeCompare(b.start_time);
+                            })
+                            .map((schedule) => (
+                              <div
+                                key={schedule.id}
+                                className={`p-3 rounded-lg cursor-pointer transition-all duration-150 hover:shadow-sm calendar-list-event ${getEventColorLight(schedule)} border-l-4 ${
+                                  (['booking','equipment'].includes(scheduleHelpers.getEventType(schedule)) && getEquipmentName(schedule))
+                                    ? getEquipmentColorVariant(getEquipmentName(schedule) as string, 'border')
+                                    : scheduleHelpers.getEventType(schedule) === 'meeting' ? 'border-purple-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'booking' ? 'border-blue-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'task' ? 'border-orange-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'equipment' ? 'border-emerald-500' :
+                                      'border-indigo-500'
+                                }`}
+                                onClick={() => {
+                                  setLocalSelectedEventId(schedule.id);
+                                  onSelectEvent?.(schedule);
+                                }}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    {/* Compact Badge */}
+                                    <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-bold text-white ${
+                                      (['booking','equipment'].includes(scheduleHelpers.getEventType(schedule)) && getEquipmentName(schedule))
+                                        ? getEventColor(schedule)
+                                        : scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-purple-500' :
+                                          scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-blue-500' :
+                                          scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-orange-500' :
+                                          scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-emerald-500' :
+                                          'bg-indigo-500'
+                                    }`}>
+                                      {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
+                                    </div>
+                                    
+                                    {/* Main Content */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <h4 className="font-medium text-sm truncate">
+                                          {schedule.title}
+                                        </h4>
+                                        {getEquipmentName(schedule) && (
+                                          <span className="text-xs px-1.5 py-0.5 bg-white bg-opacity-60 text-gray-700 rounded font-medium">
+                                            {getEquipmentName(schedule)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-3 mt-1">
+                                     <div className="flex items-center gap-1 text-xs text-gray-600">
+                                       <Clock className="w-3 h-3" />
+                                       <span className="font-medium">
+                                         {formatTime(schedule.start_time)}
+                                         {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                                       </span>
+                                     </div>
+                                        
+                                        {schedule.location && (
+                                          <div className="flex items-center gap-1 text-xs text-gray-600">
+                                            <MapPin className="w-3 h-3" />
+                                            <span className="truncate max-w-24">{schedule.location}</span>
+                                          </div>
+                                        )}
+                                        
+                                         {schedule.status !== 'scheduled' && (
+                                          <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-medium">
+                                            {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
+                                          </span>
+                                       )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Compact Action Buttons */}
+                                  <div className="flex items-center gap-1 ml-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEditEvent?.(schedule);
+                                      }}
+                                      className="p-1 hover:bg-white hover:bg-opacity-60 rounded transition-colors"
+                                      title="Edit event"
+                                    >
+                                      <Edit3 className="w-3 h-3 text-gray-600" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteEvent?.(schedule.id);
+                                      }}
+                                      className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 rounded transition-colors"
+                                      title="Delete event"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    ))}
+                  
+                  {/* Empty State */}
+                  {calendarDays.filter(day => day.schedules.length > 0 && day.isCurrentMonth).length === 0 && (
+                    <div className="text-center py-12">
+                      <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No events this month</h3>
+                      <p className="text-gray-500 mb-6">Create your first event to get started</p>
+                      <button
+                        onClick={() => onCreateEvent?.(selectedDate)}
+                        className="btn btn-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Create Event
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Day View - List Layout */}
+          {viewMode === 'day' && calendarLayout === 'list' && (
+            <div className="h-full overflow-hidden" style={{ height: availableHeight }}>
+              <div className="h-full overflow-y-auto calendar-scroll-container p-6">
+                <div className="space-y-6">
+                  {calendarDays
+                    .filter(day => day.schedules.length > 0)
+                    .map((day) => (
+                      <div key={day.date} className="space-y-4">
+                        {/* Day Header */}
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-16 h-16 rounded-xl flex items-center justify-center text-xl font-bold ${
+                              day.isToday 
+                                ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white' 
+                                : day.isWeekend 
+                                ? 'bg-gradient-to-br from-gray-200 to-gray-300 text-gray-700' 
+                                : 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-800'
+                            } shadow-sm`}>
+                              {day.dayNumber}
+                            </div>
+                            <div>
+                              <h2 className={`text-2xl font-bold ${
+                                day.isToday ? 'text-primary-700' : 'text-gray-900'
+                              }`}>
+                                {formatDate(day.date).fullDate}
+                              </h2>
+                              <p className="text-gray-600 font-medium">
+                                {day.schedules.length} event{day.schedules.length !== 1 ? 's' : ''} scheduled
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => onCreateEvent?.(day.date)}
+                            className="btn btn-primary"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Event
+                          </button>
+                        </div>
+
+                        {/* Timeline Layout */}
+                        <div className="space-y-1">
+                          {day.schedules
+                            .sort((a, b) => {
+                              if (!a.start_time || !b.start_time) return 0;
+                              return a.start_time.localeCompare(b.start_time);
+                            })
+                            .map((schedule, index) => (
+                              <div
+                                key={schedule.id}
+                                className="flex items-start gap-3 p-2.5 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition-all duration-200 cursor-pointer"
+                                onClick={() => {
+                                  setLocalSelectedEventId(schedule.id);
+                                  onSelectEvent?.(schedule);
+                                }}
+                              >
+                                {/* Timeline Connector */}
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-3.5 h-3.5 rounded-full border-2 ${
+                                    scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-purple-500 border-purple-500' :
+                                    scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-blue-500 border-blue-500' :
+                                    scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-orange-500 border-orange-500' :
+                                    scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-emerald-500 border-emerald-500' :
+                                    'bg-indigo-500 border-indigo-500'
+                                  } shadow-sm`} />
+                                  {index < day.schedules.length - 1 && (
+                                    <div className="w-0.5 h-10 bg-gray-200 mt-1" />
+                                  )}
+                                </div>
+
+                                {/* Compact Event Card */}
+                                <div className={`flex-1 p-2 rounded-lg ${getEventColorLight(schedule)} border-l-3 ${
+                                  (['booking','equipment'].includes(scheduleHelpers.getEventType(schedule)) && getEquipmentName(schedule))
+                                    ? getEquipmentColorVariant(getEquipmentName(schedule) as string, 'border')
+                                    : scheduleHelpers.getEventType(schedule) === 'meeting' ? 'border-purple-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'booking' ? 'border-blue-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'task' ? 'border-orange-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'equipment' ? 'border-emerald-500' :
+                                      'border-indigo-500'
+                                }`}>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      {/* Event Header */}
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <div className="flex items-center gap-2">
+                                          <Clock className="w-3 h-3 text-gray-600" />
+                                          <span className="font-bold text-gray-900 text-sm">
+                                            {formatTime(schedule.start_time)}
+                                            {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                                          </span>
+                                        </div>
+                                          {getEquipmentName(schedule) && (
+                                          <span className="text-xs px-1.5 py-0.5 bg-white bg-opacity-60 text-gray-700 rounded font-medium">
+                                              {getEquipmentName(schedule)}
+                                          </span>
+                                        )}
+                                        {schedule.status !== 'scheduled' && (
+                                          <span className="text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded font-medium">
+                                            {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Event Details */}
+                                      <h3 className="text-sm font-semibold text-gray-900 mb-1 truncate">
+                                        {schedule.title}
+                                      </h3>
+                                      
+                                      {/* Event Meta - Compact */}
+                                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                                        {schedule.location && (
+                                          <div className="flex items-center gap-1">
+                                            <MapPin className="w-3 h-3" />
+                                            <span className="truncate max-w-32">{schedule.location}</span>
+                                          </div>
+                                        )}
+                                        {getAssignedUserName(schedule) && (
+                                          <div className="flex items-center gap-1">
+                                            <Users className="w-3 h-3" />
+                                            <span className="truncate max-w-24">{getAssignedUserName(schedule)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                      
+                                      {schedule.description && (
+                                        <p className="text-xs text-gray-600 mt-1 line-clamp-1 leading-relaxed">
+                                          {schedule.description}
+                                        </p>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Compact Action Buttons */}
+                                    <div className="flex items-center gap-1 ml-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onEditEvent?.(schedule);
+                                        }}
+                                        className="p-1 hover:bg-white hover:bg-opacity-60 rounded transition-colors"
+                                        title="Edit event"
+                                      >
+                                        <Edit3 className="w-3 h-3 text-gray-600" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onDeleteEvent?.(schedule.id);
+                                        }}
+                                        className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 rounded transition-colors"
+                                        title="Delete event"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    ))}
+                  
+                  {/* Empty State */}
+                  {calendarDays.filter(day => day.schedules.length > 0).length === 0 && (
+                    <div className="text-center py-12">
+                      <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No events today</h3>
+                      <p className="text-gray-500 mb-6">Create your first event to get started</p>
+                      <button
+                        onClick={() => onCreateEvent?.(selectedDate)}
+                        className="btn btn-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Create Event
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Week View - Grid Layout */}
+          {viewMode === 'week' && calendarLayout === 'grid' && (
             <div className="h-full flex overflow-hidden" style={{ height: availableHeight }}>
               {/* Time Column - Optimized */}
               <div className="w-16 lg:w-20 border-r border-gray-100 bg-gray-50 flex-shrink-0">
@@ -617,122 +1176,8 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                         ></div>
                       ))}
                       
-                      {/* Events with improved overlap handling */}
-                      {day.schedules.map((schedule, eventIndex) => {
-                        const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
-                        const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
-                        const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
-                        const endMinute = schedule.end_time ? parseInt(schedule.end_time.split(':')[1]) : 0;
-                        const startPx = startHour * hourHeightWeek + (startMinute / 60) * hourHeightWeek;
-                        const endPx = endHour * hourHeightWeek + (endMinute / 60) * hourHeightWeek;
-                        const barHeight = Math.max(endPx - startPx, 56); // Increased minimum height for better text display
-                        
-                        // Calculate overlap with other events
-                        const overlappingEvents = day.schedules.filter((otherSchedule, otherIndex) => {
-                          if (otherIndex >= eventIndex) return false; // Only check previous events
-                          const otherStartHour = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[0]) : 9;
-                          const otherStartMinute = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[1]) : 0;
-                          const otherEndHour = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[0]) : otherStartHour + 1;
-                          const otherEndMinute = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[1]) : 0;
-                          const otherStartPx = otherStartHour * hourHeightWeek + (otherStartMinute / 60) * hourHeightWeek;
-                          const otherEndPx = otherEndHour * hourHeightWeek + (otherEndMinute / 60) * hourHeightWeek;
-                          
-                          // Check if events overlap
-                          return startPx < otherEndPx && endPx > otherStartPx;
-                        });
-                        
-                        const overlapCount = overlappingEvents.length;
-                        const eventWidth = Math.max(30, 98 - (overlapCount * 10)); // Allow narrower events
-                        const leftOffset = overlapCount * 6; // Minimal stagger for maximum space
-                        
-                        return (
-                          <div
-                            key={schedule.id}
-                            className={`absolute rounded-lg p-2 cursor-pointer text-white shadow-sm transition-all duration-200 hover:shadow-lg hover:scale-105 modern-calendar-event ${getEventColor(schedule)}`}
-                            style={{
-                              top: startPx,
-                              height: barHeight,
-                              left: `${2 + leftOffset}px`, // Minimal left margin
-                              right: `${2}px`, // Use right positioning for better space usage
-                              width: `calc(${eventWidth}% - ${leftOffset + 4}px)`,
-                              zIndex: 10 + eventIndex,
-                              minWidth: eventWidth < 60 ? '80px' : eventWidth < 85 ? '120px' : '160px', // Adaptive minimum width
-                              maxWidth: 'calc(100% - 4px)'
-                            }}
-                            onClick={() => {
-                              setLocalSelectedEventId(schedule.id);
-                              onSelectEvent?.(schedule);
-                            }}
-                            title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
-                          >
-                            {/* Horizontal-First Layout Event Card */}
-                            <div className="h-full flex flex-col p-2 relative overflow-hidden">
-                              {/* Single Horizontal Row - All Components */}
-                              <div className="flex items-center gap-1.5 flex-1 min-h-0">
-                                {/* Event Type Badge */}
-                                <div className="flex-shrink-0 text-xs font-bold event-type-badge rounded-full w-5 h-5 flex items-center justify-center">
-                                  {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
-                                </div>
-                                
-                                {/* Title and Time Combined */}
-                                <div className="flex flex-col min-w-0 flex-1">
-                                  <div className="event-title text-xs leading-tight truncate font-semibold">
-                                    {schedule.title}
-                                  </div>
-                                  <div className="event-time text-xs leading-tight opacity-90">
-                                    {formatTime(schedule.start_time)}
-                                    {schedule.end_time && eventWidth > 120 && ` - ${formatTime(schedule.end_time)}`}
-                                  </div>
-                                </div>
-
-                                {/* Location - Horizontal if space allows */}
-                                {schedule.location && eventWidth > 140 && (
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <MapPin className="w-2.5 h-2.5 icon flex-shrink-0" />
-                                    <span className="event-location text-xs truncate max-w-16">
-                                      {schedule.location}
-                                    </span>
-                                  </div>
-                                )}
-                                
-                                {/* Quick Edit Button */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onEditEvent?.(schedule);
-                                  }}
-                                  className="flex-shrink-0 p-0.5 hover:bg-white hover:bg-opacity-25 rounded transition-all bg-white bg-opacity-10 icon"
-                                  title="Edit event"
-                                >
-                                  <Edit3 className="w-2.5 h-2.5" />
-                                </button>
-                              </div>
-
-                              {/* Secondary Row - Only for Very Tall Events */}
-                              {barHeight > 80 && schedule.location && eventWidth <= 140 && (
-                                <div className="flex items-center gap-1 mt-1 flex-shrink-0">
-                                  <MapPin className="w-2.5 h-2.5 icon flex-shrink-0" />
-                                  <span className="event-location text-xs truncate">
-                                    {schedule.location}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Status Badge - Bottom Corner for taller events */}
-                              {schedule.status !== 'scheduled' && barHeight > 60 && (
-                                <div className="absolute bottom-1 right-1">
-                                  <span className="text-xs font-medium px-1.5 py-0.5 bg-white bg-opacity-20 rounded text-white">
-                                    {schedule.status.charAt(0).toUpperCase()}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Left Border Accent */}
-                              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white bg-opacity-50"></div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {/* Events with smart overlap handling */}
+                      {renderWeekColumnEvents(day)}
                     </div>
                   ))}
                 </div>
@@ -740,8 +1185,198 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
             </div>
           )}
 
-          {/* Day View - Enhanced */}
-          {viewMode === 'day' && (
+          {/* Week View - List Layout */}
+          {viewMode === 'week' && calendarLayout === 'list' && (
+            <div className="h-full overflow-hidden" style={{ height: availableHeight }}>
+              <div className="h-full overflow-y-auto calendar-scroll-container p-6">
+                <div className="space-y-6">
+                  {/* Week Header */}
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-white flex items-center justify-center text-xl font-bold shadow-sm">
+                        {formatDate(selectedDate).dayNumber}
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900">
+                          Week of {formatDate(selectedDate).monthName} {formatDate(selectedDate).dayNumber}
+                        </h2>
+                        <p className="text-gray-600 font-medium">
+                          {schedules.length} event{schedules.length !== 1 ? 's' : ''} this week
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onCreateEvent?.(selectedDate)}
+                      className="btn btn-primary"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Event
+                    </button>
+                  </div>
+
+                  {/* Days List */}
+                  {calendarDays.slice(0, 7).map((day) => (
+                    <div key={day.date} className={day.schedules.length > 0 ? "space-y-4" : "hidden"}>
+                      {/* Day Header */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold ${
+                            day.isToday 
+                              ? 'bg-primary-600 text-white' 
+                              : day.isWeekend 
+                              ? 'bg-gray-200 text-gray-700' 
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {day.dayNumber}
+                          </div>
+                          <div>
+                            <h3 className={`text-lg font-semibold ${
+                              day.isToday ? 'text-primary-700' : 'text-gray-900'
+                            }`}>
+                              {formatDate(day.date).dayName}, {formatDate(day.date).monthName} {day.dayNumber}
+                            </h3>
+                            <p className="text-sm text-gray-500">
+                              {day.schedules.length} event{day.schedules.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onCreateEvent?.(day.date)}
+                          className="btn btn-sm btn-ghost"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      {/* Compact Day Events */}
+                      <div className="grid gap-2 ml-13">
+                        {day.schedules
+                          .sort((a, b) => {
+                            if (!a.start_time || !b.start_time) return 0;
+                            return a.start_time.localeCompare(b.start_time);
+                          })
+                          .map((schedule) => (
+                                <div
+                                  key={schedule.id}
+                                className={`p-2.5 rounded-lg cursor-pointer transition-all duration-150 hover:shadow-sm calendar-list-event ${getEventColorLight(schedule)} border-l-3 ${
+                                  (['booking','equipment'].includes(scheduleHelpers.getEventType(schedule)) && getEquipmentName(schedule))
+                                    ? getEquipmentColorVariant(getEquipmentName(schedule) as string, 'border')
+                                    : scheduleHelpers.getEventType(schedule) === 'meeting' ? 'border-purple-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'booking' ? 'border-blue-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'task' ? 'border-orange-500' :
+                                      scheduleHelpers.getEventType(schedule) === 'equipment' ? 'border-emerald-500' :
+                                      'border-indigo-500'
+                              }`}
+                              onClick={() => {
+                                setLocalSelectedEventId(schedule.id);
+                                onSelectEvent?.(schedule);
+                              }}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                  {/* Compact Badge */}
+                                    <div className={`w-5 h-5 rounded flex items-center justify-center text-xs font-bold text-white ${
+                                      (['booking','equipment'].includes(scheduleHelpers.getEventType(schedule)) && getEquipmentName(schedule))
+                                      ? getEventColor(schedule)
+                                      : scheduleHelpers.getEventType(schedule) === 'meeting' ? 'bg-purple-500' :
+                                        scheduleHelpers.getEventType(schedule) === 'booking' ? 'bg-blue-500' :
+                                        scheduleHelpers.getEventType(schedule) === 'task' ? 'bg-orange-500' :
+                                        scheduleHelpers.getEventType(schedule) === 'equipment' ? 'bg-emerald-500' :
+                                        'bg-indigo-500'
+                                  }`}>
+                                    {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
+                                  </div>
+                                  
+                                  {/* Main Content */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-medium text-sm truncate">
+                                        {schedule.title}
+                                      </h4>
+                                      {getEquipmentName(schedule) && (
+                                        <span className="text-xs px-1.5 py-0.5 bg-white bg-opacity-60 text-gray-700 rounded font-medium">
+                                          {getEquipmentName(schedule)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-3 mt-0.5">
+                                      <div className="flex items-center gap-1 text-xs text-gray-600">
+                                        <Clock className="w-3 h-3" />
+                                        <span className="font-medium">
+                                          {formatTime(schedule.start_time)}
+                                          {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                                        </span>
+                                      </div>
+                                      
+                                      {schedule.location && (
+                                        <div className="flex items-center gap-1 text-xs text-gray-600">
+                                          <MapPin className="w-3 h-3" />
+                                          <span className="truncate max-w-20">{schedule.location}</span>
+                                        </div>
+                                      )}
+                                      
+                                      {schedule.status !== 'scheduled' && (
+                                        <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-medium">
+                                          {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Compact Action Buttons */}
+                                <div className="flex items-center gap-1 ml-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onEditEvent?.(schedule);
+                                    }}
+                                    className="p-1 hover:bg-white hover:bg-opacity-60 rounded transition-colors"
+                                    title="Edit event"
+                                  >
+                                    <Edit3 className="w-3 h-3 text-gray-600" />
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDeleteEvent?.(schedule.id);
+                                    }}
+                                    className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 rounded transition-colors"
+                                    title="Delete event"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Empty State */}
+                  {calendarDays.slice(0, 7).every(day => day.schedules.length === 0) && (
+                    <div className="text-center py-12">
+                      <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No events this week</h3>
+                      <p className="text-gray-500 mb-6">Create your first event to get started</p>
+                      <button
+                        onClick={() => onCreateEvent?.(selectedDate)}
+                        className="btn btn-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Create Event
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Day View - Grid Layout */}
+          {viewMode === 'day' && calendarLayout === 'grid' && (
             <div className="h-full flex overflow-hidden" style={{ height: availableHeight }}>
               {/* Time Column - Optimized for Working Hours */}
               <div className="w-20 lg:w-24 border-r border-gray-100 bg-gray-50 flex-shrink-0">
@@ -772,154 +1407,142 @@ const ModernCalendarView: React.FC<ModernCalendarViewProps> = ({
                   );
                 })}
                 
-                {/* Events with enhanced layout and overlap handling */}
-                {schedules
-                  .filter(s => s.date === selectedDate)
-                  .reduce((unique: Schedule[], schedule) => {
-                    // Deduplicate by title, date, and start_time
-                    const exists = unique.some(
-                      existing => existing.title === schedule.title && 
-                                 existing.date === schedule.date &&
-                                 existing.start_time === schedule.start_time
-                    );
-                    if (!exists) {
-                      unique.push(schedule);
-                    }
-                    return unique;
-                  }, [])
-                  .map((schedule, eventIndex, allEvents) => {
-                  const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
-                  const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
-                  const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
-                  const endMinute = schedule.end_time ? parseInt(schedule.end_time.split(':')[1]) : 0;
-                  
-                  // Adjust position calculation for working hours (6 AM - 12 AM)
-                  const adjustedStartHour = startHour >= 6 ? startHour - 6 : startHour + 24 - 6;
-                  const adjustedEndHour = endHour >= 6 ? endHour - 6 : endHour + 24 - 6;
-                  const startPosition = adjustedStartHour * hourHeightDay + (startMinute / 60) * hourHeightDay;
-                  const endPosition = adjustedEndHour * hourHeightDay + (endMinute / 60) * hourHeightDay;
-                  const height = Math.max(endPosition - startPosition, 90); // Increased minimum height for better layout
-                  
-                  // Calculate overlaps for proper positioning
-                  const overlappingEvents = allEvents.filter((otherSchedule, otherIndex) => {
-                    if (otherIndex >= eventIndex) return false;
-                    const otherStartHour = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[0]) : 9;
-                    const otherStartMinute = otherSchedule.start_time ? parseInt(otherSchedule.start_time.split(':')[1]) : 0;
-                    const otherEndHour = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[0]) : otherStartHour + 1;
-                    const otherEndMinute = otherSchedule.end_time ? parseInt(otherSchedule.end_time.split(':')[1]) : 0;
-                    const adjustedOtherStartHour = otherStartHour >= 6 ? otherStartHour - 6 : otherStartHour + 24 - 6;
-                    const adjustedOtherEndHour = otherEndHour >= 6 ? otherEndHour - 6 : otherEndHour + 24 - 6;
-                    const otherStartPosition = adjustedOtherStartHour * hourHeightDay + (otherStartMinute / 60) * hourHeightDay;
-                    const otherEndPosition = adjustedOtherEndHour * hourHeightDay + (otherEndMinute / 60) * hourHeightDay;
-                    
-                    return startPosition < otherEndPosition && endPosition > otherStartPosition;
+                {/* Events with enhanced layout and true side-by-side handling */}
+                {(() => {
+                  // 1) Prepare and de-duplicate all events for the day with pixel positions
+                  const uniqueEvents: Schedule[] = schedules
+                    .filter(s => s.date === selectedDate)
+                    .reduce((unique: Schedule[], schedule) => {
+                      const exists = unique.some(
+                        existing => existing.title === schedule.title &&
+                                   existing.date === schedule.date &&
+                                   existing.start_time === schedule.start_time
+                      );
+                      if (!exists) unique.push(schedule);
+                      return unique;
+                    }, []);
+
+                  const processedEvents = uniqueEvents.map((schedule, eventIndex) => {
+                    const startHour = schedule.start_time ? parseInt(schedule.start_time.split(':')[0]) : 9;
+                    const startMinute = schedule.start_time ? parseInt(schedule.start_time.split(':')[1]) : 0;
+                    const endHour = schedule.end_time ? parseInt(schedule.end_time.split(':')[0]) : startHour + 1;
+                    const endMinute = schedule.end_time ? parseInt(schedule.end_time.split(':')[1]) : 0;
+
+                    const adjustedStartHour = startHour >= 6 ? startHour - 6 : startHour + 24 - 6;
+                    const adjustedEndHour = endHour >= 6 ? endHour - 6 : endHour + 24 - 6;
+                    const startPx = adjustedStartHour * hourHeightDay + (startMinute / 60) * hourHeightDay;
+                    const endPx = adjustedEndHour * hourHeightDay + (endMinute / 60) * hourHeightDay;
+                    const barHeight = Math.max(endPx - startPx, 90);
+                    return { ...schedule, eventIndex, startPx, endPx, barHeight } as any;
                   });
-                  
-                  const overlapCount = overlappingEvents.length;
-                  const eventWidth = Math.max(30, 96 - (overlapCount * 8)); // Allow narrower events for horizontal layout
-                  const leftOffset = overlapCount * 4; // Minimal offset for maximum space
-                  
-                  return (
-                    <div
-                      key={schedule.id}
-                      className={`absolute rounded-xl p-5 cursor-pointer text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.01] modern-calendar-event ${getEventColor(schedule)}`}
-                      style={{
-                        top: startPosition,
-                        height: height,
-                        left: `${8 + leftOffset}px`, // Minimal left margin
-                        right: `8px`, // Use right positioning
-                        width: `calc(${eventWidth}% - ${leftOffset + 16}px)`,
-                        zIndex: 10 + eventIndex,
-                        minWidth: eventWidth < 60 ? '150px' : eventWidth < 85 ? '200px' : '320px', // Adaptive minimum width
-                        maxWidth: 'calc(100% - 16px)' // Ensure it doesn't overflow
-                      }}
-                      onClick={() => {
-                        setLocalSelectedEventId(schedule.id);
-                        onSelectEvent?.(schedule);
-                      }}
-                      title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
-                    >
-                      {/* Horizontal-First Day View Event Card Layout */}
-                      <div className="h-full flex flex-col p-3 relative overflow-hidden">
-                        {/* Main Horizontal Row - Badge, Title, Time, Location, Button */}
-                        <div className="flex items-center gap-2 mb-2 flex-shrink-0">
-                          {/* Event Type Badge */}
-                          <div className="flex-shrink-0 text-xs event-type-badge rounded-full w-6 h-6 flex items-center justify-center">
-                            {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
-                          </div>
-                          
-                          {/* Title and Time Combined Column */}
-                          <div className="flex flex-col min-w-0 flex-1">
-                            <div className="event-title text-sm leading-tight truncate font-semibold">
-                              {schedule.title}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="w-2.5 h-2.5 icon flex-shrink-0" />
-                              <span className="text-xs event-time truncate">
-                                {formatTime(schedule.start_time)}
-                                {schedule.end_time && eventWidth > 200 && ` - ${formatTime(schedule.end_time)}`}
-                              </span>
-                            </div>
-                          </div>
 
-                          {/* Location - Horizontal if space allows */}
-                          {schedule.location && eventWidth > 250 && (
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <MapPin className="w-2.5 h-2.5 icon flex-shrink-0" />
-                              <span className="text-xs event-location truncate max-w-24">
-                                {schedule.location}
-                              </span>
+                  // 2) Group overlapping events so each group can be evenly divided horizontally
+                  const groups: any[][] = [];
+                  const visited = new Set<number>();
+
+                  processedEvents.forEach((evt, idx) => {
+                    if (visited.has(idx)) return;
+                    const group = [evt];
+                    visited.add(idx);
+
+                    for (let j = idx + 1; j < processedEvents.length; j++) {
+                      if (visited.has(j)) continue;
+                      const other = processedEvents[j];
+                      const overlaps = group.some(e => e.startPx < other.endPx && e.endPx > other.startPx);
+                      if (overlaps) {
+                        group.push(other);
+                        visited.add(j);
+                      }
+                    }
+                    groups.push(group);
+                  });
+
+                  // 3) Render each group with equal widths and small gaps
+                  return groups.flatMap(group => {
+                    const groupWidth = Math.max(28, 96 / group.length);
+                    return group.map((schedule: any, groupIndex: number) => {
+                      const leftOffset = groupIndex * groupWidth;
+                      return (
+                        <div
+                          key={schedule.id}
+                          className={`absolute rounded-xl p-5 cursor-pointer text-white shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-[1.01] modern-calendar-event ${getEventColor(schedule)}`}
+                          style={{
+                            top: schedule.startPx,
+                            height: schedule.barHeight,
+                            left: `${leftOffset}%`,
+                            width: `${groupWidth - 1}%`,
+                            zIndex: 10 + schedule.eventIndex,
+                            minWidth: 'max(110px, 18%)',
+                            maxWidth: 'calc(100% - 16px)'
+                          }}
+                          onClick={() => {
+                            setLocalSelectedEventId(schedule.id);
+                            onSelectEvent?.(schedule);
+                          }}
+                          title={`${schedule.title} - ${formatTime(schedule.start_time)} (${scheduleHelpers.getEventType(schedule)})`}
+                        >
+                          <div className="h-full flex flex-col p-3 relative overflow-hidden">
+                            <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+                              <div className="flex-shrink-0 text-xs event-type-badge rounded-full w-6 h-6 flex items-center justify-center">
+                                {scheduleHelpers.getEventType(schedule).charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                <div className="event-title text-sm leading-tight truncate font-semibold">
+                                  {schedule.title}
+                                </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5 icon flex-shrink-0" />
+                    <span className="text-xs event-time truncate">
+                      {formatTime(schedule.start_time)}
+                      {schedule.end_time && ` - ${formatTime(schedule.end_time)}`}
+                    </span>
+                  </div>
+                              </div>
+                              {schedule.location && groupWidth > 60 && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <MapPin className="w-2.5 h-2.5 icon flex-shrink-0" />
+                                  <span className="text-xs event-location truncate max-w-24">
+                                    {schedule.location}
+                                  </span>
+                                </div>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditEvent?.(schedule);
+                                }}
+                                className="flex-shrink-0 p-1 hover:bg-white hover:bg-opacity-25 rounded-md transition-all bg-white bg-opacity-10 icon"
+                                title="Edit event"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
                             </div>
-                          )}
-                          
-                          {/* Quick Action Button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onEditEvent?.(schedule);
-                            }}
-                            className="flex-shrink-0 p-1 hover:bg-white hover:bg-opacity-25 rounded-md transition-all bg-white bg-opacity-10 icon"
-                            title="Edit event"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </button>
+                            {schedule.location && groupWidth <= 60 && schedule.barHeight > 60 && (
+                              <div className="flex items-center gap-1 mb-2 flex-shrink-0">
+                                <MapPin className="w-3 h-3 icon flex-shrink-0" />
+                                <span className="text-xs event-location truncate">{schedule.location}</span>
+                              </div>
+                            )}
+                            {schedule.description && schedule.barHeight > 100 && (
+                              <div className="text-xs text-white opacity-80 line-clamp-2 flex-1 overflow-hidden leading-relaxed">
+                                {schedule.description}
+                              </div>
+                            )}
+                            {schedule.status !== 'scheduled' && (
+                              <div className="absolute bottom-2 right-2">
+                                <span className="text-xs status-badge px-2 py-1 rounded-full">
+                                  {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-white bg-opacity-50 rounded-r-sm"></div>
+                          </div>
+                          <div className="absolute left-0 top-0 bottom-0 w-2 bg-white bg-opacity-50 rounded-r-lg"></div>
                         </div>
-
-                        {/* Secondary Row - Only for location when not shown horizontally */}
-                        {schedule.location && eventWidth <= 250 && height > 60 && (
-                          <div className="flex items-center gap-1 mb-2 flex-shrink-0">
-                            <MapPin className="w-3 h-3 icon flex-shrink-0" />
-                            <span className="text-xs event-location truncate">
-                              {schedule.location}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Description - Only for tall events */}
-                        {schedule.description && height > 100 && (
-                          <div className="text-xs text-white opacity-80 line-clamp-2 flex-1 overflow-hidden leading-relaxed">
-                            {schedule.description}
-                          </div>
-                        )}
-
-                        {/* Status Badge - Bottom Corner */}
-                        {schedule.status !== 'scheduled' && (
-                          <div className="absolute bottom-2 right-2">
-                            <span className="text-xs status-badge px-2 py-1 rounded-full">
-                              {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Left Border Accent */}
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-white bg-opacity-50 rounded-r-sm"></div>
-                      </div>
-                      
-                      {/* Event connection line - enhanced */}
-                      <div className="absolute left-0 top-0 bottom-0 w-2 bg-white bg-opacity-50 rounded-r-lg"></div>
-                    </div>
-                  );
-                })}
+                      );
+                    });
+                  });
+                })()}
               </div>
             </div>
           )}

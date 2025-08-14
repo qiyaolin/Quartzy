@@ -79,15 +79,22 @@ def schedules_api(request):
                 pass
         
         # Convert to frontend-compatible format
+        from .models import get_eastern_timezone
+        eastern_tz = get_eastern_timezone()
+        
         events = []
         for event in queryset.order_by('start_time'):
+            # Convert times to Eastern timezone
+            start_time_et = event.start_time.astimezone(eastern_tz)
+            end_time_et = event.end_time.astimezone(eastern_tz)
+            
             events.append({
                 'id': event.id,
                 'title': event.title,
                 'description': event.description or '',
-                'date': event.start_time.date().isoformat(),
-                'start_time': event.start_time.strftime('%H:%M'),
-                'end_time': event.end_time.strftime('%H:%M'),
+                'date': start_time_et.date().isoformat(),
+                'start_time': start_time_et.strftime('%H:%M'),
+                'end_time': end_time_et.strftime('%H:%M'),
                 'location': '',  # Event model doesn't have location, could add later
                 'status': 'scheduled',  # Map event_type to status if needed
                 'attendees_count': 0,
@@ -129,13 +136,16 @@ def schedules_api(request):
             )
             
             # Return frontend-compatible response
+            start_time_et = event.start_time.astimezone(eastern_tz)
+            end_time_et = event.end_time.astimezone(eastern_tz)
+            
             response_data = {
                 'id': event.id,
                 'title': event.title,
                 'description': event.description or '',
-                'date': event.start_time.date().isoformat(),
-                'start_time': event.start_time.strftime('%H:%M'),
-                'end_time': event.end_time.strftime('%H:%M'),
+                'date': start_time_et.date().isoformat(),
+                'start_time': start_time_et.strftime('%H:%M'),
+                'end_time': end_time_et.strftime('%H:%M'),
                 'location': '',
                 'status': 'scheduled',
                 'attendees_count': 0,

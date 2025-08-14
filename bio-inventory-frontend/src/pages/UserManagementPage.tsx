@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import Pagination from '../components/Pagination.tsx';
 import UsersTable from '../components/UsersTable.tsx';
+import { releaseUserColor, reactivateUser } from '../utils/userColors.ts';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUsers }) => {
@@ -43,6 +44,16 @@ const UserManagementPage = ({ onEditUser, onDeleteUser, refreshKey, users, setUs
             });
             const updatedData = await updatedResponse.json();
             setUsers(updatedData);
+
+            // Release or reassign color based on new status
+            const updatedUser = updatedData.find((u) => u.id === user.id);
+            if (updatedUser) {
+                if (updatedUser.is_active === false) {
+                    releaseUserColor(updatedUser.username);
+                } else if (updatedUser.is_active === true) {
+                    reactivateUser(updatedUser.username);
+                }
+            }
         } catch (e) { 
             alert(e.message); 
         }

@@ -27,7 +27,9 @@ from .models import (
     TaskRotationQueue, QueueMember, TaskSwapRequest, NotificationRecord,
     # Intelligent Meeting Management Models
     MeetingConfiguration, MeetingInstance, Presenter, RotationSystem,
-    QueueEntry, SwapRequest, PresentationHistory
+    QueueEntry, SwapRequest, PresentationHistory,
+    # Timezone functions
+    get_eastern_timezone, get_eastern_now, get_eastern_today
 )
 from .serializers import (
     EventSerializer, EquipmentSerializer, BookingSerializer, 
@@ -119,11 +121,16 @@ class EventViewSet(viewsets.ModelViewSet):
                     # 如果Event记录了booking类型但没有对应的booking对象，跳过
                     continue
             
+            # Convert times to Eastern timezone for consistent display
+            eastern_tz = get_eastern_timezone()
+            event_start_eastern = event.start_time.astimezone(eastern_tz)
+            event_end_eastern = event.end_time.astimezone(eastern_tz)
+            
             event_data = {
                 'id': event.id,
                 'title': event.title,
-                'start_time': event.start_time,
-                'end_time': event.end_time,
+                'start_time': event_start_eastern.isoformat(),
+                'end_time': event_end_eastern.isoformat(),
                 'event_type': event.event_type,
                 'description': event.description or '',
             }
@@ -993,7 +1000,9 @@ class MeetingInstanceViewSet(viewsets.ModelViewSet):
                 self.sync_service = None
     
     def get_queryset(self):
-        queryset = MeetingInstance.objects.select_related('event').prefetch_related('presenters')
+        queryset = MeetingInstance.objects.select_related('event').prefetch_related(
+            'presenters__user'  # Optimize by prefetching user data as well
+        )
         
         # Filter by meeting type
         meeting_type = self.request.query_params.get('meeting_type')
@@ -3120,7 +3129,7 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
             )
 
     def _get_today_events(self, user, today):
-        """Get all events for today with deduplication"""
+        """Get all events for today with deduplication and consistent status filtering"""
         events = Event.objects.filter(
             start_time__date=today
         ).select_related(
@@ -3135,6 +3144,15 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
         seen_events = set()  # Track seen events to prevent duplicates
         
         for event in events:
+            # Skip booking events with invalid status (consistent with equipment_bookings filtering)
+            if event.event_type == 'booking':
+                try:
+                    booking = event.booking
+                    if booking.status not in ['confirmed', 'pending', 'in_progress']:
+                        continue
+                except Booking.DoesNotExist:
+                    continue
+            
             # Create a unique identifier for the event to prevent duplicates
             event_identifier = (
                 event.title, 
@@ -3150,11 +3168,16 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
                 continue
             seen_events.add(event_identifier)
             
+            # Convert times to Eastern timezone for consistent display
+            eastern_tz = get_eastern_timezone()
+            event_start_eastern = event.start_time.astimezone(eastern_tz)
+            event_end_eastern = event.end_time.astimezone(eastern_tz)
+            
             event_data = {
                 'id': event.id,
                 'title': event.title,
-                'start_time': event.start_time,
-                'end_time': event.end_time,
+                'start_time': event_start_eastern.isoformat(),
+                'end_time': event_end_eastern.isoformat(),
                 'event_type': event.event_type,
                 'description': event.description,
                 'is_mine': False
@@ -3256,19 +3279,26 @@ class UnifiedDashboardViewSet(viewsets.ViewSet):
 
         equipment_bookings = []
         for booking in bookings:
+            # Use Eastern timezone for consistency
+            eastern_tz = get_eastern_timezone()
+            eastern_now = get_eastern_now()
+            booking_start_eastern = booking.event.start_time.astimezone(eastern_tz)
+            booking_end_eastern = booking.event.end_time.astimezone(eastern_tz)
+            
             time_until_val = None
-            if booking.event.start_time > timezone.now():
-                time_until_val = (booking.event.start_time - timezone.now()).total_seconds() / 3600
+            if booking_start_eastern > eastern_now:
+                time_until_val = (booking_start_eastern - eastern_now).total_seconds() / 3600
 
             booking_data = {
                 'id': booking.id,
                 'equipment_name': booking.equipment.name,
                 'equipment_location': booking.equipment.location,
-                'start_time': booking.event.start_time,
-                'end_time': booking.event.end_time,
+                'start_time': booking_start_eastern.isoformat(),
+                'end_time': booking_end_eastern.isoformat(),
                 'status': booking.status,
-                'is_today': booking.event.start_time.date() == start_date,
-                'time_until': time_until_val
+                'is_today': booking_start_eastern.date() == start_date,
+                'time_until': time_until_val,
+                'requires_qr_checkin': getattr(booking.equipment, 'requires_qr_checkin', False)
             }
             equipment_bookings.append(booking_data)
 

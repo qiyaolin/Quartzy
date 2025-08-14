@@ -124,7 +124,7 @@
 
 /* Event positioning improvements */
 .calendar-event-positioned {
-  min-width: 120px;
+  min-width: max(60px, 15%); /* Responsive minimum width */
   max-width: calc(100% - 8px);
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -318,4 +318,89 @@
   flex-shrink: 0;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* Responsive event width improvements */
+.modern-calendar-event {
+  /* Use CSS container queries for responsive behavior when supported */
+  container-type: inline-size;
+}
+
+@container (min-width: 200px) {
+  .modern-calendar-event .event-time {
+    font-size: 0.75rem;
+  }
+  
+  .modern-calendar-event .event-location {
+    display: block;
+  }
+}
+
+@container (min-width: 160px) {
+  .modern-calendar-event .event-title {
+    font-size: 0.75rem;
+  }
+}
+
+@container (max-width: 120px) {
+  .modern-calendar-event .event-time {
+    font-size: 0.625rem;
+  }
+  
+  .modern-calendar-event .event-location {
+    display: none;
+  }
+}
+
+/* List view enhancements */
+.calendar-list-event {
+  transition: all 0.2s ease;
+  border: 1px solid rgba(229, 231, 235, 0.6);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.calendar-list-event:hover {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.03);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+}
+
+/* Tighter paddings for list view cards */
+.calendar-list-event .text-sm { line-height: 1.25rem; }
+.calendar-list-event .px-1\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+.calendar-list-event .py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+
+/* Improved responsive breakpoints for calendar events */
+@media (max-width: 1200px) {
+  .modern-calendar-event {
+    padding: 0.5rem;
+  }
+  
+  .modern-calendar-event .event-title {
+    font-size: 0.75rem;
+  }
+  
+  .modern-calendar-event .event-time {
+    font-size: 0.625rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .modern-calendar-event {
+    padding: 0.375rem;
+    min-height: 32px;
+  }
+  
+  .modern-calendar-event .event-title {
+    font-size: 0.625rem;
+  }
+  
+  .modern-calendar-event .event-time {
+    font-size: 0.5625rem;
+  }
+  
+  .modern-calendar-event .event-location {
+    display: none;
+  }
 }

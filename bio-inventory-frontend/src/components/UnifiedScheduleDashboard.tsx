@@ -246,15 +246,31 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
     // Helper function to check if an event is completed
     const isEventCompleted = (event: TodayEvent) => {
         const now = new Date();
-        const eventEndTime = new Date(`${now.toDateString()} ${event.end_time}`);
+        // Handle both datetime strings (from backend) and time-only strings
+        const eventEndTime = new Date(event.end_time);
+        // If parsing as full datetime fails, fall back to time-only parsing
+        if (isNaN(eventEndTime.getTime())) {
+            const todayDateString = now.toDateString();
+            const fallbackEndTime = new Date(`${todayDateString} ${event.end_time}`);
+            return fallbackEndTime < now;
+        }
         return eventEndTime < now;
     };
 
     // Helper function to get event status (ongoing, upcoming, completed)
     const getEventStatus = (event: TodayEvent) => {
         const now = new Date();
-        const eventStartTime = new Date(`${now.toDateString()} ${event.start_time}`);
-        const eventEndTime = new Date(`${now.toDateString()} ${event.end_time}`);
+        
+        // Handle both datetime strings (from backend) and time-only strings
+        let eventStartTime = new Date(event.start_time);
+        let eventEndTime = new Date(event.end_time);
+        
+        // If parsing as full datetime fails, fall back to time-only parsing
+        if (isNaN(eventStartTime.getTime()) || isNaN(eventEndTime.getTime())) {
+            const todayDateString = now.toDateString();
+            eventStartTime = new Date(`${todayDateString} ${event.start_time}`);
+            eventEndTime = new Date(`${todayDateString} ${event.end_time}`);
+        }
         
         if (eventEndTime < now) return 'completed';
         if (eventStartTime <= now && eventEndTime >= now) return 'ongoing';
@@ -364,7 +380,7 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
                 return (
                     <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full border border-green-200 flex items-center gap-1">
                         <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                        Ongoing
+                        In Progress
                     </span>
                 );
             case 'upcoming':
@@ -414,18 +430,25 @@ const UnifiedScheduleDashboard: React.FC<UnifiedScheduleDashboardProps> = ({
 
     // Helper function to convert TodayEvent to Schedule format for modal
     const convertEventToSchedule = (event: TodayEvent): Schedule & { is_mine?: boolean } => {
+        // Extract date from the event's start_time if it's a full datetime string
+        let eventDate = new Date().toISOString().split('T')[0]; // Default to today
+        const startDateTime = new Date(event.start_time);
+        if (!isNaN(startDateTime.getTime())) {
+            eventDate = startDateTime.toISOString().split('T')[0];
+        }
+
         return {
             id: event.id,
             title: event.title,
             description: event.description,
-            date: new Date().toISOString().split('T')[0], // Today's date
+            date: eventDate,
             start_time: event.start_time,
             end_time: event.end_time,
             status: event.status || 'scheduled',
             location: '', // Not available in TodayEvent
             equipment: event.equipment_name ? { name: event.equipment_name } : null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            created_at: '', // Don't use dynamic timestamps that cause issues
+            updated_at: '', // Don't use dynamic timestamps that cause issues
             is_mine: event.is_mine // Preserve ownership information
         } as Schedule & { is_mine?: boolean };
     };

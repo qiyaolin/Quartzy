@@ -1176,9 +1176,13 @@ const SchedulePage: React.FC = () => {
                             setIsMeetingEditModalOpen(true);
                         }}
                         isAdmin={isAdmin}
-                        onOpenJournalClubHub={(meetingId, initialTab) => {
+                        onOpenJournalClubHub={(meetingId, initialTab, onUpdate) => {
                             setJournalClubMeetingId(meetingId ? String(meetingId) : null);
                             setIsJournalClubHubOpen(true);
+                            // Store the update callback for later use
+                            if (onUpdate) {
+                                (window as any).__journalClubUpdateCallback = onUpdate;
+                            }
                             // store desired initial tab in URL hash to pass to Hub (simple approach)
                             if (initialTab) {
                                 window.location.hash = `jc-tab=${initialTab}`;
@@ -1420,7 +1424,8 @@ const SchedulePage: React.FC = () => {
                                 title: taskData.title,
                                 description: taskData.description,
                                 cron_schedule: taskData.cron_schedule,
-                                assignee_group: taskData.assignee_group,
+                                // Pass IDs list for backend rotation queue creation
+                                assignee_group_ids: taskData.assignee_group,
                                 location: taskData.location,
                                 is_active: true
                             });
@@ -1477,12 +1482,31 @@ const SchedulePage: React.FC = () => {
                     <div className="modal-panel modal-panel-large">
                         <div className="card-header flex items-center justify-between">
                             <h3 className="text-lg font-semibold text-gray-900">Submit Journal Club Paper</h3>
-                            <button onClick={() => setIsJournalClubHubOpen(false)} className="btn btn-ghost btn-xs">✕</button>
+                            <button 
+                                onClick={() => {
+                                    setIsJournalClubHubOpen(false);
+                                    // Call the update callback if it exists
+                                    const callback = (window as any).__journalClubUpdateCallback;
+                                    if (callback && typeof callback === 'function') {
+                                        callback();
+                                        // Clean up the callback
+                                        delete (window as any).__journalClubUpdateCallback;
+                                    }
+                                }} 
+                                className="btn btn-ghost btn-xs"
+                            >✕</button>
                         </div>
                         <div className="card-body">
                             <JournalClubHub 
                                 meetingId={journalClubMeetingId || undefined}
                                 initialTab={(window.location.hash.match(/jc-tab=(current|archive|upload)/)?.[1] as any) || 'current'}
+                                onUpdate={() => {
+                                    // Call the stored update callback
+                                    const callback = (window as any).__journalClubUpdateCallback;
+                                    if (callback && typeof callback === 'function') {
+                                        callback();
+                                    }
+                                }}
                             />
                         </div>
                     </div>

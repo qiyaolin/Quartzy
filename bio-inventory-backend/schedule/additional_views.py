@@ -1951,7 +1951,7 @@ class TaskSystemAdapter:
         Enhance task data with rotation queue information
         """
         try:
-            rotation_queue = template.rotation_queues.first()
+            rotation_queue = getattr(template, 'rotation_queue', None)
             if rotation_queue:
                 # Get eligible users from rotation queue
                 eligible_users = rotation_queue.queue_members.filter(is_active=True)
@@ -2049,7 +2049,7 @@ class RecurringTaskCompatibilityView(APIView):
                     try:
                         user = User.objects.get(id=user_id)
                         QueueMember.objects.create(
-                            queue=rotation_queue,
+                            rotation_queue=rotation_queue,
                             user=user,
                             is_active=True
                         )
@@ -2307,7 +2307,7 @@ class TaskAssignmentCompatibilityView(APIView):
                 try:
                     user = User.objects.get(id=user_id)
                     QueueMember.objects.create(
-                        queue=rotation_queue,
+                        rotation_queue=rotation_queue,
                         user=user,
                         is_active=True
                     )

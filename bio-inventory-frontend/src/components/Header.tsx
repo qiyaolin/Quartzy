@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AuthContext } from './AuthContext.tsx';
 import NotificationCenter from './NotificationCenter.tsx';
+import { getUserColor } from '../utils/userColors.ts';
 
 const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, handleInventoryFilterChange, handleRequestFilterChange, device, isSidebarOpen, onToggleSidebar }) => {
     const { user, logout } = useContext(AuthContext);
@@ -164,7 +165,7 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
                             }`}
                         >
                             <div className="relative">
-                                <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                <div className={`w-9 h-9 bg-gradient-to-br ${user?.is_active !== false && user?.username ? getUserColor(user.username) : 'from-gray-400 to-gray-600'} rounded-2xl flex items-center justify-center text-white font-bold text-sm shadow-md`}>
                                     {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
                                 </div>
                                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success-500 rounded-full border-2 border-white"></div>
@@ -184,7 +185,7 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
                                 {/* User Info Header */}
                                 <div className="px-4 py-4 bg-gradient-to-r from-primary-50 to-primary-100 border-b border-gray-100">
                                     <div className="flex items-center space-x-3">
-                                        <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-md">
+                                        <div className={`w-12 h-12 bg-gradient-to-br ${user?.is_active !== false && user?.username ? getUserColor(user.username) : 'from-gray-400 to-gray-600'} rounded-2xl flex items-center justify-center text-white font-bold shadow-md`}>
                                             {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
                                         </div>
                                         <div>
@@ -298,7 +299,7 @@ const Header = ({ activePage, onNavigate, inventoryFilters, requestFilters, hand
                         {/* Mobile User Info */}
                         <div className="pt-6 mt-6 border-t border-gray-200">
                             <div className="flex items-center space-x-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl">
-                                <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center text-white font-bold shadow-lg">
+                                <div className={`w-12 h-12 bg-gradient-to-br ${user?.is_active !== false && user?.username ? getUserColor(user.username) : 'from-gray-400 to-gray-600'} rounded-2xl flex items-center justify-center text-white font-bold shadow-lg`}>
                                     {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
                                 </div>
                                 <div className="flex-1">

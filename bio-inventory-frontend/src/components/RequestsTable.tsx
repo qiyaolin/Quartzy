@@ -3,6 +3,7 @@ import { History, FileText, User, DollarSign, Package, Eye, CheckCircle, Clock, 
 import { AuthContext } from './AuthContext.tsx';
 import PrintBarcodeModal from './PrintBarcodeModal.tsx';
 import { useDevice } from '../hooks/useDevice.ts';
+import { getUserColor } from '../utils/userColors.ts';
 
 const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onReorder, onShowHistory, onViewDetails, onBatchAction, currentStatus }) => {
     const { user } = useContext(AuthContext);
@@ -165,10 +166,10 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                 </div>
                                 <div>
                                     <span className="text-gray-500">Requested by:</span>
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-6 h-6 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
-                                            {req.requested_by?.username ? req.requested_by.username.charAt(0).toUpperCase() : '?'}
-                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <div className={`w-6 h-6 bg-gradient-to-br ${req.requested_by?.is_active !== false && req.requested_by?.username ? getUserColor(req.requested_by.username) : 'from-gray-400 to-gray-600'} rounded-full flex items-center justify-center text-white text-xs font-semibold`}>
+                                                {req.requested_by?.username ? req.requested_by.username.charAt(0).toUpperCase() : '?'}
+                                            </div>
                                         <span className="font-medium">{req.requested_by?.username || 'N/A'}</span>
                                     </div>
                                 </div>
@@ -355,10 +356,10 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                         )}
                                     </td>
                                     <td className="table-cell w-1/6">
-                                        <div className="flex items-center space-x-2">
-                                            <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                                                {req.requested_by?.username ? req.requested_by.username.charAt(0).toUpperCase() : '?'}
-                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <div className={`w-8 h-8 bg-gradient-to-br ${req.requested_by?.is_active !== false && req.requested_by?.username ? getUserColor(req.requested_by.username) : 'from-gray-400 to-gray-600'} rounded-full flex items-center justify-center text-white text-sm font-semibold`}>
+                                                    {req.requested_by?.username ? req.requested_by.username.charAt(0).toUpperCase() : '?'}
+                                                </div>
                                             <span className="text-sm font-medium text-gray-700 truncate" title={req.requested_by?.username || 'N/A'}>{req.requested_by?.username || 'N/A'}</span>
                                         </div>
                                     </td>

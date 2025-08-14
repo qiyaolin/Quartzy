@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, ShieldOff, Edit, Trash2 } from 'lucide-react';
+import { getUserColor } from '../utils/userColors.ts';
 
 const UsersTable = ({ users, onEdit, onDelete, onToggleStatus }) => (
     <div className="overflow-hidden">
@@ -21,7 +22,7 @@ const UsersTable = ({ users, onEdit, onDelete, onToggleStatus }) => (
                         <td className="table-cell"><input type="checkbox" className="checkbox" /></td>
                         <td className="table-cell">
                             <div className="flex items-center">
-                                <div className="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center text-white font-semibold text-sm mr-3 shadow-soft">
+                                <div className={`w-10 h-10 bg-gradient-to-br ${user.is_active ? getUserColor(user.username) : 'from-gray-400 to-gray-600'} rounded-xl flex items-center justify-center text-white font-semibold text-sm mr-3 shadow-soft`}>
                                     {user.username.charAt(0).toUpperCase()}
                                 </div>
                                 <div>

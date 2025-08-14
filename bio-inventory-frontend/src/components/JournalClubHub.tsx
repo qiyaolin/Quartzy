@@ -25,9 +25,10 @@ interface JournalClubHubProps {
   className?: string;
   meetingId?: string; // Optional specific meeting focus
   initialTab?: 'current' | 'archive' | 'upload';
+  onUpdate?: () => void; // Callback when data changes (e.g., after successful submission)
 }
 
-const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meetingId, initialTab }) => {
+const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meetingId, initialTab, onUpdate }) => {
   const authContext = useContext(AuthContext);
   if (!authContext) {
     throw new Error('JournalClubHub must be used within an AuthProvider');
@@ -171,6 +172,11 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
 
       // Switch to current tab to show submitted paper
       setActiveTab('current');
+      
+      // Notify parent component of data change
+      if (onUpdate) {
+        onUpdate();
+      }
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit paper URL');
@@ -211,6 +217,11 @@ const JournalClubHub: React.FC<JournalClubHubProps> = ({ className = '', meeting
       setCurrentSubmission(null); // Clear the submission from state
       setSuccess('Paper submission has been withdrawn successfully. You can now submit a new paper.');
       setTimeout(() => setSuccess(null), 5000);
+      
+      // Notify parent component of data change
+      if (onUpdate) {
+        onUpdate();
+      }
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to withdraw paper');

@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Package, FileText, BarChart3, DollarSign, Users, LogOut, User } from 'lucide-react';
+import { getUserColor } from '../../utils/userColors.ts';
 
 interface NavigationItem {
   id: string;
@@ -76,7 +77,7 @@ const MobileSidebarDrawer: React.FC<MobileSidebarDrawerProps> = ({
         {/* User Info */}
         <div className="p-6 bg-gray-50">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center text-white font-semibold">
+            <div className={`w-12 h-12 bg-gradient-to-br ${user?.is_active !== false && user?.username ? getUserColor(user.username) : 'from-gray-400 to-gray-600'} rounded-xl flex items-center justify-center text-white font-semibold`}>
               {user?.username ? user.username.charAt(0).toUpperCase() : '?'}
             </div>
             <div className="flex-1 min-w-0">

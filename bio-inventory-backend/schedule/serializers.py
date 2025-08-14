@@ -671,6 +671,7 @@ class MeetingConfigurationSerializer(serializers.ModelSerializer):
 class MeetingInstanceSerializer(serializers.ModelSerializer):
     """Meeting instance serializer"""
     event = EventSerializer(read_only=True)
+    presenters = serializers.SerializerMethodField()
     
     # Write-only field
     event_id = serializers.PrimaryKeyRelatedField(
@@ -679,11 +680,37 @@ class MeetingInstanceSerializer(serializers.ModelSerializer):
         write_only=True
     )
     
+    def get_presenters(self, obj):
+        """Get presenters with materials submission status"""
+        presenters = obj.presenters.all()
+        presenter_data = []
+        for presenter in presenters:
+            presenter_data.append({
+                'id': presenter.id,
+                'user': {
+                    'id': presenter.user.id,
+                    'username': presenter.user.username,
+                    'first_name': presenter.user.first_name,
+                    'last_name': presenter.user.last_name,
+                    'email': presenter.user.email
+                } if presenter.user else None,
+                'order': presenter.order,
+                'status': presenter.status,
+                'topic': presenter.topic,
+                'paper_title': presenter.paper_title,
+                'paper_url': presenter.paper_url,
+                'materials_submitted': bool(presenter.materials_submitted_at),
+                'materials_submitted_at': presenter.materials_submitted_at,
+                'created_at': presenter.created_at,
+                'updated_at': presenter.updated_at
+            })
+        return presenter_data
+    
     class Meta:
         model = MeetingInstance
         fields = [
             'id', 'date', 'meeting_type', 'status', 'event', 'event_id',
-            'actual_duration', 'notes', 'created_at', 'updated_at'
+            'actual_duration', 'notes', 'presenters', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

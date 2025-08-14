@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { X, Calendar, Clock, MapPin, FileText, User, Link, Upload, Users } from 'lucide-react';
+import { X, Calendar, Clock, MapPin, FileText, User, Link, Users } from 'lucide-react';
 import { AuthContext } from '../components/AuthContext.tsx';
 import { ScheduleFormData, scheduleHelpers } from "../services/scheduleApi.ts";
+import { groupMeetingApi } from '../services/groupMeetingApi.ts';
+import { rotationListsApi } from '../services/groupMeetingsApi.ts';
 
 interface GroupMeetingFormData extends ScheduleFormData {
   topic: string;
   presenter_id?: number;
   materials_url?: string;
-  materials_file?: File;
   meeting_type: 'research_update' | 'journal_club' | 'general';
   rotation_list_id?: number;
 }
@@ -56,30 +57,39 @@ const GroupMeetingFormModal: React.FC<GroupMeetingFormModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [presenters, setPresenters] = useState<Presenter[]>([]);
   const [rotationLists, setRotationLists] = useState<RotationList[]>([]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Mock data for development
+  // Load real data from backend
   useEffect(() => {
-    // In real implementation, these would be API calls
-    setPresenters([
-      { id: 1, username: 'alice', first_name: 'Alice', last_name: 'Johnson' },
-      { id: 2, username: 'bob', first_name: 'Bob', last_name: 'Smith' },
-      { id: 3, username: 'carol', first_name: 'Carol', last_name: 'Davis' },
-      { id: 4, username: 'david', first_name: 'David', last_name: 'Wilson' }
-    ]);
+    const loadData = async () => {
+      if (!token) return;
 
-    setRotationLists([
-      { 
-        id: 1, 
-        name: 'Research Updates Rotation',
-        next_presenter: { id: 1, username: 'alice', first_name: 'Alice', last_name: 'Johnson' }
-      },
-      { 
-        id: 2, 
-        name: 'Journal Club Rotation',
-        next_presenter: { id: 2, username: 'bob', first_name: 'Bob', last_name: 'Smith' }
+      try {
+        // Load active users/presenters
+        const users = await groupMeetingApi.getActiveUsers(token);
+        setPresenters(users.map(user => ({
+          id: user.id,
+          username: user.username,
+          first_name: user.first_name,
+          last_name: user.last_name
+        })));
+
+        // Load rotation lists
+        try {
+          const rotations = await rotationListsApi.getRotationLists(token);
+          setRotationLists(rotations);
+        } catch (error) {
+          console.info('Rotation lists not available, continuing without rotation support');
+          setRotationLists([]);
+        }
+      } catch (error) {
+        console.error('Failed to load form data:', error);
+        // Continue with empty data - form will still work
+        setPresenters([]);
+        setRotationLists([]);
       }
-    ]);
+    };
+
+    loadData();
   }, [token]);
 
   // Auto-populate title based on meeting type and topic
@@ -120,12 +130,7 @@ const GroupMeetingFormModal: React.FC<GroupMeetingFormModalProps> = ({
     }
 
     try {
-      const meetingData = { ...formData };
-      if (selectedFile) {
-        meetingData.materials_file = selectedFile;
-      }
-
-      await onSubmit(meetingData);
+      await onSubmit(formData);
       
       // Reset form and close modal on success
       resetForm();
@@ -149,7 +154,6 @@ const GroupMeetingFormModal: React.FC<GroupMeetingFormModalProps> = ({
       meeting_type: 'research_update'
     });
     setErrors({});
-    setSelectedFile(null);
   };
 
   const handleInputChange = (field: keyof GroupMeetingFormData, value: string | number) => {
@@ -160,15 +164,6 @@ const GroupMeetingFormModal: React.FC<GroupMeetingFormModalProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      if (errors.materials_file) {
-        setErrors(prev => ({ ...prev, materials_file: '' }));
-      }
-    }
-  };
 
   const validateGroupMeetingData = (data: GroupMeetingFormData) => {
     const errors: Record<string, string> = {};
@@ -198,8 +193,8 @@ const GroupMeetingFormModal: React.FC<GroupMeetingFormModalProps> = ({
     }
 
     // Journal club requires materials
-    if (data.meeting_type === 'journal_club' && !data.materials_url && !selectedFile) {
-      errors.materials = 'Journal club meetings require materials (URL or file)';
+    if (data.meeting_type === 'journal_club' && !data.materials_url) {
+      errors.materials = 'Journal club meetings require materials URL';
     }
 
     return {
@@ -451,27 +446,6 @@ const GroupMeetingFormModal: React.FC<GroupMeetingFormModalProps> = ({
               </div>
             </div>
 
-            {/* File Upload */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload Materials File
-              </label>
-              <div className="relative">
-                <Upload className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="file"
-                  onChange={handleFileChange}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  accept=".pdf,.doc,.docx,.ppt,.pptx"
-                  disabled={isSubmitting}
-                />
-              </div>
-              {selectedFile && (
-                <p className="text-sm text-green-600 mt-1">
-                  Selected: {selectedFile.name}
-                </p>
-              )}
-            </div>
 
             {errors.materials && <p className="text-red-500 text-xs mt-1">{errors.materials}</p>}
           </div>

@@ -9,7 +9,19 @@ export const EASTERN_TIME_ZONE = 'America/New_York';
  * Convert a date to Eastern Time and format as YYYY-MM-DD
  */
 export const formatDateET = (date: Date | string): string => {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  let d: Date;
+  if (typeof date === 'string') {
+    // Handle date strings properly - interpret as ET timezone noon to avoid timezone shifting
+    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      // For YYYY-MM-DD format, create date at noon ET to avoid timezone issues
+      d = new Date(date + 'T12:00:00');
+    } else {
+      d = new Date(date);
+    }
+  } else {
+    d = date;
+  }
+  
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: EASTERN_TIME_ZONE,
     year: 'numeric',
@@ -65,7 +77,11 @@ export const getCurrentDateTimeET = (): Date => {
  * Convert a date string (YYYY-MM-DD) to a Date object in Eastern Time
  */
 export const parseDateET = (dateString: string): Date => {
-  // Append ET timezone to ensure proper parsing
+  // Create date at noon to avoid timezone shifting issues
+  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return new Date(dateString + 'T12:00:00');
+  }
+  // For other formats, try to parse as ET timezone
   const etDateString = `${dateString}T00:00:00-05:00`;
   return new Date(etDateString);
 };

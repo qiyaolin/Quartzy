@@ -4,6 +4,7 @@ import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 import MobileHeader from '../components/mobile/MobileHeader.tsx';
 import MobileFloatingActionButton from '../components/mobile/MobileFloatingActionButton.tsx';
 import { User, Mail, Shield, Calendar, Edit3, Trash2, UserPlus } from 'lucide-react';
+import { getUserColor } from '../utils/userColors.ts';
 
 interface UserItem {
   id: number;
@@ -189,7 +190,7 @@ const MobileUsersPage: React.FC<MobileUsersPageProps> = ({
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-3 flex-1">
-                      <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center text-white font-semibold shadow-sm">
+                      <div className={`w-12 h-12 bg-gradient-to-br ${user.is_active ? getUserColor(user.username) : 'from-gray-400 to-gray-600'} rounded-xl flex items-center justify-center text-white font-semibold shadow-sm`}>
                         {user.username.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">

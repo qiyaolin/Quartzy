@@ -246,8 +246,29 @@ const TaskCreationModal: React.FC<TaskCreationModalProps> = ({
 
             const created = await response.json();
 
-            // 2) If recurring: directly generate task instances for the specified date range
+            // 2) If recurring: assign selected users to rotation queue, then generate instances for the specified date range
             if (formData.task_type === 'recurring') {
+                // 2.1) Assign selected users into rotation queue for this template (compat endpoint)
+                try {
+                    const selectedUserIds = formData.assignee_group || [];
+                    if (selectedUserIds.length > 0) {
+                        const assignRes = await fetch(buildApiUrl(`/api/recurring-tasks/${created.id}/assign/`), {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Token ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ user_ids: selectedUserIds })
+                        });
+                        if (!assignRes.ok) {
+                            const err = await assignRes.json().catch(() => ({}));
+                            throw new Error(err.error || err.detail || 'Failed to assign rotation members');
+                        }
+                    }
+                } catch (e) {
+                    throw e instanceof Error ? e : new Error('Failed to assign rotation members');
+                }
+
                 // Compute YYYY-MM periods between start_date and end_date (inclusive)
                 const periods: string[] = [];
                 const start = new Date(formData.start_date);

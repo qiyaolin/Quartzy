@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "HayerLab Inventory",
+  "name": "HayerLab Inventory System",
   "icons": [
     {
       "src": "favicon.ico",

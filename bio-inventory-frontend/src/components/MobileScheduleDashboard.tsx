@@ -235,6 +235,30 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
         return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     };
 
+    // Helper function to check if an event is completed
+    const isEventCompleted = (event: TodayEvent) => {
+        const now = new Date();
+        // Handle both datetime strings (from backend) and time-only strings
+        const eventEndTime = new Date(event.end_time);
+        // If parsing as full datetime fails, fall back to time-only parsing
+        if (isNaN(eventEndTime.getTime())) {
+            const todayDateString = now.toDateString();
+            const fallbackEndTime = new Date(`${todayDateString} ${event.end_time}`);
+            return fallbackEndTime < now;
+        }
+        return eventEndTime < now;
+    };
+
+    // Helper function to filter active events (not cancelled or completed)
+    const filterActiveEvents = (events: TodayEvent[]) => {
+        return events.filter(event => {
+            // Filter out cancelled events
+            if (event.status && event.status === 'cancelled') return false;
+            // Filter out completed events
+            return !isEventCompleted(event);
+        });
+    };
+
     const getEventTypeIcon = (eventType: string) => {
         switch (eventType) {
             case 'meeting': return <Users className="w-4 h-4" />;
@@ -246,18 +270,25 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
 
     // Helper function to convert TodayEvent to Schedule format for modal
     const convertEventToSchedule = (event: TodayEvent): Schedule => {
+        // Extract date from the event's start_time if it's a full datetime string
+        let eventDate = new Date().toISOString().split('T')[0]; // Default to today
+        const startDateTime = new Date(event.start_time);
+        if (!isNaN(startDateTime.getTime())) {
+            eventDate = startDateTime.toISOString().split('T')[0];
+        }
+
         return {
             id: event.id,
             title: event.title,
             description: event.description,
-            date: new Date().toISOString().split('T')[0], // Today's date
+            date: eventDate,
             start_time: event.start_time,
             end_time: event.end_time,
             status: event.status || 'scheduled',
             location: '', // Not available in TodayEvent
             equipment: event.equipment_name ? { name: event.equipment_name } : null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            created_at: '', // Don't use dynamic timestamps that cause issues
+            updated_at: '' // Don't use dynamic timestamps that cause issues
         } as Schedule;
     };
 
@@ -434,14 +465,14 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                 </div>
                             </div>
                             <div className="card-body p-4">
-                                {todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).length === 0 ? (
+                                {filterActiveEvents(todayEvents).length === 0 ? (
                                     <div className="text-center py-8">
                                         <Calendar className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                                         <p className="text-gray-500">No events scheduled for today</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).slice(0, 3).map((event) => (
+                                        {filterActiveEvents(todayEvents).slice(0, 3).map((event) => (
                                             <div 
                                                 key={event.id}
                                                 className="flex items-center gap-3 p-3 rounded-lg bg-gray-50"
@@ -465,12 +496,12 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                                 </div>
                                             </div>
                                         ))}
-                                        {todayEvents.length > 3 && (
+                                        {filterActiveEvents(todayEvents).length > 3 && (
                                             <button
                                                 onClick={() => setActiveSection('today')}
                                                 className="w-full text-center py-3 text-primary-600 font-medium"
                                             >
-                                                View {todayEvents.length - 3} more events
+                                                View {filterActiveEvents(todayEvents).length - 3} more events
                                             </button>
                                         )}
                                     </div>
@@ -483,7 +514,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                 {/* Today Section */}
                 {activeSection === 'today' && (
                     <div className="space-y-4">
-                        {todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).length === 0 ? (
+                        {filterActiveEvents(todayEvents).length === 0 ? (
                             <div className="card p-8 text-center">
                                 <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No events today</h3>
@@ -496,7 +527,7 @@ const MobileScheduleDashboard: React.FC<MobileScheduleDashboardProps> = ({
                                 </button>
                             </div>
                         ) : (
-                            todayEvents.filter(e => (e.status ? e.status !== 'cancelled' : true)).map((event) => (
+                            filterActiveEvents(todayEvents).map((event) => (
                                 <div 
                                     key={event.id} 
                                     onClick={() => handleEventClick(event)}
