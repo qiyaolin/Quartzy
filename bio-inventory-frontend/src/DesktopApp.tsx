@@ -14,6 +14,8 @@ import ConfirmDeleteModal from './modals/ConfirmDeleteModal.tsx';
 import RequestFormModal from './modals/RequestFormModal.tsx';
 import UserFormModal from './modals/UserFormModal.tsx';
 import ConfirmDeleteUserModal from './modals/ConfirmDeleteUserModal.tsx';
+import ImportInventoryModal from './modals/ImportInventoryModal.tsx';
+import ImportRequestsModal from './modals/ImportRequestsModal.tsx';
 
 import InventoryPage from './pages/InventoryPage.tsx';
 import RequestsPage from './pages/RequestsPage.tsx';
@@ -21,6 +23,7 @@ import ReportsPage from './pages/ReportsPage.tsx';
 import UserManagementPage from './pages/UserManagementPage.tsx';
 import FundingPage from './pages/FundingPage.tsx';
 import SchedulePage from './pages/SchedulePage.tsx';
+import { exportToExcel } from './utils/excelExport.ts';
 
 const DesktopApp = () => {
     const { token } = useContext(AuthContext);
@@ -44,6 +47,8 @@ const DesktopApp = () => {
     const [requestFilters, setRequestFilters] = useState({ search: '', status: 'NEW', vendor: [], requested_by: [] });
     const [userSearch, setUserSearch] = useState('');
     const [highlightRequestId, setHighlightRequestId] = useState(null);
+    const [isImportInventoryModalOpen, setIsImportInventoryModalOpen] = useState(false);
+    const [isImportRequestsModalOpen, setIsImportRequestsModalOpen] = useState(false);
 
     // Handle URL routing for email links
     useEffect(() => {
@@ -170,6 +175,160 @@ const DesktopApp = () => {
         } finally { setIsDeleteUserModalOpen(false); setDeletingUser(null); }
     };
 
+    // Import/Export handlers
+    const handleInventoryImport = () => {
+        setIsImportInventoryModalOpen(true);
+    };
+
+    const handleInventoryExport = async () => {
+        try {
+            const params = new URLSearchParams();
+            Object.keys(inventoryFilters).forEach(key => {
+                if (key === 'search' && inventoryFilters[key]) {
+                    params.append('search', inventoryFilters[key]);
+                } else if (key !== 'search' && inventoryFilters[key].length > 0) {
+                    if (key === 'expired' || key === 'low_stock') {
+                        if (inventoryFilters[key].includes('true')) {
+                            params.append(key, 'true');
+                        }
+                    } else {
+                        inventoryFilters[key].forEach(value => params.append(key, value));
+                    }
+                }
+            });
+
+            const response = await fetch(`${buildApiUrl(API_ENDPOINTS.ITEMS)}?${params.toString()}`, {
+                headers: { 'Authorization': `Token ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch inventory data');
+            
+            const items = await response.json();
+            
+            const formattedItems = items.map(item => ({
+                'Item ID': item.id,
+                'Item Name': item.name,
+                'Specifications': item.specifications || '',
+                'Quantity': item.quantity,
+                'Unit': item.unit || '',
+                'Unit Price': item.unit_price ? `$${item.unit_price}` : '',
+                'Total Value': item.total_value ? `$${item.total_value}` : '',
+                'Vendor': item.vendor?.name || '',
+                'Catalog Number': item.catalog_number || '',
+                'Location': item.location?.name || '',
+                'Item Type': item.item_type?.name || '',
+                'Expiration Date': item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('en-US') : '',
+                'Minimum Stock': item.minimum_quantity || '',
+                'Purchase Date': item.purchase_date ? new Date(item.purchase_date).toLocaleDateString('en-US') : '',
+                'Status': item.quantity <= (item.minimum_quantity || 0) ? 'Low Stock' : 
+                         (item.expiration_date && new Date(item.expiration_date) < new Date()) ? 'Expired' : 'Normal',
+                'Notes': item.notes || '',
+                'Last Updated': item.updated_at ? new Date(item.updated_at).toLocaleString('en-US') : ''
+            }));
+
+            const now = new Date();
+            const summary = {
+                'Export Time': now.toLocaleString('en-US'),
+                'Total Items': items.length,
+                'Total Value': `$${items.reduce((sum, item) => sum + (parseFloat(item.total_value) || 0), 0).toFixed(2)}`,
+                'Low Stock Items': items.filter(item => item.quantity <= (item.minimum_quantity || 0)).length,
+                'Expired Items': items.filter(item => item.expiration_date && new Date(item.expiration_date) < now).length,
+                'Expiring Soon Items': items.filter(item => {
+                    if (!item.expiration_date) return false;
+                    const expDate = new Date(item.expiration_date);
+                    const thirtyDaysFromNow = new Date();
+                    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+                    return expDate > now && expDate <= thirtyDaysFromNow;
+                }).length
+            };
+
+            exportToExcel({
+                fileName: 'inventory-export',
+                sheetName: 'Inventory List',
+                title: 'Laboratory Inventory Management Export Report',
+                data: formattedItems,
+                summary: summary
+            });
+
+            notification.success(`Successfully exported ${items.length} inventory items`);
+        } catch (error) {
+            notification.error(`Export failed: ${error.message}`);
+        }
+    };
+
+    const handleRequestsImport = () => {
+        setIsImportRequestsModalOpen(true);
+    };
+
+    const handleRequestsExport = async () => {
+        try {
+            const params = new URLSearchParams();
+            Object.keys(requestFilters).forEach(key => {
+                if (!['search', 'status'].includes(key) && requestFilters[key].length > 0) {
+                    requestFilters[key].forEach(value => params.append(key, value));
+                } else if (key === 'search' && requestFilters[key]) {
+                    params.append('search', requestFilters[key]);
+                }
+            });
+
+            const response = await fetch(`${buildApiUrl(API_ENDPOINTS.REQUESTS)}?${params.toString()}`, {
+                headers: { 'Authorization': `Token ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch requests data');
+            
+            const requests = await response.json();
+            
+            const formattedRequests = requests.map(req => ({
+                'Request ID': req.id,
+                'Product Name': req.product_name,
+                'Specifications': req.specifications,
+                'Quantity': req.quantity,
+                'Unit Price': req.unit_price ? `$${req.unit_price}` : '',
+                'Total Price': req.total_price ? `$${req.total_price}` : '',
+                'Status': req.status === 'pending' ? 'Pending' : 
+                         req.status === 'approved' ? 'Approved' : 
+                         req.status === 'ordered' ? 'Ordered' : 
+                         req.status === 'received' ? 'Received' : 
+                         req.status === 'rejected' ? 'Rejected' : req.status,
+                'Requester': req.requester_name,
+                'Department': req.department,
+                'Laboratory': req.lab,
+                'Vendor': req.vendor,
+                'Product Link': req.product_link,
+                'Urgency': req.urgency === 'high' ? 'High' : 
+                          req.urgency === 'medium' ? 'Medium' : 
+                          req.urgency === 'low' ? 'Low' : req.urgency,
+                'Request Date': req.requested_date ? new Date(req.requested_date).toLocaleDateString('en-US') : '',
+                'Expected Delivery': req.expected_delivery_date ? new Date(req.expected_delivery_date).toLocaleDateString('en-US') : '',
+                'Notes': req.notes || ''
+            }));
+
+            const summary = {
+                'Export Time': new Date().toLocaleString('en-US'),
+                'Total Requests': requests.length,
+                'Pending': requests.filter(r => r.status === 'pending').length,
+                'Approved': requests.filter(r => r.status === 'approved').length,
+                'Ordered': requests.filter(r => r.status === 'ordered').length,
+                'Received': requests.filter(r => r.status === 'received').length,
+                'Rejected': requests.filter(r => r.status === 'rejected').length,
+                'Total Value': `$${requests.reduce((sum, req) => sum + (parseFloat(req.total_price) || 0), 0).toFixed(2)}`
+            };
+
+            exportToExcel({
+                fileName: 'requests-export',
+                sheetName: 'Purchase Requests',
+                title: 'Laboratory Purchase Requests Export Report',
+                data: formattedRequests,
+                summary: summary
+            });
+
+            notification.success(`Successfully exported ${requests.length} requests`);
+        } catch (error) {
+            notification.error(`Export failed: ${error.message}`);
+        }
+    };
+
     const renderPage = () => {
         switch (activePage) {
             case 'inventory': 
@@ -242,7 +401,9 @@ const DesktopApp = () => {
                 onFilterChange: handleInventoryFilterChange,
                 filterOptions: filterOptions,
                 isMobile: false,
-                onClose: () => setIsSidebarOpen(false)
+                onClose: () => setIsSidebarOpen(false),
+                onImportData: handleInventoryImport,
+                onExportData: handleInventoryExport
             };
         } else if (activePage === 'requests') {
             SidebarComponent = RequestsSidebar;
@@ -252,7 +413,9 @@ const DesktopApp = () => {
                 onFilterChange: handleRequestFilterChange,
                 filterOptions: filterOptions,
                 isMobile: false,
-                onClose: () => setIsSidebarOpen(false)
+                onClose: () => setIsSidebarOpen(false),
+                onImportData: handleRequestsImport,
+                onExportData: handleRequestsExport
             };
         } else if (activePage === 'users') {
             SidebarComponent = UserManagementSidebar;
@@ -325,6 +488,18 @@ const DesktopApp = () => {
                 onClose={() => setIsDeleteUserModalOpen(false)}
                 onConfirm={handleDeleteUserConfirm}
                 userName={deletingUser?.username}
+            />
+            <ImportInventoryModal
+                isOpen={isImportInventoryModalOpen}
+                onClose={() => setIsImportInventoryModalOpen(false)}
+                onSuccess={handleSave}
+                token={token}
+            />
+            <ImportRequestsModal
+                isOpen={isImportRequestsModalOpen}
+                onClose={() => setIsImportRequestsModalOpen(false)}
+                onSuccess={handleSave}
+                token={token}
             />
         </div>
     );

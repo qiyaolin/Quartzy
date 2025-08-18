@@ -52,6 +52,7 @@ export const API_ENDPOINTS = {
   ITEMS_ALERTS: '/api/items/alerts/',
   ITEMS_BATCH_ARCHIVE: '/api/items/batch_archive/',
   ITEMS_BATCH_DELETE: '/api/items/batch_delete/',
+  ITEMS_BATCH_CREATE: '/api/items/batch_create/',
   
   // Request Management
   REQUESTS: '/api/requests/',
@@ -60,6 +61,7 @@ export const API_ENDPOINTS = {
   REQUESTS_BATCH_REORDER: '/api/requests/batch_reorder/',
   REQUESTS_BATCH_PLACE_ORDER: '/api/requests/batch_place_order/',
   REQUESTS_BATCH_MARK_RECEIVED: '/api/requests/batch_mark_received/',
+  REQUESTS_BATCH_CREATE: '/api/requests/batch_create/',
   
   // Base Data
   VENDORS: '/api/vendors/',

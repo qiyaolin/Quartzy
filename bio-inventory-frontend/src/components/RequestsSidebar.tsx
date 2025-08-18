@@ -2,7 +2,7 @@ import React from 'react';
 import { PlusCircle, Search, Upload, Download, X } from 'lucide-react';
 import SidebarFilter from './SidebarFilter.tsx';
 
-const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOptions, isMobile = false, onClose }) => (
+const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOptions, isMobile = false, onClose, onImportData, onExportData }) => (
     <aside className={`sidebar ${isMobile ? 'w-80' : 'w-72'} p-4 md:p-6 flex flex-col h-full animate-fade-in bg-white shadow-xl`}>
         {/* 移动端关闭按钮 */}
         {isMobile && (
@@ -47,11 +47,19 @@ const RequestsSidebar = ({ onAddRequestClick, filters, onFilterChange, filterOpt
         </div>
         
         <div className="pt-6 border-t border-secondary-200 space-y-2">
-            <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+            <button 
+                onClick={onImportData}
+                className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200"
+                disabled={!onImportData}
+            >
                 <Upload className="w-4 h-4 mr-2" />
                 <span>Import Data</span>
             </button>
-            <button className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200">
+            <button 
+                onClick={onExportData}
+                className="btn btn-secondary w-full justify-center py-2.5 hover:bg-secondary-100 transition-all duration-200"
+                disabled={!onExportData}
+            >
                 <Download className="w-4 h-4 mr-2" />
                 <span>Export Data</span>
             </button>
