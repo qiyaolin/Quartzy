@@ -19,6 +19,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
     const [isRequestHistoryOpen, setIsRequestHistoryOpen] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
+    const [localRefreshKey, setLocalRefreshKey] = useState(0);
     const itemsPerPage = 10;
 
     const groupedInventory = useMemo(() => {
@@ -62,13 +63,22 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
             });
             try {
                 const response = await fetch(`${buildApiUrl(API_ENDPOINTS.ITEMS)}?${params.toString()}`, { headers: { 'Authorization': `Token ${token}` } });
-                if (!response.ok) throw new Error(`Authentication failed`);
+                if (!response.ok) {
+                    let detail = '';
+                    try {
+                        const payload = await response.json();
+                        detail = payload?.detail || payload?.error || '';
+                    } catch {
+                        // ignore parse errors for non-json responses
+                    }
+                    throw new Error(`Inventory API failed (${response.status})${detail ? `: ${detail}` : ''}`);
+                }
                 const data = await response.json();
                 setInventory(data);
             } catch (e) { setError(e.message); } finally { setLoading(false); }
         };
         if (token) { fetchInventory(); }
-    }, [token, refreshKey, filters]);
+    }, [token, refreshKey, localRefreshKey, filters]);
 
     const handleViewRequestHistory = (item) => {
         setSelectedItem(item);
@@ -77,12 +87,12 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
 
     const handleBatchAction = async (action, selectedIds) => {
         if (selectedIds.length === 0) return;
-        
+
         switch (action) {
             case 'export':
                 // Filter selected items and export to Excel
                 const selectedItems = inventory.filter(item => selectedIds.includes(item.id));
-                
+
                 // Prepare formatted data for Excel
                 const formattedItems = selectedItems.map(item => ({
                     'Item ID': item.id,
@@ -99,12 +109,12 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                     'Expiration Date': item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('en-US') : '',
                     'Minimum Stock': item.minimum_quantity || '',
                     'Purchase Date': item.purchase_date ? new Date(item.purchase_date).toLocaleDateString('en-US') : '',
-                    'Status': item.quantity <= (item.minimum_quantity || 0) ? 'Low Stock' : 
-                           (item.expiration_date && new Date(item.expiration_date) < new Date()) ? 'Expired' : 'Normal',
+                    'Status': item.quantity <= (item.minimum_quantity || 0) ? 'Low Stock' :
+                        (item.expiration_date && new Date(item.expiration_date) < new Date()) ? 'Expired' : 'Normal',
                     'Notes': item.notes || '',
                     'Last Updated': item.updated_at ? new Date(item.updated_at).toLocaleString('en-US') : ''
                 }));
-                
+
                 const now = new Date();
                 const summary = {
                     'Export Time': now.toLocaleString('en-US'),
@@ -120,7 +130,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                         return expDate > now && expDate <= thirtyDaysFromNow;
                     }).length
                 };
-                
+
                 exportToExcel({
                     fileName: 'inventory-export',
                     sheetName: 'Inventory List',
@@ -129,7 +139,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                     summary: summary
                 });
                 break;
-                
+
             case 'archive':
                 if (window.confirm(`Are you sure you want to archive ${selectedIds.length} item(s)?`)) {
                     try {
@@ -142,15 +152,15 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                             body: JSON.stringify({ item_ids: selectedIds })
                         });
                         if (response.ok) {
-                            // Refresh inventory
-                            window.location.reload();
+                            notification.success(`Successfully archived ${selectedIds.length} item(s)`);
+                            setLocalRefreshKey(prev => prev + 1);
                         }
                     } catch (error) {
                         notification.error('Failed to archive items');
                     }
                 }
                 break;
-                
+
             case 'delete':
                 if (window.confirm(`Are you sure you want to delete ${selectedIds.length} item(s)? This action cannot be undone.`)) {
                     try {
@@ -163,8 +173,8 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                             body: JSON.stringify({ item_ids: selectedIds })
                         });
                         if (response.ok) {
-                            // Refresh inventory
-                            window.location.reload();
+                            notification.success(`Successfully deleted ${selectedIds.length} item(s)`);
+                            setLocalRefreshKey(prev => prev + 1);
                         }
                     } catch (error) {
                         notification.error('Failed to delete items');
@@ -182,7 +192,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
 
     const handleBarcodeCheckout = async (barcode, itemData) => {
         console.log('Processing barcode checkout:', barcode, itemData);
-        
+
         if (itemData) {
             try {
                 // 检查物品是否已经归档
@@ -211,14 +221,14 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                 if (response.ok) {
                     await response.json();
                     notification.success(`Successfully checked out: ${itemData.name}`);
-                    
+
                     // 刷新库存数据
                     fetchInventory();
                 } else {
                     const errorData = await response.json();
                     notification.error(`Failed to checkout: ${errorData.error || 'Unknown error'}`);
                 }
-                
+
             } catch (error) {
                 console.error('Checkout error:', error);
                 notification.error(`Failed to checkout item: ${error.message}`);
@@ -226,7 +236,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
         } else {
             notification.error('Item not found with this barcode');
         }
-        
+
         setIsScannerOpen(false);
     };
 
@@ -265,10 +275,10 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                 )}
                 {!loading && !error && (
                     <>
-                        <InventoryTable 
-                            groupedData={paginatedData} 
-                            onEdit={onEditItem} 
-                            onDelete={onDeleteItem} 
+                        <InventoryTable
+                            groupedData={paginatedData}
+                            onEdit={onEditItem}
+                            onDelete={onDeleteItem}
                             onViewRequestHistory={handleViewRequestHistory}
                             onBatchAction={handleBatchAction}
                         />
@@ -278,11 +288,11 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                     </>
                 )}
             </div>
-            <ItemRequestHistoryModal 
-                isOpen={isRequestHistoryOpen} 
-                onClose={() => setIsRequestHistoryOpen(false)} 
-                itemName={selectedItem?.name} 
-                token={token} 
+            <ItemRequestHistoryModal
+                isOpen={isRequestHistoryOpen}
+                onClose={() => setIsRequestHistoryOpen(false)}
+                itemName={selectedItem?.name}
+                token={token}
             />
             <BarcodeScanner
                 isOpen={isScannerOpen}

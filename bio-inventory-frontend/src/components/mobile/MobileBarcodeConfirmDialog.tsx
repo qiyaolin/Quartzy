@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Printer, Package } from 'lucide-react';
 
 interface MobileBarcodeConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (printMode: 'tape' | 'label') => void;
   itemName: string;
   barcode: string;
 }
@@ -16,10 +16,18 @@ const MobileBarcodeConfirmDialog: React.FC<MobileBarcodeConfirmDialogProps> = ({
   itemName,
   barcode
 }) => {
+  const [selectedPrintMode, setSelectedPrintMode] = useState<'tape' | 'label'>('tape');
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedPrintMode('tape');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleConfirm = () => {
-    onConfirm();
+    onConfirm(selectedPrintMode);
     onClose();
   };
 
@@ -82,6 +90,28 @@ const MobileBarcodeConfirmDialog: React.FC<MobileBarcodeConfirmDialogProps> = ({
             <p className="text-sm text-gray-500 mt-1">
               Make sure your printer is connected and ready.
             </p>
+          </div>
+
+          <div className="bg-indigo-50 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Print Mode</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { key: 'tape', label: 'Tape (Default)' },
+                { key: 'label', label: 'Label' }
+              ] as const).map((modeOption) => (
+                <button
+                  key={modeOption.key}
+                  onClick={() => setSelectedPrintMode(modeOption.key)}
+                  className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                    selectedPrintMode === modeOption.key
+                      ? 'bg-indigo-500 text-white border-indigo-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {modeOption.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

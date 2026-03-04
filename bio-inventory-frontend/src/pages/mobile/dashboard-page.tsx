@@ -21,6 +21,8 @@ import MobileItemFormModal from '../../modals/MobileItemFormModal.tsx';
 import MobileRequestFormModal from '../../modals/MobileRequestFormModal.tsx';
 import ZBarBarcodeScanner from '../../components/ZBarBarcodeScanner.tsx';
 import { useNotification } from '../../contexts/NotificationContext.tsx';
+import { normalizeInventoryItem, type MobileInventoryItem } from '../../utils/mobileInventoryFields.ts';
+import { buildMobileInventoryGroups } from '../../utils/mobileInventoryGrouping.ts';
 
 interface DashboardStats {
   total_items: number;
@@ -87,11 +89,20 @@ const MobileDashboardPage = () => {
             notificationsResponse.json()
           ]);
 
+          const rawItems: unknown[] = Array.isArray(itemsData)
+            ? itemsData
+            : itemsData && typeof itemsData === 'object' && Array.isArray((itemsData as { results?: unknown[] }).results)
+              ? (itemsData as { results: unknown[] }).results
+              : [];
+          const normalizedItems = rawItems
+            .map(normalizeInventoryItem)
+            .filter((item): item is MobileInventoryItem => item !== null);
+          const groupedItems = buildMobileInventoryGroups(normalizedItems);
+          const lowStockGroups = groupedItems.filter((group) => group.stockLevel !== 'in');
+
           // Calculate statistics
-          const totalItems = itemsData.length || 0;
-          const lowStockItems = itemsData.filter((item: any) => 
-            item.low_stock_threshold && item.quantity <= item.low_stock_threshold
-          ).length || 0;
+          const totalItems = groupedItems.length || 0;
+          const lowStockItems = lowStockGroups.length || 0;
           const pendingRequests = requestsData.filter((req: any) => 
             req.status === 'NEW' || req.status === 'PENDING'
           ).length || 0;
@@ -107,9 +118,9 @@ const MobileDashboardPage = () => {
             const maxPendingThreshold = Math.max(5, totalItems * 0.1); // 10% of items or min 5
             const requestResponseScore = Math.max(0, 100 - (pendingRequests / maxPendingThreshold) * 100);
             
-            // Inventory Organization: Items with complete information
-            const organizedItems = itemsData.filter((item: any) => 
-              item.location && (item.low_stock_threshold || item.quantity > 0)
+            // Inventory Organization: grouped records with valid location summary
+            const organizedItems = groupedItems.filter((group) =>
+              Boolean(group.locationSummary && group.locationSummary !== 'Unknown')
             ).length;
             const organizationScore = totalItems > 0 ? (organizedItems / totalItems) * 100 : 100;
             
@@ -128,7 +139,7 @@ const MobileDashboardPage = () => {
             const activities: any[] = [];
             
             // Recent items added (last 7 days)
-            const recentItems = itemsData.filter((item: any) => {
+            const recentItems = rawItems.filter((item: any) => {
               if (!item.created_at) return false;
               const itemDate = new Date(item.created_at);
               const weekAgo = new Date();
@@ -167,17 +178,16 @@ const MobileDashboardPage = () => {
             });
 
             // Low stock alerts
-            if (lowStockItems > 0) {
-              const lowStockItem = itemsData.find((item: any) => 
-                item.low_stock_threshold && item.quantity <= item.low_stock_threshold
-              );
-              if (lowStockItem) {
+            if (lowStockGroups.length > 0) {
+              const lowStockGroup = lowStockGroups[0];
+              if (lowStockGroup) {
+                const issueLabel = lowStockGroup.stockLevel === 'out' ? 'Out of stock' : 'Low stock';
                 activities.push({
                   id: 'low_stock_alert',
                   type: 'low_stock',
-                  description: `Low stock alert: ${lowStockItem.name} (${lowStockItem.quantity} remaining)`,
+                  description: `${issueLabel} alert: ${lowStockGroup.name} (${lowStockGroup.totalQuantity} remaining)`,
                   timestamp: new Date().toISOString(),
-                  item_name: lowStockItem.name
+                  item_name: lowStockGroup.name
                 });
               }
             }

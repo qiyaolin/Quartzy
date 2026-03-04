@@ -7,6 +7,8 @@ export interface LabelData {
   customText?: string;
   fontSize?: number;
   isBold?: boolean;
+  printMode?: 'tape' | 'label';
+  templateFile?: string;
   [key: string]: any;
 }
 
@@ -181,11 +183,14 @@ class PrintingService {
       customText?: string;
       fontSize?: number;
       isBold?: boolean;
+      printMode?: 'tape' | 'label';
+      templateFile?: string;
     } = {}
   ): Promise<PrintJob> {
     const labelData: LabelData = {
       itemName,
       barcode,
+      printMode: options.printMode || 'tape',
       ...options
     };
 

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Plus, PlusCircle, ScanLine } from 'lucide-react';
-import { Button } from '../ui/button.tsx';
 
 interface SpeedDialFabProps {
   onAddItem?: () => void;
@@ -32,32 +31,39 @@ const SpeedDialFab: React.FC<SpeedDialFabProps> = ({ onAddItem, onScanCheckout }
   ];
 
   return (
-    <div className="fixed bottom-24 right-4 z-50">
-      <div className="relative flex flex-col items-center">
+    <div
+      className="fixed right-4 z-50 pointer-events-none"
+      style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px) + 12px)' }}
+    >
+      <div className="relative flex items-end">
         {/* 背景遮罩 */}
         <div 
-          className={`fixed inset-0 bg-black/20 backdrop-blur-sm transition-all duration-300 ${
+          className={`fixed inset-0 z-40 bg-black/20 backdrop-blur-sm transition-all duration-300 ${
             isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
           }`}
           onClick={() => setIsOpen(false)}
         />
         
         {/* 动作按钮容器 */}
-        <div className="relative flex flex-col items-center">
+        <div
+          className={`absolute bottom-full right-0 mb-3 z-50 flex flex-col items-end transition-opacity duration-200 ${
+            isOpen ? 'pointer-events-auto' : 'pointer-events-none'
+          }`}
+        >
           {actions.map((action, index) => (
             <div 
               key={index} 
-              className={`flex items-center gap-3 mb-4 transition-all duration-300 ease-out ${
+              className={`mb-4 flex items-center gap-3 transition-all duration-300 ease-out ${
                 isOpen 
                   ? 'opacity-100 translate-y-0 scale-100' 
-                  : 'opacity-0 translate-y-4 scale-90 pointer-events-none'
+                  : 'opacity-0 translate-y-4 scale-90'
               }`}
               style={{
                 transitionDelay: isOpen ? `${index * 50}ms` : '0ms'
               }}
             >
               {/* 标签 */}
-              <div className={`bg-white/95 backdrop-blur-sm text-sm text-gray-700 rounded-xl px-3 py-2 shadow-lg border border-white/20 transition-all duration-200 ${
+              <div className={`min-w-[112px] whitespace-nowrap text-center bg-white/95 backdrop-blur-sm text-sm text-gray-700 rounded-xl px-4 py-2 shadow-lg border border-white/20 transition-all duration-200 ${
                 isOpen ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2'
               }`}
               style={{
@@ -81,7 +87,7 @@ const SpeedDialFab: React.FC<SpeedDialFabProps> = ({ onAddItem, onScanCheckout }
         
         {/* 主按钮 */}
         <button
-          className={`rounded-full flex items-center justify-center relative overflow-hidden text-white shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:scale-110 active:scale-95 ${
+          className={`pointer-events-auto z-50 relative overflow-hidden rounded-full flex items-center justify-center text-white shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:scale-110 active:scale-95 ${
             isOpen ? 'rotate-45 shadow-blue-500/40' : 'rotate-0'
           }`}
           onClick={() => setIsOpen(!isOpen)}
