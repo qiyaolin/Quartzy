@@ -209,10 +209,9 @@ class EmailNotificationService:
             logger.warning(f"Request {request_obj.id} has no requester or requester has no email")
             return False
         
-        # Check for partial delivery
-        quantity_received = quantity_received or request_obj.quantity
-        partial_delivery = quantity_received < request_obj.quantity
-        remaining_quantity = request_obj.quantity - quantity_received if partial_delivery else 0
+        quantity_received = quantity_received or 0
+        remaining_quantity = max(getattr(request_obj, 'remaining_quantity', 0), 0)
+        partial_delivery = remaining_quantity > 0
         
         context = {
             'request': request_obj,

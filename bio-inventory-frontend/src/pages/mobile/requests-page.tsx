@@ -16,8 +16,10 @@ interface Request {
   id: number;
   product_name?: string;
   item_name: string;
+  barcode?: string;
   specifications?: string;
   quantity: number;
+  remaining_quantity?: number;
   unit_price?: number;
   total_price?: number;
   status: string;
@@ -210,6 +212,12 @@ const MobileRequestsPage = () => {
     }
   };
 
+  const getRemainingQty = (request: Request): number => {
+    const remaining = Number(request?.remaining_quantity);
+    if (!Number.isNaN(remaining) && remaining >= 0) return remaining;
+    return Number(request?.quantity || 0);
+  };
+
   const handleCreateRequest = () => {
     setIsRequestFormModalOpen(true);
   };
@@ -316,9 +324,23 @@ const MobileRequestsPage = () => {
       if (response.ok) {
         setRefreshKey(prev => prev + 1);
         notification.success('Request marked as received');
+        const responseText = await response.text();
+        try {
+          return responseText ? JSON.parse(responseText) : null;
+        } catch (parseError) {
+          console.warn('Failed to parse mark received response JSON:', parseError);
+          return null;
+        }
       } else {
         const errorText = await response.text();
-        throw new Error(`Failed to mark as received: ${errorText}`);
+        let errorMessage = errorText;
+        try {
+          const parsed = errorText ? JSON.parse(errorText) : null;
+          errorMessage = parsed?.error || errorText;
+        } catch {
+          // Keep original error text
+        }
+        throw new Error(`Failed to mark as received: ${errorMessage}`);
       }
     } catch (err) {
       console.error('Error marking as received:', err);
@@ -598,7 +620,7 @@ const MobileRequestsPage = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl">
                       <Package className="w-4 h-4 text-blue-600" />
-                      <span className="font-semibold text-gray-800">Qty: {request.quantity}</span>
+                      <span className="font-semibold text-gray-800">Qty: {getRemainingQty(request)}/{request.quantity}</span>
                     </div>
                     
                     {request.unit_price && (

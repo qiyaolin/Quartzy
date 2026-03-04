@@ -43,6 +43,12 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
         const config = statusConfig[status] || { class: 'badge-secondary', label: status };
         return <span className={`badge ${config.class}`}>{config.label}</span>;
     };
+
+    const getRemainingQty = (req) => {
+        const remaining = Number(req?.remaining_quantity);
+        if (!Number.isNaN(remaining) && remaining >= 0) return remaining;
+        return Number(req?.quantity || 0);
+    };
     
     
     return (
@@ -162,6 +168,9 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                 <div>
                                     <span className="text-gray-500">Price:</span>
                                     <div className="font-mono font-bold text-lg">${req.unit_price}</div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                        Remaining: <span className="font-medium">{getRemainingQty(req)}/{req.quantity}</span>
+                                    </div>
                                 </div>
                                 <div>
                                     <span className="text-gray-500">Requested by:</span>
@@ -348,9 +357,9 @@ const RequestsTable = ({ requests, onApprove, onPlaceOrder, onMarkReceived, onRe
                                     </td>
                                     <td className="table-cell w-20">
                                         <div className="font-mono font-bold text-gray-900 text-lg">${req.unit_price}</div>
-                                        {req.quantity > 1 && (
+                                        {req.quantity > 0 && (
                                             <div className="text-xs text-gray-500 mt-1">
-                                                Qty: <span className="font-medium">{req.quantity}</span>
+                                                Qty: <span className="font-medium">{getRemainingQty(req)}/{req.quantity}</span>
                                             </div>
                                         )}
                                     </td>

@@ -4,10 +4,11 @@ from rest_framework.response import Response
 from rest_framework.filters import SearchFilter # Import SearchFilter
 from django_filters import rest_framework as filters # Import django_filters
 from rest_framework.permissions import IsAdminUser # Import this
+from django.db import IntegrityError, transaction
 from .models import Request, RequestHistory
 from .serializers import RequestSerializer, RequestHistorySerializer
 from .filters import RequestFilter # Import our filter class
-from items.models import Item, Location
+from items.models import Item, ItemType, Location
 from notifications.email_service import EmailNotificationService
 import logging
 
@@ -39,6 +40,129 @@ class RequestViewSet(viewsets.ModelViewSet):
         
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def _normalize_receipts_payload(self, payload):
+        """
+        Normalize receive payload into a list of {'location_id': int}.
+        Supports new payload:
+          {'receipts': [{'location_id': 1}, ...]}
+        and legacy payload:
+          {'location_id': 1, 'quantity_received': 3}
+        """
+        receipts = payload.get('receipts')
+        normalized = []
+
+        if isinstance(receipts, list):
+            for entry in receipts:
+                if not isinstance(entry, dict):
+                    return None, 'Each receipt must be an object.'
+                location_id = entry.get('location_id')
+                try:
+                    location_id = int(location_id)
+                except (TypeError, ValueError):
+                    return None, 'Each receipt must include a valid location_id.'
+                normalized.append({'location_id': location_id})
+        else:
+            location_id = payload.get('location_id')
+            quantity_received_raw = payload.get('quantity_received', 0)
+            try:
+                location_id = int(location_id)
+                quantity_received = int(quantity_received_raw)
+            except (TypeError, ValueError):
+                return None, 'Location and valid quantity are required.'
+
+            if quantity_received <= 0:
+                return None, 'Location and valid quantity are required.'
+
+            normalized = [{'location_id': location_id} for _ in range(quantity_received)]
+
+        if not normalized:
+            return None, 'At least one receipt entry is required.'
+
+        return normalized, None
+
+    def _process_request_receipts(self, req_id, receipts, actor):
+        try:
+            with transaction.atomic():
+                req_object = Request.objects.select_for_update().get(pk=req_id)
+
+                if req_object.status != 'ORDERED':
+                    return None, 'Only ordered items can be marked as received.'
+
+                remaining = req_object.remaining_quantity or req_object.quantity
+                if remaining <= 0:
+                    remaining = req_object.quantity
+                    req_object.remaining_quantity = remaining
+
+                if len(receipts) > remaining:
+                    return None, 'Received quantity cannot exceed remaining ordered quantity.'
+
+                location_ids = list({entry['location_id'] for entry in receipts})
+                locations = {
+                    location.id: location
+                    for location in Location.objects.filter(id__in=location_ids)
+                }
+                missing_location_ids = [location_id for location_id in location_ids if location_id not in locations]
+                if missing_location_ids:
+                    return None, 'Selected location does not exist.'
+
+                item_type_id = req_object.item_type_id or ItemType.objects.get_or_create(name='General Supply')[0].id
+                created_items = []
+                for entry in receipts:
+                    location = locations[entry['location_id']]
+                    created_item = Item.objects.create(
+                        name=req_object.item_name,
+                        vendor=req_object.vendor,
+                        catalog_number=req_object.catalog_number,
+                        item_type_id=item_type_id,
+                        owner=req_object.requested_by,
+                        quantity=1,
+                        unit=req_object.unit_size or 'unit',
+                        location=location,
+                        price=req_object.unit_price,
+                        fund_id=req_object.fund_id,
+                    )
+                    created_items.append(created_item)
+
+                old_status = req_object.status
+                req_object.remaining_quantity = max(remaining - len(created_items), 0)
+                req_object.status = 'RECEIVED' if req_object.remaining_quantity == 0 else 'ORDERED'
+                req_object.save(update_fields=['remaining_quantity', 'status', 'updated_at'])
+
+                RequestHistory.objects.create(
+                    request=req_object,
+                    user=actor,
+                    old_status=old_status,
+                    new_status=req_object.status,
+                    notes=(
+                        f"Marked as received - Quantity: {len(created_items)}, "
+                        f"Remaining: {req_object.remaining_quantity}"
+                    ),
+                )
+        except Request.DoesNotExist:
+            return None, 'Request not found.'
+        except IntegrityError as e:
+            logger.warning(f"Failed to mark request {req_id} as received due to integrity error: {e}")
+            return None, 'Could not create inventory item due to duplicate or invalid data.'
+
+        created_items_payload = [
+            {
+                'id': item.id,
+                'barcode': item.barcode,
+                'location_id': item.location_id,
+                'location_name': item.location.name if item.location else None,
+            }
+            for item in created_items
+        ]
+
+        return {
+            'request_id': req_object.id,
+            'request_status': req_object.status,
+            'remaining_quantity': req_object.remaining_quantity,
+            'created_items': created_items_payload,
+            'request_item_name': req_object.item_name,
+            'request_obj': req_object,
+        }, None
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser]) # Add this decorator
     def approve(self, request, pk=None):
@@ -109,6 +233,8 @@ class RequestViewSet(viewsets.ModelViewSet):
         )
         
         req_object.status = 'ORDERED'
+        if req_object.remaining_quantity <= 0:
+            req_object.remaining_quantity = req_object.quantity
         req_object.save()
         
         # Send email notification to requester
@@ -126,74 +252,45 @@ class RequestViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def mark_received(self, request, pk=None):
         """
-        Custom action to mark a request as received.
-        This action ALWAYS creates a new Item record.
+        Mark ordered request items as received by piece.
+        Creates one inventory Item(quantity=1) per receipt entry.
         """
-        req_object = self.get_object()
-        if req_object.status != 'ORDERED':
-            return Response({'error': 'Only ordered items can be marked as received.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        location_id = request.data.get('location_id')
-        quantity_received = int(request.data.get('quantity_received', 0))
-
-        if not location_id or quantity_received <= 0:
-            return Response({'error': 'Location and valid quantity are required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # **MODIFIED LOGIC**: Always create a new inventory item for each reception.
-        Item.objects.create(
-            name=req_object.item_name,
-            vendor=req_object.vendor,
-            catalog_number=req_object.catalog_number,
-            item_type_id=1, # Default to a generic type, can be improved
-            owner=req_object.requested_by,
-            quantity=quantity_received,
-            unit=req_object.unit_size,
-            location_id=location_id,
-            price=req_object.unit_price,
-            fund_id=req_object.fund_id,  # Include fund_id from the request
-            barcode=req_object.barcode,  # Include barcode from the request
-        )
-
-        # Handle partial delivery
-        if quantity_received < req_object.quantity:
-            remaining_qty = req_object.quantity - quantity_received
-            Request.objects.create(
-                item_name=f"{req_object.item_name} (Back-ordered)",
-                requested_by=req_object.requested_by,
-                vendor=req_object.vendor,
-                catalog_number=req_object.catalog_number,
-                quantity=remaining_qty,
-                unit_price=req_object.unit_price,
-                status='ORDERED', # It's still on order
-                fund_id=req_object.fund_id  # Keep the same fund for back-orders
-            )
-
-        # Create history record
-        RequestHistory.objects.create(
-            request=req_object,
-            user=request.user,
-            old_status=req_object.status,
-            new_status='RECEIVED',
-            notes=f"Marked as received - Quantity: {quantity_received}"
-        )
-        
-        req_object.status = 'RECEIVED'
-        req_object.save()
+        req_base = self.get_object()
+        receipts, error = self._normalize_receipts_payload(request.data)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        result, error = self._process_request_receipts(req_base.id, receipts, request.user)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
         
         # Send email notification to requester
+        location_names = {item['location_name'] for item in result['created_items'] if item['location_name']}
+        location_summary = next(iter(location_names)) if len(location_names) == 1 else 'Multiple locations'
         try:
-            location = Location.objects.get(id=location_id) if location_id else None
             EmailNotificationService.send_item_received_notification(
-                req_object, 
+                result['request_obj'],
                 request.user, 
-                quantity_received,
-                location.name if location else None
+                len(result['created_items']),
+                location_summary
             )
-            logger.info(f"Email notification sent for item received: {req_object.id}")
+            logger.info(f"Email notification sent for item received: {result['request_id']}")
         except Exception as e:
             logger.error(f"Failed to send email notification for item received: {e}")
 
-        return Response({'status': 'Item received and new inventory record created.'})
+        first_created = result['created_items'][0] if result['created_items'] else {}
+        return Response({
+            'status': 'Items received and inventory records created.',
+            'item_id': first_created.get('id'),
+            'barcode': first_created.get('barcode'),
+            'request_status': result['request_status'],
+            'remaining_quantity': result['remaining_quantity'],
+            'created_items': result['created_items'],
+            'print_payload': {
+                'request_id': result['request_id'],
+                'item_name': result['request_item_name'],
+                'items': result['created_items'],
+            },
+        })
 
     @action(detail=True, methods=['post'])
     def reorder(self, request, pk=None):
@@ -261,6 +358,8 @@ class RequestViewSet(viewsets.ModelViewSet):
                 )
                 
                 req_object.status = 'ORDERED'
+                if req_object.remaining_quantity <= 0:
+                    req_object.remaining_quantity = req_object.quantity
                 req_object.save()
                 updated_count += 1
                 
@@ -360,59 +459,74 @@ class RequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def batch_mark_received(self, request):
-        """Batch mark received for multiple ordered requests."""
-        request_ids = request.data.get('request_ids', [])
-        location_id = request.data.get('location_id')
-        
-        if not request_ids or not location_id:
-            return Response({'error': 'Request IDs and location are required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        requests_to_update = Request.objects.filter(id__in=request_ids, status='ORDERED')
-        updated_count = 0
+        """Batch mark received with per-request receipt entries."""
+        payload_entries = request.data.get('receipts_by_request', [])
+
+        # Legacy payload compatibility: request_ids + location_id
+        if not payload_entries:
+            request_ids = request.data.get('request_ids', [])
+            location_id = request.data.get('location_id')
+            if request_ids and location_id:
+                try:
+                    location_id = int(location_id)
+                except (TypeError, ValueError):
+                    return Response({'error': 'Selected location does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+
+                ordered_requests = Request.objects.filter(id__in=request_ids, status='ORDERED')
+                payload_entries = []
+                for req_object in ordered_requests:
+                    remaining = req_object.remaining_quantity or req_object.quantity
+                    payload_entries.append({
+                        'request_id': req_object.id,
+                        'receipts': [{'location_id': location_id} for _ in range(remaining)],
+                    })
+
+        if not payload_entries:
+            return Response({'error': 'receipts_by_request is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        success_results = []
         errors = []
-        
-        for req_object in requests_to_update:
+
+        for entry in payload_entries:
+            request_id = entry.get('request_id')
+            receipts_raw = {'receipts': entry.get('receipts', [])}
+            receipts, error = self._normalize_receipts_payload(receipts_raw)
+            if error:
+                errors.append({'request_id': request_id, 'error': error})
+                continue
+
+            result, error = self._process_request_receipts(request_id, receipts, request.user)
+            if error:
+                errors.append({'request_id': request_id, 'error': error})
+                continue
+
+            location_names = {item['location_name'] for item in result['created_items'] if item['location_name']}
+            location_summary = next(iter(location_names)) if len(location_names) == 1 else 'Multiple locations'
             try:
-                # Create inventory item
-                Item.objects.create(
-                    name=req_object.item_name,
-                    vendor=req_object.vendor,
-                    catalog_number=req_object.catalog_number,
-                    item_type_id=1,
-                    owner=req_object.requested_by,
-                    quantity=req_object.quantity,
-                    unit=req_object.unit_size,
-                    location_id=location_id,
-                    price=req_object.unit_price,
-                    fund_id=req_object.fund_id,
-                    barcode=req_object.barcode  # Include barcode from the request
+                EmailNotificationService.send_item_received_notification(
+                    result['request_obj'],
+                    request.user,
+                    len(result['created_items']),
+                    location_summary,
                 )
-                
-                # Create history record
-                RequestHistory.objects.create(
-                    request=req_object,
-                    user=request.user,
-                    old_status=req_object.status,
-                    new_status='RECEIVED',
-                    notes=f"Batch mark received operation"
-                )
-                
-                req_object.status = 'RECEIVED'
-                req_object.save()
-                updated_count += 1
-                
             except Exception as e:
-                errors.append(f"Request {req_object.id}: {str(e)}")
-        
+                logger.error(f"Failed to send email notification for item received: {e}")
+
+            success_results.append({
+                'request_id': result['request_id'],
+                'request_status': result['request_status'],
+                'remaining_quantity': result['remaining_quantity'],
+                'created_count': len(result['created_items']),
+                'created_items': result['created_items'],
+            })
+
         response_data = {
-            'updated_count': updated_count,
-            'total_requested': len(request_ids)
+            'success_count': len(success_results),
+            'failure_count': len(errors),
+            'results': success_results,
+            'errors': errors,
         }
-        
-        if errors:
-            response_data['errors'] = errors
-        
-        return Response(response_data)
+        return Response(response_data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'])
     def batch_reorder(self, request):

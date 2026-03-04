@@ -30,6 +30,7 @@ class Request(models.Model):
 
     # Quantity and Price
     quantity = models.PositiveIntegerField(default=1)
+    remaining_quantity = models.PositiveIntegerField(default=0, help_text="Remaining quantity to receive")
     unit_size = models.CharField(max_length=100, blank=True, help_text="e.g., 100 uL, 500 g")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -47,6 +48,8 @@ class Request(models.Model):
     def save(self, *args, **kwargs):
         if not self.barcode:
             self.barcode = f"REQ-{uuid.uuid4().hex[:8].upper()}"
+        if self._state.adding and (self.remaining_quantity is None or self.remaining_quantity == 0):
+            self.remaining_quantity = self.quantity
         super().save(*args, **kwargs)
 
     def __str__(self):

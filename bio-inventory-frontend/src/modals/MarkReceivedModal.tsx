@@ -1,49 +1,162 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Printer, X } from 'lucide-react';
 import PrintBarcodeModal from '../components/PrintBarcodeModal.tsx';
+import { useNotification } from '../contexts/NotificationContext.tsx';
+import { printingService } from '../services/printingService.ts';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
 const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
-    const [locationId, setLocationId] = useState('');
-    const [quantityReceived, setQuantityReceived] = useState(request?.quantity || 1);
+    const notification = useNotification();
+    const [defaultLocationId, setDefaultLocationId] = useState('');
+    const [quantityReceived, setQuantityReceived] = useState(1);
+    const [pieceLocations, setPieceLocations] = useState([]);
     const [locations, setLocations] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showBarcodeSection, setShowBarcodeSection] = useState(false);
     const [showPrintModal, setShowPrintModal] = useState(false);
+    const [selectedPrintItem, setSelectedPrintItem] = useState(null);
+    const [createdItems, setCreatedItems] = useState([]);
+    const [isBulkPrinting, setIsBulkPrinting] = useState(false);
+    const bulkPrintLockRef = useRef(false);
+
+    const remainingQty = Number(request?.remaining_quantity ?? request?.quantity ?? 1);
+
     useEffect(() => {
-        if (isOpen) {
-            const fetchLocations = async () => {
-                const response = await fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { 
-                    headers: { 'Authorization': `Token ${token}` } 
-                });
-                const data = await response.json();
-                setLocations(data);
-            };
-            fetchLocations();
-            setQuantityReceived(request?.quantity || 1);
-            setShowBarcodeSection(false);
+        if (!isOpen) return;
+        const fetchLocations = async () => {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), {
+                headers: { 'Authorization': `Token ${token}` }
+            });
+            const data = await response.json();
+            setLocations(data);
+        };
+        fetchLocations();
+        setQuantityReceived(remainingQty);
+        setPieceLocations(Array(remainingQty).fill(''));
+        setDefaultLocationId('');
+        setShowBarcodeSection(false);
+        setCreatedItems([]);
+        setSelectedPrintItem(null);
+        bulkPrintLockRef.current = false;
+    }, [isOpen, token, remainingQty]);
+
+    const applyDefaultLocationToAll = () => {
+        if (!defaultLocationId) return;
+        setPieceLocations(Array(quantityReceived).fill(defaultLocationId));
+    };
+
+    const handleQuantityChange = (value) => {
+        const parsed = parseInt(value, 10);
+        if (Number.isNaN(parsed)) {
+            setQuantityReceived('');
+            setPieceLocations([]);
+            return;
         }
-    }, [isOpen, request, token]);
+
+        const bounded = Math.max(1, Math.min(parsed, remainingQty));
+        setQuantityReceived(bounded);
+        setPieceLocations((prev) => {
+            const next = [...prev];
+            if (next.length > bounded) {
+                return next.slice(0, bounded);
+            }
+            while (next.length < bounded) {
+                next.push(defaultLocationId || '');
+            }
+            return next;
+        });
+    };
+
+    const updatePieceLocation = (index, locationId) => {
+        setPieceLocations((prev) => {
+            const next = [...prev];
+            next[index] = locationId;
+            return next;
+        });
+    };
 
     const handleSubmit = async (e) => {
-        e.preventDefault(); 
+        e.preventDefault();
         setIsSubmitting(true);
         try {
-            await onSave(request.id, { 
-                location_id: parseInt(locationId), 
-                quantity_received: parseInt(quantityReceived) 
-            });
-            // Show barcode section after successful save
+            const qty = Number(quantityReceived);
+            const receipts = pieceLocations.slice(0, qty).map((locationId) => ({
+                location_id: parseInt(locationId, 10),
+            }));
+
+            if (!receipts.length || receipts.some((entry) => Number.isNaN(entry.location_id))) {
+                throw new Error('Please select a storage location for each piece.');
+            }
+
+            const result = await onSave(request.id, { receipts });
+            const resultItems = result?.created_items || [];
+            if (!resultItems.length && result?.barcode) {
+                resultItems.push({
+                    id: result?.item_id,
+                    barcode: result?.barcode,
+                    location_name: '',
+                });
+            }
+            setCreatedItems(resultItems);
             setShowBarcodeSection(true);
         } catch (error) {
-            // Error is already handled by parent component
             console.error('Form submission failed:', error);
+            if (error?.message) {
+                notification.error(error.message);
+            }
         } finally {
             setIsSubmitting(false);
         }
     };
 
+    const handleBulkPrint = async () => {
+        if (bulkPrintLockRef.current || isBulkPrinting || !createdItems.length) return;
+        bulkPrintLockRef.current = true;
+        setIsBulkPrinting(true);
+        let successCount = 0;
+
+        try {
+            const dedupedItems = [];
+            const seenItemIds = new Set();
+            for (const item of createdItems) {
+                const itemId = item?.id;
+                if (itemId !== null && itemId !== undefined) {
+                    const itemKey = String(itemId);
+                    if (seenItemIds.has(itemKey)) continue;
+                    seenItemIds.add(itemKey);
+                }
+                dedupedItems.push(item);
+            }
+
+            for (const item of dedupedItems) {
+                if (!item.barcode) continue;
+                try {
+                    await printingService.printItemLabel(request?.item_name || 'Item', item.barcode, {
+                        itemId: item?.id?.toString(),
+                        priority: 'normal',
+                        customText: request?.item_name || 'Item',
+                        printMode: 'tape',
+                    });
+                    successCount += 1;
+                } catch (error) {
+                    console.error('Failed to queue print job for barcode:', item.barcode, error);
+                }
+            }
+
+            if (successCount > 0) {
+                notification.success(`Queued ${successCount} print job(s)`);
+            } else {
+                notification.error('Failed to queue print jobs');
+            }
+        } finally {
+            setIsBulkPrinting(false);
+            bulkPrintLockRef.current = false;
+        }
+    };
+
     if (!isOpen) return null;
+    const qty = Number(quantityReceived) || 0;
+    const isFormValid = qty > 0 && qty <= remainingQty && pieceLocations.length === qty && pieceLocations.every(Boolean);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
@@ -70,48 +183,82 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                                 <label htmlFor="quantityReceived" className="block text-sm font-medium text-gray-700">
                                     Quantity Received *
                                 </label>
-                                <input 
-                                    type="number" 
-                                    id="quantityReceived" 
-                                    value={quantityReceived} 
-                                    onChange={(e) => setQuantityReceived(e.target.value)} 
-                                    required 
-                                    max={request?.quantity} 
-                                    min="1" 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500" 
+                                <input
+                                    type="number"
+                                    id="quantityReceived"
+                                    value={quantityReceived}
+                                    onChange={(e) => handleQuantityChange(e.target.value)}
+                                    required
+                                    max={remainingQty}
+                                    min="1"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                                 />
+                                <p className="text-xs text-gray-500 mt-1">Remaining to receive: {remainingQty}</p>
                             </div>
 
                             <div>
-                                <label htmlFor="locationId" className="block text-sm font-medium text-gray-700">
-                                    Storage Location *
+                                <label htmlFor="defaultLocationId" className="block text-sm font-medium text-gray-700">
+                                    Default Storage Location
                                 </label>
-                                <select 
-                                    id="locationId" 
-                                    value={locationId} 
-                                    onChange={(e) => setLocationId(e.target.value)} 
-                                    required 
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                                >
-                                    <option value="">Select a location...</option>
-                                    {locations.map(loc => (
-                                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                <div className="mt-1 flex gap-2">
+                                    <select
+                                        id="defaultLocationId"
+                                        value={defaultLocationId}
+                                        onChange={(e) => setDefaultLocationId(e.target.value)}
+                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                                    >
+                                        <option value="">Select a default location...</option>
+                                        {locations.map((loc) => (
+                                            <option key={loc.id} value={String(loc.id)}>{loc.name}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={applyDefaultLocationToAll}
+                                        disabled={!defaultLocationId}
+                                        className="btn btn-secondary whitespace-nowrap"
+                                    >
+                                        Apply to All
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Piece-by-piece Locations *
+                                </label>
+                                <div className="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-md p-3 bg-gray-50">
+                                    {Array.from({ length: qty }).map((_, index) => (
+                                        <div key={`piece-${index}`} className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-gray-600 w-14">Piece {index + 1}</span>
+                                            <select
+                                                value={pieceLocations[index] || ''}
+                                                onChange={(e) => updatePieceLocation(index, e.target.value)}
+                                                required
+                                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                                            >
+                                                <option value="">Select location...</option>
+                                                {locations.map((loc) => (
+                                                    <option key={loc.id} value={String(loc.id)}>{loc.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     ))}
-                                </select>
+                                </div>
                             </div>
 
                             <div className="flex justify-end space-x-4 pt-4">
-                                <button 
-                                    type="button" 
-                                    onClick={onClose} 
+                                <button
+                                    type="button"
+                                    onClick={onClose}
                                     className="btn btn-secondary"
                                     disabled={isSubmitting}
                                 >
                                     Cancel
                                 </button>
-                                <button 
-                                    type="submit" 
-                                    disabled={isSubmitting} 
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting || !isFormValid}
                                     className="btn btn-primary"
                                 >
                                     {isSubmitting ? 'Saving...' : 'Confirm & Update Inventory'}
@@ -122,49 +269,67 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                         <div className="space-y-6">
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                                 <h3 className="text-lg font-semibold text-green-800 mb-2">
-                                    ✓ Item Successfully Received
+                                    Items Successfully Received
                                 </h3>
                                 <p className="text-green-700">
-                                    <strong>{request?.item_name}</strong> has been marked as received and added to inventory.
+                                    <strong>{request?.item_name}</strong> has been received and split into {createdItems.length} inventory items.
                                 </p>
                             </div>
 
                             <div className="border-t pt-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-lg font-semibold text-gray-900">
-                                        Print Barcode Label
+                                        Print Barcode Labels
                                     </h3>
                                     <Printer className="w-5 h-5 text-gray-500" />
                                 </div>
-                                
-                                {request?.barcode ? (
-                                    <div className="bg-gray-50 rounded-lg p-4">
-                                        <div className="text-center mb-4">
-                                            <div className="text-sm text-gray-600 mb-2">
-                                                <p><strong>Item:</strong> {request.item_name}</p>
-                                                <p><strong>Barcode:</strong> {request.barcode}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-center">
-                                            <button
-                                                onClick={() => setShowPrintModal(true)}
-                                                className="btn btn-primary btn-sm flex items-center space-x-2"
-                                            >
-                                                <Printer className="w-4 h-4" />
-                                                <span>Print Label</span>
-                                            </button>
+
+                                {createdItems.length > 0 ? (
+                                    <div className="space-y-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleBulkPrint}
+                                            disabled={isBulkPrinting}
+                                            className="btn btn-primary w-full"
+                                        >
+                                            {isBulkPrinting ? 'Queueing Print Jobs...' : `Print All (${createdItems.length})`}
+                                        </button>
+
+                                        <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-md">
+                                            {createdItems.map((item, index) => (
+                                                <div key={item.id || item.barcode || index} className="flex items-center justify-between p-3 border-b last:border-b-0">
+                                                    <div className="text-sm">
+                                                        <p className="font-medium text-gray-900">Piece {index + 1}</p>
+                                                        <p className="font-mono text-xs text-gray-600">{item.barcode}</p>
+                                                        {item.location_name && (
+                                                            <p className="text-xs text-gray-500">Location: {item.location_name}</p>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedPrintItem(item);
+                                                            setShowPrintModal(true);
+                                                        }}
+                                                        className="btn btn-secondary btn-sm flex items-center space-x-1"
+                                                    >
+                                                        <Printer className="w-3 h-3" />
+                                                        <span>Print</span>
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="bg-gray-50 rounded-lg p-4 text-center">
-                                        <p className="text-gray-500">No barcode available for this item</p>
+                                        <p className="text-gray-500">No barcode labels available for this receive action.</p>
                                     </div>
                                 )}
                             </div>
 
                             <div className="flex justify-end">
-                                <button 
-                                    onClick={onClose} 
+                                <button
+                                    onClick={onClose}
                                     className="btn btn-primary"
                                 >
                                     Done
@@ -175,14 +340,16 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                 </div>
             </div>
 
-            {/* Centralized Print Modal */}
-            {request?.barcode && (
+            {selectedPrintItem?.barcode && (
                 <PrintBarcodeModal
                     isOpen={showPrintModal}
-                    onClose={() => setShowPrintModal(false)}
-                    itemName={request.item_name}
-                    barcode={request.barcode}
-                    itemId={request.id}
+                    onClose={() => {
+                        setShowPrintModal(false);
+                        setSelectedPrintItem(null);
+                    }}
+                    itemName={request?.item_name || 'Item'}
+                    barcode={selectedPrintItem.barcode}
+                    itemId={selectedPrintItem.id}
                     allowTextEdit={true}
                     priority="normal"
                 />

@@ -239,13 +239,21 @@ const MobileRequestsPage: React.FC<MobileRequestsPageProps> = ({
       console.log('Mark received response status:', response.status);
       const responseText = await response.text();
       console.log('Mark received response:', responseText);
+      let responseData = null;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch (parseError) {
+        console.warn('Failed to parse mark received response JSON:', parseError);
+      }
       
       if (!response.ok) {
-        throw new Error(`Failed to mark as received: ${responseText}`);
+        const errorMessage = responseData?.error || responseText || 'Unknown error';
+        throw new Error(`Failed to mark as received: ${errorMessage}`);
       }
       
       fetchRequests(); // Refresh list on success
       // Don't close modal immediately - let the modal handle the success state
+      return responseData;
     } catch (error) {
       console.error('Mark received error:', error);
       errorHandler.handleError(error, 'MARK_RECEIVED');

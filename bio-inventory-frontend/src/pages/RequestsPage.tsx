@@ -40,7 +40,16 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
         });
         try {
             const response = await fetch(`${buildApiUrl(API_ENDPOINTS.REQUESTS)}?${params.toString()}`, { headers: { 'Authorization': `Token ${token}` } });
-            if (!response.ok) throw new Error(`Authentication failed.`);
+            if (!response.ok) {
+                let detail = '';
+                try {
+                    const payload = await response.json();
+                    detail = payload?.detail || payload?.error || '';
+                } catch {
+                    // ignore parse errors for non-json responses
+                }
+                throw new Error(`Request API failed (${response.status})${detail ? `: ${detail}` : ''}`);
+            }
             const data = await response.json();
             setRequests(data);
         } catch (e) { setError(e.message); } finally { setLoading(false); }
@@ -110,13 +119,21 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
             console.log('Mark received response status:', response.status);
             const responseText = await response.text();
             console.log('Mark received response:', responseText);
+            let responseData = null;
+            try {
+                responseData = responseText ? JSON.parse(responseText) : null;
+            } catch (parseError) {
+                console.warn('Failed to parse mark received response JSON:', parseError);
+            }
             
             if (!response.ok) {
-                throw new Error(`Failed to mark as received: ${responseText}`);
+                const errorMessage = responseData?.error || responseText || 'Unknown error';
+                throw new Error(`Failed to mark as received: ${errorMessage}`);
             }
             
             fetchRequests(); // Refresh list on success
             // Don't close modal immediately - let the modal handle the success state
+            return responseData;
         } catch (error) {
             console.error('Mark received error:', error);
             notification.error(error.message);
@@ -305,14 +322,18 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
                     'Content-Type': 'application/json',
                     'Authorization': `Token ${token}`
                 },
-                body: JSON.stringify({ 
-                    request_ids: selectedRequestsData.map(req => req.id),
-                    location_id: data.location_id
-                })
+                body: JSON.stringify(data)
             });
             if (response.ok) {
                 const result = await response.json();
-                notification.success(`Successfully marked ${result.updated_count} requests as received`);
+                const successCount = result.success_count || 0;
+                const failureCount = result.failure_count || 0;
+                if (failureCount > 0) {
+                    notification.warning(`Received ${successCount} request(s); ${failureCount} request(s) failed. Check errors in logs.`);
+                    console.warn('Batch receive errors:', result.errors);
+                } else {
+                    notification.success(`Successfully marked ${successCount} request(s) as received`);
+                }
                 fetchRequests(); // Refresh data
             } else {
                 const error = await response.json();
