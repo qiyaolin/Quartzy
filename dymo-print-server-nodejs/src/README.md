@@ -51,17 +51,28 @@ Edit `print_agent_config.json`:
 ```json
 {
   "backend_url": "https://your-backend-api.com",
+  "server_id": "lab-print-server-001",
   "api_token": "your-api-token-here",
   "api_endpoints": {
+    "fetch_job": "/api/printing/api/fetch-pending-job/",
     "get_jobs": "/api/printing/api/jobs/",
     "update_status": "/api/printing/api/jobs/{job_id}/update_status/"
   },
   "poll_interval": 3,
+  "default_print_mode": "tape",
+  "mode_template_map": {
+    "tape": "sample.label",
+    "label": "QRcode.label"
+  },
   "printer_selection": {
-    "mode": "specific",
-    "preferred_printer": "DYMO LabelWriter 450 DUO Tape",
+    "mode": "auto",
+    "preferred_printer": "",
     "label_printer_keywords": ["Label", "LabelWriter"],
     "tape_printer_keywords": ["Tape", "LabelManager"]
+  },
+  "mode_printer_map": {
+    "tape": { "mode": "tape" },
+    "label": { "mode": "label" }
   },
   "auto_close_browser": false,
   "debug_mode": true
@@ -84,6 +95,9 @@ Edit `print_agent_config.json`:
 - **`backend_url`**: Your API server URL
 - **`api_token`**: Authentication token for API calls
 - **`poll_interval`**: How often to check for new jobs (seconds)
+- **`default_print_mode`**: Default mode when job does not specify `printMode`
+- **`mode_template_map`**: Template mapping for each mode (`tape` / `label`)
+- **`mode_printer_map`**: Printer selection mode mapping per print mode
 - **`preferred_printer`**: Exact name of preferred printer
 - **`auto_close_browser`**: Whether to close print window after completion
 - **`debug_mode`**: Enable detailed logging
@@ -127,7 +141,9 @@ Create print jobs via your backend API with this structure:
     "barcode": "ITEM123456",
     "customText": "Custom Label Text",
     "fontSize": "10",
-    "isBold": true
+    "isBold": true,
+    "printMode": "tape",
+    "templateFile": "sample.label"
   }
 }
 ```
@@ -137,19 +153,31 @@ Create print jobs via your backend API with this structure:
 ### Backend Requirements
 Your backend should provide these endpoints:
 
+#### GET `/api/printing/api/fetch-pending-job/?server_id=<server-id>`
+Atomically claims one pending/retryable print job:
+```json
+{
+  "id": 123,
+  "status": "processing",
+  "label_data": {
+    "itemName": "Test Item",
+    "barcode": "TEST123",
+    "customText": "Custom Text",
+    "printMode": "label"
+  }
+}
+```
+
+Returns `204 No Content` when no job is available.
+
 #### GET `/api/printing/api/jobs/`
-Returns pending print jobs:
+Legacy list endpoint (kept for compatibility):
 ```json
 {
   "results": [
     {
       "id": 123,
-      "status": "pending",
-      "label_data": {
-        "itemName": "Test Item",
-        "barcode": "TEST123",
-        "customText": "Custom Text"
-      }
+      "status": "pending"
     }
   ]
 }
@@ -184,6 +212,11 @@ Updates job status:
 - Check browser console for detailed errors
 - Verify label template is valid
 - Ensure printer has compatible label stock
+
+#### 4. "Template type is incompatible with print mode"
+- `printMode: "tape"` requires a `ContinuousLabel` template (e.g. `sample.label`)
+- `printMode: "label"` requires a `DieCutLabel` template (e.g. `QRcode.label`)
+- Avoid sending `QRcode.label` to tape mode, or `sample.label` to label mode
 
 #### 4. "Configuration not loading"
 - Check that `print_agent_config.json` is in the same directory as the Python script

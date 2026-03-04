@@ -1,16 +1,37 @@
 {
-  "backend_url": "https://lab-inventory-467021.nn.r.appspot.com",
-  "api_token": "5e4ef32fe77d54a3dccf5181797bd840791465e9",
+  "backend_url": "http://127.0.0.1:8000",
+  "api_token": "1c24d8b824f16925a9503b1335ec2531fee23b24",
   "api_endpoints": {
     "get_jobs": "/api/printing/api/jobs/",
     "update_status": "/api/printing/api/jobs/{job_id}/update_status/"
   },
   "poll_interval": 3,
   "template_path": "auto_print_template.html",
-  "label_file": "QRcode.label",
+  "label_file": "sample.label",
+  "default_print_mode": "tape",
+  "mode_template_map": {
+    "tape": "sample.label",
+    "label": "QRcode.label"
+  },
   "printer_selection": {
     "mode": "specific",
-    "preferred_printer": "DYMO LabelWriter 450 DUO Label"
+    "preferred_printer": "DYMO LabelWriter 450 DUO Tape",
+    "label_printer_keywords": [
+      "Label",
+      "LabelWriter"
+    ],
+    "tape_printer_keywords": [
+      "Tape",
+      "LabelManager"
+    ]
+  },
+  "mode_printer_map": {
+    "tape": {
+      "mode": "tape"
+    },
+    "label": {
+      "mode": "label"
+    }
   },
   "max_retry_count": 3,
   "browser_timeout": 30,

@@ -2,6 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import PrintJob, PrintJobHistory, PrintServer
 
+VALID_PRINT_MODES = {'tape', 'label'}
+
 
 class PrintJobSerializer(serializers.ModelSerializer):
     requested_by_username = serializers.CharField(source='requested_by.username', read_only=True)
@@ -27,6 +29,16 @@ class PrintJobSerializer(serializers.ModelSerializer):
         for field in required_fields:
             if field not in value:
                 raise serializers.ValidationError(f"Missing required field: {field}")
+
+        print_mode = value.get('printMode')
+        if print_mode is not None and print_mode not in VALID_PRINT_MODES:
+            raise serializers.ValidationError(
+                f"Invalid printMode: {print_mode}. Expected one of {sorted(VALID_PRINT_MODES)}"
+            )
+
+        template_file = value.get('templateFile')
+        if template_file is not None and not str(template_file).strip():
+            raise serializers.ValidationError("templateFile cannot be empty when provided")
         return value
 
 
@@ -43,6 +55,16 @@ class PrintJobCreateSerializer(serializers.ModelSerializer):
         for field in required_fields:
             if field not in value:
                 raise serializers.ValidationError(f"Missing required field: {field}")
+
+        print_mode = value.get('printMode')
+        if print_mode is not None and print_mode not in VALID_PRINT_MODES:
+            raise serializers.ValidationError(
+                f"Invalid printMode: {print_mode}. Expected one of {sorted(VALID_PRINT_MODES)}"
+            )
+
+        template_file = value.get('templateFile')
+        if template_file is not None and not str(template_file).strip():
+            raise serializers.ValidationError("templateFile cannot be empty when provided")
         return value
 
     def create(self, validated_data):

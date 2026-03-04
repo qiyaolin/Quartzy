@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q, F
-from django.db import transaction
+from django.db import transaction, connection
 from .models import PrintJob, PrintJobHistory, PrintServer
 from .serializers import (
     PrintJobSerializer, PrintJobCreateSerializer, PrintJobStatusUpdateSerializer,
@@ -49,9 +49,18 @@ class PrintJobViewSet(viewsets.ModelViewSet):
         
         # Get the next pending job with highest priority
         with transaction.atomic():
-            job = PrintJob.objects.filter(
+            pending_jobs = PrintJob.objects.filter(
                 Q(status='pending') | Q(status='failed', retry_count__lt=F('max_retries'))
-            ).order_by('-priority', 'created_at').first()
+            )
+
+            # Use row-level locking to avoid the same job being claimed by multiple agents.
+            if connection.features.has_select_for_update:
+                if connection.features.has_select_for_update_skip_locked:
+                    pending_jobs = pending_jobs.select_for_update(skip_locked=True)
+                else:
+                    pending_jobs = pending_jobs.select_for_update()
+
+            job = pending_jobs.order_by('-priority', 'created_at').first()
             
             if job:
                 # Mark as processing

@@ -303,10 +303,20 @@
         );
     }
 
+    function connectedPrinterNames(printers) {
+        return (printers || [])
+            .filter(p => p && p.isConnected)
+            .map(p => p.name)
+            .join(', ');
+    }
+
     // Select appropriate printer based on configuration
     function selectPrinter(printers, printerConfig) {
+        selectPrinter.lastError = '';
+
         if (!printers || printers.length === 0) {
             console.log('❌ No printers available for selection');
+            selectPrinter.lastError = 'No DYMO printers available';
             return null;
         }
 
@@ -329,8 +339,10 @@
                 return specificPrinter;
             } else if (specificPrinter && !specificPrinter.isConnected) {
                 console.warn(`⚠️ Specific printer "${preferredPrinter}" found but NOT CONNECTED`);
+                selectPrinter.lastError = `Specific printer "${preferredPrinter}" is not connected`;
             } else {
                 console.warn(`❌ Specific printer "${preferredPrinter}" NOT FOUND`);
+                selectPrinter.lastError = `Specific printer "${preferredPrinter}" not found`;
             }
             console.warn(`⚠️ Falling back to auto selection`);
         }
@@ -352,6 +364,8 @@
                 return labelPrinter;
             } else {
                 console.log(`❌ No connected label printer found with matching keywords`);
+                selectPrinter.lastError = `No connected label printer found. Connected printers: ${connectedPrinterNames(printers) || 'none'}`;
+                return null;
             }
         }
 
@@ -372,6 +386,8 @@
                 return tapePrinter;
             } else {
                 console.log(`❌ No connected tape printer found with matching keywords`);
+                selectPrinter.lastError = `No connected tape printer found. Connected printers: ${connectedPrinterNames(printers) || 'none'}`;
+                return null;
             }
         }
 
@@ -405,7 +421,7 @@
             // Select appropriate printer
             const selectedPrinter = selectPrinter(printers, params.printer_config);
             if (!selectedPrinter) {
-                const error = 'No suitable printer found';
+                const error = selectPrinter.lastError || 'No suitable printer found';
                 showStatus(error, 'error');
                 notifyPrintResult(params.jobId, false, error);
                 return;

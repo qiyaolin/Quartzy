@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Printer, Package, AlertCircle } from 'lucide-react';
 import { printingService } from "../services/printingService.ts";
@@ -30,7 +30,14 @@ const PrintBarcodeModal: React.FC<PrintBarcodeModalProps> = ({
   const [fontSize, setFontSize] = useState(8);
   const [isBold, setIsBold] = useState(false);
   const [selectedPriority, setSelectedPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>(priority);
+  const [selectedPrintMode, setSelectedPrintMode] = useState<'tape' | 'label'>('tape');
   const notification = useNotification();
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedPrintMode('tape');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -47,7 +54,8 @@ const PrintBarcodeModal: React.FC<PrintBarcodeModalProps> = ({
         priority: selectedPriority,
         customText: editableText,
         fontSize,
-        isBold
+        isBold,
+        printMode: selectedPrintMode
       });
 
       notification.success(`Print job queued successfully! Job ID: ${result.id}`);
@@ -195,6 +203,29 @@ const PrintBarcodeModal: React.FC<PrintBarcodeModalProps> = ({
                   }`}
                 >
                   {priorityOption.charAt(0).toUpperCase() + priorityOption.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Print Mode Selection */}
+          <div className="bg-indigo-50 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Print Mode</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { key: 'tape', label: 'Tape (Default)' },
+                { key: 'label', label: 'Label' }
+              ] as const).map((modeOption) => (
+                <button
+                  key={modeOption.key}
+                  onClick={() => setSelectedPrintMode(modeOption.key)}
+                  className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                    selectedPrintMode === modeOption.key
+                      ? 'bg-indigo-500 text-white border-indigo-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {modeOption.label}
                 </button>
               ))}
             </div>

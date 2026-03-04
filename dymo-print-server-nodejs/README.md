@@ -45,6 +45,11 @@ Edit `src/print_agent_config.json`:
   "backend_url": "https://your-backend-server.com",
   "api_token": "",
   "poll_interval": 3,
+  "default_print_mode": "tape",
+  "mode_template_map": {
+    "tape": "sample.label",
+    "label": "QRcode.label"
+  },
   "auto_close_browser": true,
   "debug_mode": false
 }
@@ -53,7 +58,7 @@ Edit `src/print_agent_config.json`:
 ## API Integration
 Your backend should provide:
 - `GET /api/printing/api/jobs/` - Return pending print jobs
-- `POST /api/printing/api/jobs/{id}/update-status/` - Receive status updates
+- `POST /api/printing/api/jobs/{id}/update_status/` - Receive status updates
 
 ## Print Job Format
 ```json
@@ -64,7 +69,8 @@ Your backend should provide:
     "barcode": "SAMPLE-123",
     "customText": "Optional custom text",
     "fontSize": "8",
-    "isBold": false
+    "isBold": false,
+    "printMode": "tape"
   }
 }
 ```

@@ -1,12 +1,30 @@
 {
   "backend_url": "https://your-backend-server.com",
+  "server_id": "lab-print-server-001",
   "api_token": "your-api-token-here",
   "api_endpoints": {
+    "fetch_job": "/api/printing/api/fetch-pending-job/",
     "get_jobs": "/api/printing/api/jobs/",
     "update_status": "/api/printing/api/jobs/{job_id}/update_status/"
   },
   "poll_interval": 3,
   "template_path": "auto_print_template.html",
+  "label_file": "sample.label",
+  "default_print_mode": "tape",
+  "mode_template_map": {
+    "tape": "sample.label",
+    "label": "QRcode.label"
+  },
+  "printer_selection": {
+    "mode": "auto",
+    "preferred_printer": "",
+    "label_printer_keywords": ["Label", "LabelWriter"],
+    "tape_printer_keywords": ["Tape", "LabelManager"]
+  },
+  "mode_printer_map": {
+    "tape": { "mode": "tape" },
+    "label": { "mode": "label" }
+  },
   "max_retry_count": 3,
   "browser_timeout": 30,
   "auto_close_browser": true,
