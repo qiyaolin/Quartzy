@@ -4,22 +4,24 @@
 // Get API base URL from environment variables, use default if not available
 const getApiBaseUrl = (): string => {
   // In browser environment, React apps can only access environment variables starting with REACT_APP_
-  const envApiUrl = process.env.REACT_APP_API_BASE_URL;
-  
-  if (envApiUrl) {
+  const envApiUrl = (process.env.REACT_APP_API_BASE_URL || '').trim();
+
+  // "auto" means runtime auto-detection based on current host.
+  if (envApiUrl && envApiUrl.toLowerCase() !== 'auto') {
     return envApiUrl;
   }
   
-  // If no environment variable, determine based on current domain
+  // Auto mode: localhost -> local backend, otherwise same-origin backend.
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
+    const { hostname, origin } = window.location;
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://127.0.0.1:8000';
     }
+    return origin;
   }
   
-  // Default to production environment URL
-  return 'https://lab-inventory-467021.nn.r.appspot.com';
+  // Safe server-side fallback for local development.
+  return 'http://127.0.0.1:8000';
 };
 
 export const API_BASE_URL = getApiBaseUrl();
@@ -27,7 +29,7 @@ export const API_BASE_URL = getApiBaseUrl();
 // API endpoint builder function - fix undefined errors
 export const buildApiUrl = (endpoint: string): string => {
   // Ensure API_BASE_URL and endpoint are not undefined
-  const baseUrl = API_BASE_URL || 'https://lab-inventory-467021.nn.r.appspot.com';
+  const baseUrl = API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
   const safeEndpoint = endpoint || '';
   
   // Ensure endpoint starts with /

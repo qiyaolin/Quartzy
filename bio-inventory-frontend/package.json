@@ -26,13 +26,10 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "deploy:local": "cmd /c ..\\deploy_local_frontend.bat",
+    "serve:prod": "npx --yes serve -s build -l 3000 -c serve.json --no-port-switching -n -L",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "predeploy": "npm run build",
-    "deploy": "firebase deploy --only hosting",
-    "deploy:preview": "firebase hosting:channel:deploy preview",
-    "firebase:login": "firebase login",
-    "firebase:init": "firebase init"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [

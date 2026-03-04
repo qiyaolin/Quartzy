@@ -100,3 +100,10 @@ dist/
 # Temporary files
 *.tmp
 *.temp
+
+# Local bootstrap data (contains real lab data)
+/Hayer Lab's Order Requests.csv
+/data.csv
+
+# Local one-off database reset helper
+/bio-inventory-backend/reset_postgres.py

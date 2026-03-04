@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,9 +28,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-(ke1aekx@qekmk_og@bbl
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 # Allow production host by default to avoid host header rejections on GAE
+# Add * to prepare for Cloudflare tunnel which may pass different Host headers
 ALLOWED_HOSTS = os.environ.get(
     'ALLOWED_HOSTS',
-    'localhost,127.0.0.1,lab-inventory-467021.nn.r.appspot.com'
+    'localhost,127.0.0.1,*,lab-inventory-467021.nn.r.appspot.com'
 ).split(',')
 
 # Security settings for production
@@ -109,6 +111,14 @@ DB_PASS = os.environ.get("DB_PASS") # 将从 app.yaml 读取
 DB_NAME = os.environ.get("DB_NAME", "inventory_db")
 INSTANCE_CONNECTION_NAME = os.environ.get("INSTANCE_CONNECTION_NAME") # 将从 app.yaml 读取
 
+
+def _require_env_vars(var_names, context):
+    missing = [name for name in var_names if not os.environ.get(name)]
+    if missing:
+        raise ImproperlyConfigured(
+            f"Missing required environment variables for {context}: {', '.join(missing)}"
+        )
+
 # App Engine 环境下的数据库配置
 if os.environ.get('GAE_ENV', '').startswith('standard'):
     # 在 App Engine 标准环境中使用 Unix socket 连接
@@ -124,12 +134,26 @@ if os.environ.get('GAE_ENV', '').startswith('standard'):
     }
 else:
     # 本地开发环境或其他环境
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+    # 如果环境变量指明了使用 Postgres，则连接 Postgres，否则退回 SQLite
+    if os.environ.get('USE_POSTGRES', 'False').lower() == 'true':
+        _require_env_vars(["DB_HOST", "DB_PORT", "DB_PASS", "DB_USER", "DB_NAME"], "local PostgreSQL")
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': DB_NAME,
+                'USER': DB_USER,
+                'PASSWORD': DB_PASS,
+                'HOST': os.environ.get('DB_HOST', 'localhost'),
+                'PORT': os.environ.get('DB_PORT', '5432'),
+            }
         }
-    }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
 
 
 # Password validation
@@ -192,7 +216,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CORS Configuration (allow both local dev and production hosts)
 cors_origins_env = os.environ.get(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com'
+    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173,https://lab-inventory-467021.web.app,https://lab-inventory-467021.firebaseapp.com'
 )
 CORS_ALLOWED_ORIGINS = [o.strip() for o in cors_origins_env.split(',') if o.strip()]
 
