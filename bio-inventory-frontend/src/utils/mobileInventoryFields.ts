@@ -8,10 +8,18 @@ export interface MobileInventoryItem {
   unit: string | null;
   catalog_number: string | null;
   location: NamedValue;
+  primary_location?: NamedValue;
   item_type: NamedValue;
   vendor: NamedValue;
   expiry_date: string | null;
   barcode: string | null;
+  tracking_mode?: string | null;
+  label_mode?: string | null;
+  tracking_summary?: string | null;
+  request_state_label?: string | null;
+  can_scan_consume?: boolean;
+  open_unit_count?: number;
+  last_used_date?: string | null;
   fund_id?: number;
   fund_name?: string;
   created_at: string;
@@ -106,10 +114,18 @@ export const normalizeInventoryItem = (raw: unknown): MobileInventoryItem | null
     unit: toOptionalString(record.unit),
     catalog_number: toOptionalString(record.catalog_number),
     location: normalizeNamedValue(record.location),
+    primary_location: normalizeNamedValue(record.primary_location),
     item_type: normalizeNamedValue(record.item_type),
     vendor: normalizeNamedValue(record.vendor),
     expiry_date: toOptionalString(record.expiry_date ?? record.expiration_date),
     barcode: toOptionalString(record.barcode),
+    tracking_mode: toOptionalString(record.resolved_tracking_mode ?? record.tracking_mode),
+    label_mode: toOptionalString(record.resolved_label_mode ?? record.label_mode),
+    tracking_summary: toOptionalString(record.tracking_summary),
+    request_state_label: toOptionalString(record.request_state_label),
+    can_scan_consume: Boolean(record.can_scan_consume),
+    open_unit_count: toNumber(record.open_unit_count, 0),
+    last_used_date: toOptionalString(record.last_used_date),
     fund_id: normalizedFundId >= 0 ? normalizedFundId : undefined,
     fund_name: toOptionalString(record.fund_name) || undefined,
     created_at: toOptionalString(record.created_at) || ''

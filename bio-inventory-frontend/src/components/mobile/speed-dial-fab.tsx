@@ -3,10 +3,10 @@ import { Plus, PlusCircle, ScanLine } from 'lucide-react';
 
 interface SpeedDialFabProps {
   onAddItem?: () => void;
-  onScanCheckout?: () => void;
+  onScanConsume?: () => void;
 }
 
-const SpeedDialFab: React.FC<SpeedDialFabProps> = ({ onAddItem, onScanCheckout }) => {
+const SpeedDialFab: React.FC<SpeedDialFabProps> = ({ onAddItem, onScanConsume }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const actions = [
@@ -22,10 +22,10 @@ const SpeedDialFab: React.FC<SpeedDialFabProps> = ({ onAddItem, onScanCheckout }
       })
     },
     { 
-      label: 'Scan Out', 
+      label: 'Scan Label', 
       icon: <ScanLine className="w-6 h-6" />, 
-      onClick: onScanCheckout || (() => {
-        alert('Scan checkout feature requires camera access');
+      onClick: onScanConsume || (() => {
+        alert('Labeled item scan requires camera access');
       })
     },
   ];

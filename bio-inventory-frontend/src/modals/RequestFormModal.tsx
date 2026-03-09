@@ -2,12 +2,33 @@ import React, { useState, useEffect } from 'react';
 import { X, Package, DollarSign, Tag, Save, AlertCircle, ShoppingCart } from 'lucide-react';
 import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
 
-const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
-    const [formData, setFormData] = useState({ item_name: '', item_type_id: '', vendor_id: '', catalog_number: '', quantity: 1, unit_size: '', unit_price: '', url: '', notes: '' });
+const buildInitialFormData = (initialData = null) => ({
+    item_name: initialData?.item_name || initialData?.name || '',
+    item_type_id: initialData?.item_type?.id ? String(initialData.item_type.id) : '',
+    vendor_id: initialData?.vendor?.id ? String(initialData.vendor.id) : '',
+    catalog_number: initialData?.catalog_number || '',
+    quantity: initialData?.quantity ? Number(initialData.quantity) : 1,
+    unit_size: initialData?.unit_size || initialData?.unit || '',
+    unit_price: initialData?.unit_price || initialData?.price || '',
+    url: initialData?.url || '',
+    notes: initialData?.notes || '',
+});
+
+const RequestFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {
+    const [formData, setFormData] = useState(buildInitialFormData(initialData));
     const [dropdownData, setDropdownData] = useState({ vendors: [], itemTypes: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [customVendor, setCustomVendor] = useState('');
+    const isPrefilled = initialData !== null;
+
+    useEffect(() => {
+        if (isOpen) {
+            setFormData(buildInitialFormData(initialData));
+            setCustomVendor('');
+            setError(null);
+        }
+    }, [isOpen, initialData]);
 
     useEffect(() => {
         if (isOpen) {
@@ -98,8 +119,10 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token }) => {
                                     <ShoppingCart className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-bold text-gray-900">Add New Request</h2>
-                                    <p className="text-sm text-primary-700">Submit a new item request for approval</p>
+                                    <h2 className="text-2xl font-bold text-gray-900">{isPrefilled ? 'Request Restock' : 'Add New Request'}</h2>
+                                    <p className="text-sm text-primary-700">
+                                        {isPrefilled ? 'Start a request from the selected inventory item' : 'Submit a new item request for approval'}
+                                    </p>
                                 </div>
                             </div>
                             <button 

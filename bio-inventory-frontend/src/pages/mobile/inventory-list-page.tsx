@@ -219,7 +219,7 @@ const MobileInventoryListPage = () => {
     notification.success('Item added successfully!');
   };
 
-  const handleScanCheckout = () => {
+  const handleScanConsume = () => {
     setShowBarcodeScanner(true);
   };
 
@@ -229,34 +229,68 @@ const MobileInventoryListPage = () => {
 
   const handleBarcodeConfirmed = async (barcode: string, itemData?: any) => {
     try {
-      const checkoutData = {
+      const consumeData = {
         barcode: barcode,
-        checkout_date: new Date().toISOString(),
-        notes: `Mobile checkout via barcode scan: ${barcode}`
+        notes: `Mobile consume via labeled item scan: ${barcode}`
       };
 
-      const response = await fetch(buildApiUrl('/api/items/checkout_by_barcode/'), {
+      const response = await fetch(buildApiUrl('/api/items/consume_by_barcode/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Token ${token}`
         },
-        body: JSON.stringify(checkoutData)
+        body: JSON.stringify(consumeData)
       });
 
       if (response.ok) {
         const result = await response.json();
-        notification.success(`Successfully checked out: ${result.item_name || itemData?.name || 'Item'}`);
+        notification.success(`Successfully consumed: ${result.item?.name || itemData?.name || 'Item'}`);
         setRefreshKey((previous) => previous + 1);
         setShowBarcodeScanner(false);
       } else {
         const errorData = await response.json();
-        notification.error(`Checkout failed: ${errorData.error || 'Unknown error'}`);
+        notification.error(`Consume failed: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error: any) {
-      console.error('Barcode checkout error:', error);
-      notification.error(`Failed to checkout item: ${error.message}`);
+      console.error('Barcode consume error:', error);
+      notification.error(`Failed to consume item: ${error.message}`);
     }
+  };
+
+  const handleRequestMore = () => {
+    window.history.pushState(null, '', '/requests');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const performInventoryAction = async (endpoint: string, successMessage: string) => {
+    try {
+      const response = await fetch(buildApiUrl(endpoint), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Token ${token}`
+        }
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Inventory action failed');
+      }
+
+      notification.success(successMessage);
+      setRefreshKey((previous) => previous + 1);
+    } catch (actionError: any) {
+      notification.error(actionError.message || 'Inventory action failed');
+    }
+  };
+
+  const handleSubtractPack = (record: InventoryItem) => {
+    performInventoryAction(`/api/items/${record.id}/subtract_pack/`, `Subtracted one pack from ${record.name}`);
+  };
+
+  const handleMarkOpen = (record: InventoryItem) => {
+    performInventoryAction(`/api/items/${record.id}/mark_open/`, `Marked one pack open for ${record.name}`);
   };
 
   const handleBarcodeClick = (item: InventoryItem) => {
@@ -355,7 +389,7 @@ const MobileInventoryListPage = () => {
               <h1 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
                 Inventory
               </h1>
-              <p className="text-gray-500 text-sm">{visibleGroups.length} item groups found</p>
+              <p className="text-gray-500 text-sm">{visibleGroups.length} item groups in active inventory</p>
             </div>
           </div>
         </div>
@@ -482,7 +516,7 @@ const MobileInventoryListPage = () => {
                         <span className="font-semibold text-gray-800">Total Quantity: {formatQuantity(group.totalQuantity)}</span>
                       </div>
                       <span className="text-sm text-gray-500 font-medium">
-                        {group.records.length} barcode record{group.records.length > 1 ? 's' : ''}
+                        {group.records.length} tracked record{group.records.length > 1 ? 's' : ''}
                       </span>
                     </div>
 
@@ -496,6 +530,57 @@ const MobileInventoryListPage = () => {
                         <span className="text-xs font-semibold text-purple-800">{group.itemTypeName}</span>
                       </div>
                       <span className="text-sm text-gray-500 font-medium">{group.vendorName}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <div className="inline-flex items-center px-3 py-1.5 bg-white rounded-full border border-blue-100 text-xs font-semibold text-slate-700">
+                        {group.trackingSummary}
+                      </div>
+                      {group.openUnitCount > 0 && (
+                        <div className="inline-flex items-center px-3 py-1.5 bg-amber-50 rounded-full border border-amber-200 text-xs font-semibold text-amber-700">
+                          {group.openUnitCount} open
+                        </div>
+                      )}
+                      <div className="inline-flex items-center px-3 py-1.5 bg-slate-50 rounded-full border border-slate-200 text-xs font-semibold text-slate-600">
+                        {group.requestStateLabel}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {group.records[0]?.tracking_mode === 'pack_managed' && (
+                        <>
+                          <Button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleSubtractPack(group.records[0]);
+                            }}
+                            className="h-9 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white hover:bg-amber-600"
+                          >
+                            -1 Box
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleMarkOpen(group.records[0]);
+                            }}
+                            className="h-9 rounded-xl bg-slate-800 px-4 text-sm font-semibold text-white hover:bg-slate-900"
+                          >
+                            Mark Open
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleRequestMore();
+                        }}
+                        className="h-9 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                      >
+                        Request More
+                      </Button>
                     </div>
 
                     {group.fundSummary && (
@@ -519,7 +604,7 @@ const MobileInventoryListPage = () => {
 
                 {isExpanded && (
                   <div className="mt-4 pt-4 border-t border-blue-100 space-y-3">
-                    <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">Barcode details</p>
+                    <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">Instance details</p>
                     {group.records.map((record) => {
                       const recordExpiringSoon = record.expiry_date
                         ? new Date(record.expiry_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -556,19 +641,49 @@ const MobileInventoryListPage = () => {
                           )}
 
                           {record.barcode ? (
-                            <button
-                              type="button"
-                              className="w-full flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl cursor-pointer hover:from-indigo-100 hover:to-blue-100 transition-all duration-200 active:scale-[0.99]"
-                              onClick={() => handleBarcodeClick(record)}
-                            >
-                              <Scan className="w-4 h-4 text-indigo-600" />
-                              <span className="text-sm text-indigo-700 font-mono">{record.barcode}</span>
-                              <div className="ml-auto">
-                                <Printer className="w-4 h-4 text-indigo-600" />
-                              </div>
-                            </button>
+                            record.can_scan_consume ? (
+                              <button
+                                type="button"
+                                className="w-full flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl cursor-pointer hover:from-indigo-100 hover:to-blue-100 transition-all duration-200 active:scale-[0.99]"
+                                onClick={() => handleBarcodeClick(record)}
+                              >
+                                <Scan className="w-4 h-4 text-indigo-600" />
+                                <span className="text-sm text-indigo-700 font-mono">{record.barcode}</span>
+                                <div className="ml-auto">
+                                  <Printer className="w-4 h-4 text-indigo-600" />
+                                </div>
+                              </button>
+                            ) : (
+                              <div className="p-3 rounded-xl bg-gray-50 text-sm text-gray-500">Instance tracked without physical barcode</div>
+                            )
                           ) : (
                             <div className="p-3 rounded-xl bg-gray-50 text-sm text-gray-500">No barcode</div>
+                          )}
+
+                          {record.tracking_mode === 'pack_managed' && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              <Button
+                                type="button"
+                                onClick={() => handleSubtractPack(record)}
+                                className="h-9 rounded-xl bg-amber-500 px-4 text-sm font-semibold text-white hover:bg-amber-600"
+                              >
+                                -1 Box
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => handleMarkOpen(record)}
+                                className="h-9 rounded-xl bg-slate-800 px-4 text-sm font-semibold text-white hover:bg-slate-900"
+                              >
+                                Mark Open
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={handleRequestMore}
+                                className="h-9 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                              >
+                                Need Reorder
+                              </Button>
+                            </div>
                           )}
                         </div>
                       );
@@ -600,7 +715,7 @@ const MobileInventoryListPage = () => {
           </div>
         )}
 
-        <SpeedDialFab onAddItem={handleAddItem} onScanCheckout={handleScanCheckout} />
+        <SpeedDialFab onAddItem={handleAddItem} onScanConsume={handleScanConsume} />
 
         <MobileItemFormModal
           isOpen={isItemFormModalOpen}
@@ -614,7 +729,7 @@ const MobileInventoryListPage = () => {
           onClose={() => setShowBarcodeScanner(false)}
           onScan={handleBarcodeScanned}
           onConfirm={handleBarcodeConfirmed}
-          title="ZBar WASM Scanner"
+          title="Scan Labeled Item"
           token={token}
         />
 

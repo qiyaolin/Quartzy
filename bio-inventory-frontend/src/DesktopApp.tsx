@@ -33,6 +33,7 @@ const DesktopApp = () => {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deletingItem, setDeletingItem] = useState(null);
     const [isRequestFormModalOpen, setIsRequestFormModalOpen] = useState(false);
+    const [requestPrefill, setRequestPrefill] = useState(null);
     const [isUserFormModalOpen, setIsUserFormModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [isDeleteUserModalOpen, setIsDeleteUserModalOpen] = useState(false);
@@ -134,6 +135,10 @@ const DesktopApp = () => {
     const handleOpenAddItemModal = () => { setEditingItem(null); setIsItemFormModalOpen(true); };
     const handleOpenEditItemModal = (item) => { setEditingItem(item); setIsItemFormModalOpen(true); };
     const handleOpenDeleteModal = (item) => { setDeletingItem(item); setIsDeleteModalOpen(true); };
+    const handleOpenAddRequestModal = (initialData = null) => {
+        setRequestPrefill(initialData);
+        setIsRequestFormModalOpen(true);
+    };
     const handleOpenAddUserModal = () => { setEditingUser(null); setIsUserFormModalOpen(true); };
     const handleOpenEditUserModal = (user) => { setEditingUser(user); setIsUserFormModalOpen(true); };
     const handleOpenDeleteUserModal = (user) => { setDeletingUser(user); setIsDeleteUserModalOpen(true); };
@@ -179,12 +184,16 @@ const DesktopApp = () => {
                         onDeleteItem={handleOpenDeleteModal} 
                         refreshKey={refreshKey} 
                         filters={inventoryFilters} 
+                        filterOptions={filterOptions}
+                        onAddItemClick={handleOpenAddItemModal}
+                        onRequestMoreItem={handleOpenAddRequestModal}
+                        onFilterChange={handleInventoryFilterChange}
                     />
                 );
             case 'requests': 
                 return (
                     <RequestsPage 
-                        onAddRequestClick={() => setIsRequestFormModalOpen(true)} 
+                        onAddRequestClick={() => handleOpenAddRequestModal()} 
                         refreshKey={refreshKey} 
                         filters={requestFilters} 
                         onFilterChange={handleRequestFilterChange} 
@@ -196,7 +205,7 @@ const DesktopApp = () => {
                     <ReportsPage 
                         onNavigateToInventory={() => navigateToPage('inventory')}
                         onOpenAddItemModal={handleOpenAddItemModal}
-                        onOpenNewRequestModal={() => setIsRequestFormModalOpen(true)}
+                        onOpenNewRequestModal={() => handleOpenAddRequestModal()}
                         onSetInventoryFilters={setInventoryFilters}
                     />
                 );
@@ -219,6 +228,10 @@ const DesktopApp = () => {
                         onDeleteItem={handleOpenDeleteModal} 
                         refreshKey={refreshKey} 
                         filters={inventoryFilters} 
+                        filterOptions={filterOptions}
+                        onAddItemClick={handleOpenAddItemModal}
+                        onRequestMoreItem={handleOpenAddRequestModal}
+                        onFilterChange={handleInventoryFilterChange}
                     />
                 );
         }
@@ -247,7 +260,7 @@ const DesktopApp = () => {
         } else if (activePage === 'requests') {
             SidebarComponent = RequestsSidebar;
             sidebarProps = {
-                onAddRequestClick: () => setIsRequestFormModalOpen(true),
+                onAddRequestClick: () => handleOpenAddRequestModal(),
                 filters: requestFilters,
                 onFilterChange: handleRequestFilterChange,
                 filterOptions: filterOptions,
@@ -286,7 +299,7 @@ const DesktopApp = () => {
                 isSidebarOpen={isSidebarOpen}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             />
-            <AlertsBanner />
+            {activePage !== 'inventory' && <AlertsBanner />}
             <div className="flex flex-grow relative min-h-0">
                 {renderSidebar()}
                 <div className="flex-1 w-full min-w-0 overflow-y-auto">
@@ -309,9 +322,13 @@ const DesktopApp = () => {
             />
             <RequestFormModal 
                 isOpen={isRequestFormModalOpen} 
-                onClose={() => setIsRequestFormModalOpen(false)} 
+                onClose={() => {
+                    setIsRequestFormModalOpen(false);
+                    setRequestPrefill(null);
+                }} 
                 onSave={handleSave} 
                 token={token} 
+                initialData={requestPrefill}
             />
             <UserFormModal
                 isOpen={isUserFormModalOpen}

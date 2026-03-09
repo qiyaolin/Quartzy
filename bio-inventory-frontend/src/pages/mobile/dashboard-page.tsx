@@ -286,33 +286,32 @@ const MobileDashboardPage = () => {
     }
 
     try {
-      const checkoutData = {
+      const consumeData = {
         barcode: barcode,
-        checkout_date: new Date().toISOString(),
-        notes: `Mobile checkout via barcode scan: ${barcode}`
+        notes: `Mobile consume via labeled item scan: ${barcode}`
       };
 
-      const response = await fetch(buildApiUrl('/api/items/checkout_by_barcode/'), {
+      const response = await fetch(buildApiUrl('/api/items/consume_by_barcode/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Token ${token}`
         },
-        body: JSON.stringify(checkoutData)
+        body: JSON.stringify(consumeData)
       });
 
       if (response.ok) {
         const result = await response.json();
-        notification.success(`Successfully checked out: ${result.item_name || itemData?.name || 'Item'}`);
+        notification.success(`Successfully consumed: ${result.item?.name || itemData?.name || 'Item'}`);
         setRefreshKey(prev => prev + 1);
         setShowBarcodeScanner(false);
       } else {
         const errorData = await response.json();
-        notification.error(`Checkout failed: ${errorData.error || 'Unknown error'}`);
+        notification.error(`Consume failed: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error: any) {
-      console.error('Barcode checkout error:', error);
-      notification.error(`Failed to checkout item: ${error.message}`);
+      console.error('Barcode consume error:', error);
+      notification.error(`Failed to consume item: ${error.message}`);
     }
   };
 

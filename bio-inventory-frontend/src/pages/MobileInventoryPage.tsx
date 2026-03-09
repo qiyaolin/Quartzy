@@ -267,8 +267,8 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
     }, 300);
   };
 
-  // Barcode checkout functionality
-  const handleBarcodeCheckout = () => {
+  // Barcode consume functionality for labeled instances
+  const handleBarcodeConsume = () => {
     setIsBarcodePickerOpen(true);
   };
 
@@ -276,34 +276,33 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
     try {
       loadingState.setLoading('checkout', true);
       
-      const checkoutData = {
+      const consumeData = {
         barcode: barcode,
-        checkout_date: new Date().toISOString(),
-        notes: `Mobile checkout via barcode scan: ${barcode}`
+        notes: `Mobile consume via labeled item scan: ${barcode}`
       };
 
-      const response = await fetch(buildApiUrl('/api/items/checkout_by_barcode/'), {
+      const response = await fetch(buildApiUrl('/api/items/consume_by_barcode/'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Token ${token}`
         },
-        body: JSON.stringify(checkoutData)
+        body: JSON.stringify(consumeData)
       });
 
       if (response.ok) {
         const result = await response.json();
-        notification.success(`Successfully checked out item: ${result.item_name || 'Unknown item'}`);
+        notification.success(`Successfully consumed item: ${result.item?.name || 'Unknown item'}`);
         
         // Refresh inventory data
         fetchInventory();
       } else {
         const errorData = await response.json();
-        notification.error(`Checkout failed: ${errorData.error || 'Unknown error'}`);
+        notification.error(`Consume failed: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Barcode checkout error:', error);
-      notification.error(`Failed to checkout item: ${error.message}`);
+      console.error('Barcode consume error:', error);
+      notification.error(`Failed to consume item: ${error.message}`);
     } finally {
       loadingState.setLoading('checkout', false);
     }
@@ -381,7 +380,7 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
               <div className="bg-primary-50 border border-primary-200 rounded-lg p-4 text-center">
                 <div className="flex items-center justify-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                  <span className="text-primary-700 font-medium">Processing checkout...</span>
+                  <span className="text-primary-700 font-medium">Processing consume action...</span>
                 </div>
               </div>
             )}
@@ -412,8 +411,8 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
       <InventoryFAB
         onAddItem={onAddItemClick}
         onScanBarcode={() => {
-          // Open barcode scanner for checkout
-          handleBarcodeCheckout();
+          // Open barcode scanner for labeled-item consume
+          handleBarcodeConsume();
         }}
       />
 
@@ -432,8 +431,8 @@ const MobileInventoryPage: React.FC<MobileInventoryPageProps> = ({
         isOpen={isBarcodePickerOpen}
         onClose={() => setIsBarcodePickerOpen(false)}
         onScan={() => {}} // This is called when barcode is detected but before confirmation
-        onConfirm={processBarcode} // This is called when user confirms checkout
-        title="Scan for Checkout"
+        onConfirm={processBarcode} // This is called when user confirms consume
+        title="Scan Labeled Item"
         token={token}
       />
     </div>

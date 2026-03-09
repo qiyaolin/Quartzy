@@ -150,3 +150,101 @@ class InventoryLocationAllocationApiTests(APITestCase):
         merged_item = Item.objects.get(name='Test')
         self.assertEqual(merged_item.quantity, Decimal('5.00'))
         self.assertEqual(merged_item.location_allocations.count(), 2)
+
+    def test_item_inherits_tracking_defaults_and_omits_barcode_when_not_labeled(self):
+        unlabeled_type = ItemType.objects.create(
+            name='Antibody',
+            tracking_mode=ItemType.TrackingMode.INSTANCE_TRACKED,
+            label_mode=ItemType.LabelMode.NONE,
+        )
+
+        response = self.client.post(
+            reverse('item-list'),
+            data={
+                'name': 'pERM antibody',
+                'item_type_id': unlabeled_type.id,
+                'owner_id': self.user.id,
+                'quantity': '1.00',
+                'unit': 'vial',
+                'location_allocations': [
+                    {'location_id': self.shelf_a1.id, 'quantity': '1.00'},
+                ],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['resolved_tracking_mode'], ItemType.TrackingMode.INSTANCE_TRACKED)
+        self.assertEqual(response.data['resolved_label_mode'], ItemType.LabelMode.NONE)
+        self.assertFalse(response.data['can_scan_consume'])
+        self.assertIsNone(response.data['barcode'])
+
+    def test_mark_open_and_subtract_pack_update_pack_managed_summary(self):
+        pack_type = ItemType.objects.create(
+            name='Tips',
+            tracking_mode=ItemType.TrackingMode.PACK_MANAGED,
+            label_mode=ItemType.LabelMode.NONE,
+        )
+        item = Item.objects.create(
+            name='200 uL filter tips',
+            item_type=pack_type,
+            owner=self.user,
+            quantity=Decimal('3.00'),
+            unit='box',
+            location=self.shelf_a1,
+        )
+        ItemLocationAllocation.objects.create(item=item, location=self.shelf_a1, quantity=Decimal('3.00'))
+
+        mark_open_response = self.client.post(reverse('item-mark-open', args=[item.id]), format='json')
+        subtract_response = self.client.post(reverse('item-subtract-pack', args=[item.id]), format='json')
+
+        self.assertEqual(mark_open_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(subtract_response.status_code, status.HTTP_200_OK)
+
+        item.refresh_from_db()
+        self.assertEqual(item.open_unit_count, 1)
+        self.assertEqual(item.quantity, Decimal('2.00'))
+        self.assertEqual(subtract_response.data['item']['tracking_summary'], 'Pack-managed (1 open)')
+
+    def test_consume_by_barcode_requires_labeled_instance(self):
+        unlabeled_type = ItemType.objects.create(
+            name='Small Molecule',
+            tracking_mode=ItemType.TrackingMode.INSTANCE_TRACKED,
+            label_mode=ItemType.LabelMode.NONE,
+        )
+        unlabeled_item = Item.objects.create(
+            name='Tiny inhibitor',
+            item_type=unlabeled_type,
+            owner=self.user,
+            quantity=Decimal('1.00'),
+            unit='tube',
+            location=self.shelf_a1,
+        )
+        ItemLocationAllocation.objects.create(item=unlabeled_item, location=self.shelf_a1, quantity=Decimal('1.00'))
+
+        labeled_item = Item.objects.create(
+            name='DMEM',
+            item_type=self.item_type,
+            owner=self.user,
+            quantity=Decimal('1.00'),
+            unit='bottle',
+            location=self.shelf_a1,
+            label_mode=ItemType.LabelMode.ITEM_BARCODE,
+        )
+        ItemLocationAllocation.objects.create(item=labeled_item, location=self.shelf_a1, quantity=Decimal('1.00'))
+
+        fail_response = self.client.post(
+            reverse('item-consume-by-barcode'),
+            data={'barcode': unlabeled_item.barcode or 'MISSING'},
+            format='json',
+        )
+        success_response = self.client.post(
+            reverse('item-consume-by-barcode'),
+            data={'barcode': labeled_item.barcode},
+            format='json',
+        )
+
+        self.assertEqual(fail_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(success_response.status_code, status.HTTP_200_OK)
+        labeled_item.refresh_from_db()
+        self.assertTrue(labeled_item.is_archived)

@@ -212,7 +212,7 @@ const ZBarBarcodeScanner: React.FC<ZBarBarcodeScannerProps> = ({
             setShowConfirmation(true);
             onScan(barcode);
           } else {
-            setError('Item has already been checked out');
+            setError('Item has already been consumed');
           }
         } else {
           setError('No item found with this barcode');
@@ -309,7 +309,7 @@ const ZBarBarcodeScanner: React.FC<ZBarBarcodeScannerProps> = ({
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center mb-3">
                   <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                  <span className="font-semibold text-green-800">Item Available for Checkout</span>
+                  <span className="font-semibold text-green-800">Labeled Item Ready to Consume</span>
                 </div>
                 <div className="space-y-2 text-sm">
                   <p><strong>Item:</strong> {itemData.name}</p>
@@ -332,7 +332,7 @@ const ZBarBarcodeScanner: React.FC<ZBarBarcodeScannerProps> = ({
                   onClick={handleConfirm}
                   className="flex-1 bg-primary-600 hover:bg-primary-700 text-white py-3 px-4 rounded-lg font-medium transition-colors"
                 >
-                  Confirm Checkout
+                  Confirm Consume
                 </button>
                 <button
                   onClick={() => {

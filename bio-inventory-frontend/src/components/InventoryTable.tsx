@@ -1,518 +1,427 @@
-import React, { useState } from 'react';
-import { ChevronDown, Edit, Trash2, AlertTriangle, Clock, Package, History, QrCode, Printer } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  Clock3,
+  MoreHorizontal,
+  Package,
+  Printer,
+  QrCode,
+  ShoppingCart,
+} from 'lucide-react';
 import PrintBarcodeModal from './PrintBarcodeModal.tsx';
 
-const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, onBatchAction }) => {
-    const [expandedGroups, setExpandedGroups] = useState({});
-    const [selectedItems, setSelectedItems] = useState(new Set());
-    const [selectAll, setSelectAll] = useState(false);
-    const [showPrintModal, setShowPrintModal] = useState(false);
-    const [selectedItemForPrint, setSelectedItemForPrint] = useState(null);
+const formatDate = (value) => {
+  if (!value) {
+    return 'No expiry';
+  }
 
-    const toggleGroup = (groupId) => { setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] })); };
+  try {
+    return new Date(value).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return value;
+  }
+};
 
-    const handleSelectAll = (checked) => {
-        setSelectAll(checked);
+const getRequestTone = (requestState) => {
+  switch (requestState) {
+    case 'ORDERED':
+      return 'bg-sky-50 text-sky-700 border-sky-200';
+    case 'APPROVED':
+      return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    case 'NEW':
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'LOW_STOCK':
+      return 'bg-orange-50 text-orange-700 border-orange-200';
+    default:
+      return 'bg-slate-50 text-slate-600 border-slate-200';
+  }
+};
+
+const StatusPill = ({ children, tone }) => (
+  <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}>{children}</span>
+);
+
+const InventoryTable = ({
+  groups,
+  selectedGroupId,
+  onSelectGroup,
+  onEdit,
+  onDelete,
+  onViewRequestHistory,
+  onBatchAction,
+  onRequestMore,
+  visibleColumns,
+}) => {
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [selectedItemForPrint, setSelectedItemForPrint] = useState(null);
+
+  const allInstanceIds = useMemo(
+    () => groups.flatMap((group) => group.instances.map((instance) => instance.id)),
+    [groups],
+  );
+
+  const toggleGroupExpansion = (groupId) => {
+    setExpandedGroups((previous) => ({ ...previous, [groupId]: !previous[groupId] }));
+  };
+
+  const handleSelectAll = (checked) => {
+    setSelectedItems(checked ? new Set(allInstanceIds) : new Set());
+  };
+
+  const handleGroupSelection = (group, checked) => {
+    setSelectedItems((previous) => {
+      const next = new Set(previous);
+      group.instances.forEach((instance) => {
         if (checked) {
-            const allItemIds = new Set();
-            Object.values(groupedData).forEach(group => {
-                allItemIds.add(group.id);
-                group.instances.forEach(instance => {
-                    allItemIds.add(instance.id);
-                });
-            });
-            setSelectedItems(allItemIds);
+          next.add(instance.id);
         } else {
-            setSelectedItems(new Set());
+          next.delete(instance.id);
         }
-    };
+      });
+      return next;
+    });
+  };
 
-    const handleSelectItem = (itemId, checked) => {
-        const newSelected = new Set(selectedItems);
-        if (checked) {
-            newSelected.add(itemId);
-        } else {
-            newSelected.delete(itemId);
-        }
-        setSelectedItems(newSelected);
+  const handleInstanceSelection = (instanceId, checked) => {
+    setSelectedItems((previous) => {
+      const next = new Set(previous);
+      if (checked) {
+        next.add(instanceId);
+      } else {
+        next.delete(instanceId);
+      }
+      return next;
+    });
+  };
 
-        // Update select all checkbox
-        const totalItems = Object.values(groupedData).reduce((count, group) =>
-            count + 1 + group.instances.length, 0);
-        setSelectAll(newSelected.size === totalItems);
-    };
+  const isGroupSelected = (group) => group.instances.every((instance) => selectedItems.has(instance.id));
+  const isGroupPartiallySelected = (group) => group.instances.some((instance) => selectedItems.has(instance.id)) && !isGroupSelected(group);
+  const allSelected = allInstanceIds.length > 0 && allInstanceIds.every((instanceId) => selectedItems.has(instanceId));
 
-    const getRowClassName = (item) => {
-        const baseClass = "table-row";
-        if (item.expiration_status === 'EXPIRED') {
-            return `${baseClass} bg-danger-25 hover:bg-danger-50`;
-        } else if (item.expiration_status === 'EXPIRING_SOON') {
-            return `${baseClass} bg-warning-25 hover:bg-warning-50`;
-        } else if (item.is_low_stock) {
-            return `${baseClass} bg-orange-25 hover:bg-orange-50`;
-        }
-        return baseClass;
-    };
+  const renderStatusPills = (group) => {
+    const pills = [];
+    if (group.hasExpired) {
+      pills.push(<StatusPill key="expired" tone="bg-danger-50 text-danger-700 border-danger-200">Expired</StatusPill>);
+    }
+    if (group.hasExpiringSoon) {
+      pills.push(<StatusPill key="expiring" tone="bg-warning-50 text-warning-700 border-warning-200">Expiring Soon</StatusPill>);
+    }
+    if (group.hasLowStock) {
+      pills.push(<StatusPill key="low" tone="bg-orange-50 text-orange-700 border-orange-200">Low Stock</StatusPill>);
+    }
+    if (group.openUnitCount > 0) {
+      pills.push(<StatusPill key="open" tone="bg-amber-50 text-amber-700 border-amber-200">{group.openUnitCount} Open</StatusPill>);
+    }
+    if (group.isLastUnit) {
+      pills.push(<StatusPill key="last" tone="bg-slate-100 text-slate-700 border-slate-200">Last Unit</StatusPill>);
+    }
+    if (pills.length === 0) {
+      pills.push(<StatusPill key="ok" tone="bg-emerald-50 text-emerald-700 border-emerald-200">Ready</StatusPill>);
+    }
+    return pills;
+  };
 
-    const getGroupRowClassName = (group) => {
-        const status = getGroupStatus(group);
-        const baseClass = "bg-secondary-25 hover:bg-secondary-50 transition-colors duration-150";
-
-        if (status.hasExpired) {
-            return `${baseClass} border-l-4 border-danger-500 bg-danger-25 hover:bg-danger-50`;
-        } else if (status.hasExpiringSoon) {
-            return `${baseClass} border-l-4 border-warning-500 bg-warning-25 hover:bg-warning-50`;
-        } else if (status.hasLowStock) {
-            return `${baseClass} border-l-4 border-orange-500 bg-orange-25 hover:bg-orange-50`;
-        }
-
-        return baseClass;
-    };
-
-    const getGroupStatus = (group) => {
-        const expiredCount = group.instances.filter(item => item.expiration_status === 'EXPIRED').length;
-        const expiringSoonCount = group.instances.filter(item => item.expiration_status === 'EXPIRING_SOON').length;
-        const lowStockCount = group.instances.filter(item => item.is_low_stock).length;
-
-        return {
-            hasExpired: expiredCount > 0,
-            hasExpiringSoon: expiringSoonCount > 0,
-            hasLowStock: lowStockCount > 0,
-            expiredCount,
-            expiringSoonCount,
-            lowStockCount,
-            totalInstances: group.instances.length
-        };
-    };
-
-    const getStatusIndicators = (status) => {
-        const indicators = [];
-
-        if (status.hasExpired) {
-            indicators.push(
-                <div key="expired" className="flex items-center space-x-1 bg-danger-100 text-danger-700 px-2 py-1 rounded-md text-xs font-medium">
-                    <AlertTriangle className="w-3 h-3" />
-                    <span>{status.expiredCount} Expired</span>
-                </div>
-            );
-        }
-
-        if (status.hasExpiringSoon) {
-            indicators.push(
-                <div key="expiring" className="flex items-center space-x-1 bg-warning-100 text-warning-700 px-2 py-1 rounded-md text-xs font-medium">
-                    <Clock className="w-3 h-3" />
-                    <span>{status.expiringSoonCount} Expiring Soon</span>
-                </div>
-            );
-        }
-
-        if (status.hasLowStock) {
-            indicators.push(
-                <div key="lowstock" className="flex items-center space-x-1 bg-orange-100 text-orange-700 px-2 py-1 rounded-md text-xs font-medium">
-                    <Package className="w-3 h-3" />
-                    <span>{status.lowStockCount} Low Stock</span>
-                </div>
-            );
-        }
-
-        return indicators;
-    };
-
-    const getExpirationBadge = (item) => {
-        if (!item.expiration_date) {
-            return <span className="text-xs text-secondary-400">No expiration</span>;
-        }
-
-        const status = item.expiration_status;
-        const daysLeft = item.days_until_expiration;
-
-        let badgeClass = 'badge-secondary';
-        let label = 'Good';
-        let icon = null;
-
-        if (status === 'EXPIRED') {
-            badgeClass = 'badge-danger';
-            label = 'Expired';
-            icon = <AlertTriangle className="w-3 h-3 mr-1" />;
-        } else if (status === 'EXPIRING_SOON') {
-            badgeClass = 'badge-warning';
-            label = `${daysLeft} days left`;
-            icon = <Clock className="w-3 h-3 mr-1" />;
-        } else if (daysLeft !== null && daysLeft <= 60) {
-            label = `${daysLeft} days left`;
-        }
-
-        return (
-            <div className="flex flex-col items-start">
-                <span className={`badge ${badgeClass} flex items-center text-xs`}>
-                    {icon}
-                    {label}
-                </span>
-                {item.expiration_date && (
-                    <span className="text-xs text-secondary-400 mt-1">
-                        {new Date(item.expiration_date).toLocaleDateString()}
-                    </span>
-                )}
+  return (
+    <div className="card overflow-hidden border border-slate-200 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.28)]">
+      {selectedItems.size > 0 && (
+        <div className="border-b border-sky-200 bg-[linear-gradient(135deg,#ecfeff,#eff6ff)] px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-500">Batch actions</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{selectedItems.size} labeled records selected</p>
             </div>
-        );
-    };
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="btn btn-secondary" onClick={() => onBatchAction?.('archive', Array.from(selectedItems))}>
+                Mark Used
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => onBatchAction?.('export', Array.from(selectedItems))}>
+                Export
+              </button>
+              <button type="button" className="btn btn-danger" onClick={() => onBatchAction?.('delete', Array.from(selectedItems))}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-    const getLocationSummaryText = (item) => {
-        if (Array.isArray(item.location_summary) && item.location_summary.length > 0) {
-            if (item.location_summary.length === 1) {
-                return item.location_summary[0].full_path;
-            }
-            return `${item.location_summary.length} locations`;
-        }
-        return item.location?.full_path || item.primary_location?.full_path || item.location?.name || 'N/A';
-    };
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse">
+          <thead className="bg-slate-950 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
+            <tr>
+              <th className="px-5 py-4">
+                <input type="checkbox" className="checkbox" checked={allSelected} onChange={(event) => handleSelectAll(event.target.checked)} />
+              </th>
+              <th className="px-5 py-4">Status</th>
+              <th className="px-5 py-4">Item</th>
+              {visibleColumns?.inStock !== false && <th className="px-5 py-4">In Stock</th>}
+              {visibleColumns?.primaryLocation !== false && <th className="px-5 py-4">Primary Location</th>}
+              {visibleColumns?.lotExpiration !== false && <th className="px-5 py-4">Lot / Expiration</th>}
+              {visibleColumns?.lastUsed !== false && <th className="px-5 py-4">Last Used</th>}
+              {visibleColumns?.tracking !== false && <th className="px-5 py-4">Tracking</th>}
+              {visibleColumns?.requestState !== false && <th className="px-5 py-4">Request State</th>}
+              <th className="px-5 py-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 bg-white">
+            {groups.map((group) => {
+              const isExpanded = !!expandedGroups[group.id];
+              const isSelected = selectedGroupId === group.id;
+              const groupChecked = isGroupSelected(group);
+              const groupPartial = isGroupPartiallySelected(group);
 
-    const buildGroupEditItem = (group) => {
-        const allocationMap = new Map();
+              return (
+                <React.Fragment key={group.id}>
+                  <tr className={`transition ${isSelected ? 'bg-sky-50/80' : 'hover:bg-slate-50'}`}>
+                    <td className="px-5 py-4 align-top">
+                      <input
+                        type="checkbox"
+                        className="checkbox"
+                        checked={groupChecked}
+                        ref={(element) => {
+                          if (element) {
+                            element.indeterminate = groupPartial;
+                          }
+                        }}
+                        onChange={(event) => handleGroupSelection(group, event.target.checked)}
+                      />
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex max-w-[220px] flex-wrap gap-2">{renderStatusPills(group)}</div>
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex items-start gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroupExpansion(group.id)}
+                          className="mt-0.5 rounded-full border border-slate-200 p-1.5 text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                        >
+                          <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                        <button type="button" className="text-left" onClick={() => onSelectGroup?.(group)}>
+                          <div className="flex items-center gap-2">
+                            <Package className="h-4 w-4 text-sky-600" />
+                            <span className="font-semibold text-slate-900">{group.name}</span>
+                          </div>
+                          <p className="mt-2 text-sm text-slate-500">
+                            {[group.vendor?.name, group.catalog_number, group.item_type?.name].filter(Boolean).join(' · ') || 'No catalog metadata'}
+                          </p>
+                        </button>
+                      </div>
+                    </td>
+                    {visibleColumns?.inStock !== false && (
+                      <td className="px-5 py-4 align-top">
+                        <div className="text-sm font-semibold text-slate-900">{group.formattedQuantity}</div>
+                        <p className="mt-2 text-sm text-slate-500">{group.instanceSummary}</p>
+                      </td>
+                    )}
+                    {visibleColumns?.primaryLocation !== false && (
+                      <td className="px-5 py-4 align-top">
+                        <div className="flex max-w-[220px] items-start gap-2 text-sm text-slate-600">
+                          <Package className="mt-0.5 h-4 w-4 text-slate-400" />
+                          <span>{group.primaryLocation}</span>
+                        </div>
+                      </td>
+                    )}
+                    {visibleColumns?.lotExpiration !== false && (
+                      <td className="px-5 py-4 align-top">
+                        <p className="text-sm font-semibold text-slate-900">{group.lotSummary}</p>
+                        <p className="mt-2 text-sm text-slate-500">{group.expirationSummary}</p>
+                      </td>
+                    )}
+                    {visibleColumns?.lastUsed !== false && (
+                      <td className="px-5 py-4 align-top">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {group.latestLastUsedDate ? formatDate(group.latestLastUsedDate) : 'Not used yet'}
+                        </p>
+                        <p className="mt-2 text-sm text-slate-500">
+                          {group.latestReceivedDate ? `Received ${formatDate(group.latestReceivedDate)}` : 'No receive history'}
+                        </p>
+                      </td>
+                    )}
+                    {visibleColumns?.tracking !== false && (
+                      <td className="px-5 py-4 align-top">
+                        <div className="space-y-2">
+                          <StatusPill tone="bg-slate-50 text-slate-700 border-slate-200">{group.trackingSummary}</StatusPill>
+                          {group.hasLabeledInstances && (
+                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                              <QrCode className="h-4 w-4 text-slate-400" />
+                              {group.labeledCount} labeled
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                    {visibleColumns?.requestState !== false && (
+                      <td className="px-5 py-4 align-top">
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getRequestTone(group.requestState)}`}>
+                          {group.requestStateLabel}
+                        </span>
+                        {group.requestStateCount > 0 && (
+                          <p className="mt-2 text-sm text-slate-500">{group.requestStateCount} linked request{group.requestStateCount > 1 ? 's' : ''}</p>
+                        )}
+                      </td>
+                    )}
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex items-center gap-2">
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => onSelectGroup?.(group)}>
+                          Details
+                        </button>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => onRequestMore?.(group.instances[0])}>
+                          <ShoppingCart className="mr-1 h-3.5 w-3.5" />
+                          Request
+                        </button>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            className="rounded-xl border border-slate-200 p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-800"
+                            onClick={() => setOpenMenuId((previous) => (previous === group.id ? null : group.id))}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {openMenuId === group.id && (
+                            <div className="absolute right-0 z-10 mt-2 w-48 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                              <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => { setOpenMenuId(null); onEdit?.(group.editItem); }}>
+                                Edit group
+                              </button>
+                              <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50" onClick={() => { setOpenMenuId(null); onViewRequestHistory?.(group.instances[0]); }}>
+                                View request history
+                              </button>
+                              <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm text-danger-600 hover:bg-danger-50" onClick={() => { setOpenMenuId(null); onDelete?.(group.instances[0]); }}>
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
 
-        group.instances.forEach((instance) => {
-            const summaries = Array.isArray(instance.location_summary) && instance.location_summary.length > 0
-                ? instance.location_summary
-                : [{
-                    location_id: instance.primary_location?.id || instance.location?.id,
-                    location_name: instance.primary_location?.name || instance.location?.name,
-                    full_path: instance.primary_location?.full_path || instance.location?.full_path || instance.location?.name || 'N/A',
-                    quantity: instance.quantity,
-                    note: '',
-                }];
-
-            summaries.forEach((summary) => {
-                if (!summary.location_id) {
-                    return;
-                }
-                const key = String(summary.location_id);
-                const existing = allocationMap.get(key);
-                const quantity = parseFloat(summary.quantity) || 0;
-                if (existing) {
-                    existing.quantity = (parseFloat(existing.quantity) + quantity).toFixed(2);
-                    if (summary.note && !existing.note.includes(summary.note)) {
-                        existing.note = existing.note ? `${existing.note}; ${summary.note}` : summary.note;
-                    }
-                } else {
-                    allocationMap.set(key, {
-                        location_id: summary.location_id,
-                        location: {
-                            id: summary.location_id,
-                            name: summary.location_name,
-                            full_path: summary.full_path,
-                        },
-                        quantity: quantity.toFixed(2),
-                        note: summary.note || '',
-                    });
-                }
-            });
-        });
-
-        const primaryInstance = group.instances[0];
-        return {
-            ...primaryInstance,
-            quantity: group.totalQuantity.toFixed(2),
-            group_item_ids: group.instances.map((instance) => instance.id),
-            is_group_edit: group.instances.length > 1,
-            location_allocations: Array.from(allocationMap.values()),
-            location_summary: Array.from(allocationMap.values()).map((allocation) => ({
-                location_id: allocation.location_id,
-                location_name: allocation.location.name,
-                full_path: allocation.location.full_path,
-                quantity: allocation.quantity,
-                note: allocation.note,
-            })),
-            primary_location: Array.from(allocationMap.values())[0]?.location || primaryInstance.primary_location || primaryInstance.location,
-        };
-    };
-    return (
-        <div className="card overflow-hidden">
-            {/* Enhanced Selection Bar */}
-            {selectedItems.size > 0 && (
-                <div className="bg-gradient-to-r from-primary-50 to-primary-100 border-b border-primary-200 p-6 animate-slide-down">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center justify-center w-10 h-10 bg-primary-500 rounded-2xl">
-                                <span className="text-white font-bold text-sm">{selectedItems.size}</span>
+                  {isExpanded && group.instances.map((instance) => (
+                    <tr key={instance.id} className="bg-slate-50/70">
+                      <td className="px-5 py-3">
+                        <input
+                          type="checkbox"
+                          className="checkbox"
+                          checked={selectedItems.has(instance.id)}
+                          onChange={(event) => handleInstanceSelection(instance.id, event.target.checked)}
+                        />
+                      </td>
+                      <td className="px-5 py-3" colSpan={2}>
+                        <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusPill tone="bg-slate-50 text-slate-700 border-slate-200">{instance.tracking_summary || 'Tracked item'}</StatusPill>
+                            {instance.expiration_status === 'EXPIRING_SOON' && (
+                              <StatusPill tone="bg-warning-50 text-warning-700 border-warning-200">
+                                <Clock3 className="mr-1 inline h-3 w-3" />
+                                Expiring soon
+                              </StatusPill>
+                            )}
+                            {instance.barcode && (
+                              <StatusPill tone="bg-sky-50 text-sky-700 border-sky-200">
+                                <QrCode className="mr-1 inline h-3 w-3" />
+                                Labeled
+                              </StatusPill>
+                            )}
+                          </div>
+                          <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+                            <div>
+                              <p className="font-semibold text-slate-900">{instance.quantity} {instance.unit}</p>
+                              <p className="mt-1">{instance.primary_location?.full_path || instance.location?.full_path || instance.location?.name || 'No location set'}</p>
                             </div>
                             <div>
-                                <span className="text-lg font-semibold text-primary-900">
-                                    {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
-                                </span>
-                                <p className="text-sm text-primary-700">Choose an action to apply to selected items</p>
+                              <p>{instance.lot_number ? `Lot ${instance.lot_number}` : 'No lot recorded'}</p>
+                              <p className="mt-1">{instance.expiration_date ? `Expires ${formatDate(instance.expiration_date)}` : 'No expiry date'}</p>
                             </div>
+                          </div>
                         </div>
-                        <div className="flex space-x-3">
+                      </td>
+                      {visibleColumns?.inStock !== false && (
+                        <td className="px-5 py-3 align-top">
+                          <span className="text-sm font-medium text-slate-900">{instance.quantity} {instance.unit}</span>
+                        </td>
+                      )}
+                      {visibleColumns?.primaryLocation !== false && (
+                        <td className="px-5 py-3 align-top text-sm text-slate-600">
+                          {instance.primary_location?.full_path || instance.location?.full_path || instance.location?.name || 'No location'}
+                        </td>
+                      )}
+                      {visibleColumns?.lotExpiration !== false && (
+                        <td className="px-5 py-3 align-top text-sm text-slate-600">
+                          {instance.lot_number ? `Lot ${instance.lot_number}` : 'No lot'}
+                          <div className="mt-2">{instance.expiration_date ? formatDate(instance.expiration_date) : 'No expiry'}</div>
+                        </td>
+                      )}
+                      {visibleColumns?.lastUsed !== false && (
+                        <td className="px-5 py-3 align-top text-sm text-slate-600">
+                          {instance.last_used_date ? formatDate(instance.last_used_date) : 'Not used yet'}
+                        </td>
+                      )}
+                      {visibleColumns?.tracking !== false && (
+                        <td className="px-5 py-3 align-top text-sm text-slate-600">
+                          {instance.tracking_summary || 'Tracked item'}
+                          <div className="mt-2 font-mono text-xs text-slate-500">{instance.barcode || 'No physical barcode'}</div>
+                        </td>
+                      )}
+                      {visibleColumns?.requestState !== false && (
+                        <td className="px-5 py-3 align-top">
+                          <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getRequestTone(instance.request_state)}`}>
+                            {instance.request_state_label}
+                          </span>
+                        </td>
+                      )}
+                      <td className="px-5 py-3 align-top">
+                        <div className="flex flex-wrap gap-2">
+                          {instance.barcode && (
                             <button
-                                onClick={() => onBatchAction && onBatchAction('archive', Array.from(selectedItems))}
-                                className="btn btn-secondary btn-sm hover:scale-105 transition-transform"
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => {
+                                setSelectedItemForPrint(instance);
+                                setShowPrintModal(true);
+                              }}
                             >
-                                Archive Selected
+                              <Printer className="mr-1 h-3.5 w-3.5" />
+                              Print
                             </button>
-                            <button
-                                onClick={() => onBatchAction && onBatchAction('export', Array.from(selectedItems))}
-                                className="btn btn-secondary btn-sm hover:scale-105 transition-transform"
-                            >
-                                Export Selected
-                            </button>
-                            <button
-                                onClick={() => onBatchAction && onBatchAction('delete', Array.from(selectedItems))}
-                                className="btn btn-danger btn-sm hover:scale-105 transition-transform"
-                            >
-                                Delete Selected
-                            </button>
+                          )}
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onViewRequestHistory?.(instance)}>
+                            History
+                          </button>
                         </div>
-                    </div>
-                </div>
-            )}
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
-            {/* Enhanced Table */}
-            <div className="overflow-x-auto">
-                <table className="table">
-                    <thead className="table-header">
-                        <tr>
-                            <th className="table-header-cell w-12">
-                                <input
-                                    type="checkbox"
-                                    className="checkbox"
-                                    checked={selectAll}
-                                    onChange={(e) => handleSelectAll(e.target.checked)}
-                                />
-                            </th>
-                            <th className="table-header-cell">
-                                <div className="flex items-center space-x-2">
-                                    <Package className="w-4 h-4 text-gray-500" />
-                                    <span>Item Name</span>
-                                </div>
-                            </th>
-                            <th className="table-header-cell">Vendor</th>
-                            <th className="table-header-cell">Fund</th>
-                            <th className="table-header-cell">Total Amount</th>
-                            <th className="table-header-cell">Expiration Status</th>
-                            <th className="table-header-cell">Type</th>
-                            <th className="table-header-cell">
-                                <div className="flex items-center space-x-2">
-                                    <QrCode className="w-4 h-4 text-gray-500" />
-                                    <span>Barcode</span>
-                                </div>
-                            </th>
-                            <th className="table-header-cell w-24">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="table-body">
-                        {Object.values(groupedData).map(group => (
-                            <React.Fragment key={group.id}>
-                                <tr className={getGroupRowClassName(group)}>
-                                    <td className="table-cell">
-                                        <input
-                                            type="checkbox"
-                                            className="checkbox"
-                                            checked={selectedItems.has(group.id)}
-                                            onChange={(e) => handleSelectItem(group.id, e.target.checked)}
-                                        />
-                                    </td>
-                                    <td className="table-cell">
-                                        <button onClick={() => toggleGroup(group.id)} className="flex items-center font-medium text-secondary-900 hover:text-primary-700 transition-colors group">
-                                            <ChevronDown className={`w-4 h-4 mr-2 text-secondary-400 group-hover:text-primary-500 transition-all duration-200 ${expandedGroups[group.id] ? 'rotate-180' : ''}`} />
-                                            {group.name}
-                                        </button>
-                                    </td>
-                                    <td className="table-cell text-secondary-600">{group.vendor?.name || 'N/A'}</td>
-                                    <td className="table-cell">
-                                        {group.instances[0]?.fund_name ? (
-                                            <span className="badge badge-info text-xs">{group.instances[0].fund_name}</span>
-                                        ) : (
-                                            <span className="text-secondary-400 text-xs">No Fund</span>
-                                        )}
-                                    </td>
-                                    <td className="table-cell">
-                                        <div className="flex flex-col">
-                                            <div>
-                                                <span className="font-medium text-secondary-900">{group.totalQuantity.toFixed(2)}</span>
-                                                <span className="text-secondary-500 ml-1">{group.instances[0]?.unit}</span>
-                                            </div>
-                                            <span className="text-xs text-secondary-500 mt-1">{getLocationSummaryText(group.instances[0])}</span>
-                                        </div>
-                                    </td>
-                                    <td className="table-cell">
-                                        <div className="flex flex-wrap gap-1">
-                                            {getStatusIndicators(getGroupStatus(group))}
-                                            {getStatusIndicators(getGroupStatus(group)).length === 0 && (
-                                                <span className="text-xs text-secondary-400">All items OK</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="table-cell">
-                                        <span className="badge badge-secondary">{group.item_type?.name || 'N/A'}</span>
-                                    </td>
-                                    <td className="table-cell">
-                                        {group.instances[0]?.barcode ? (
-                                            <div className="flex items-center space-x-2">
-                                                <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
-                                                    {group.instances[0].barcode}
-                                                </code>
-                                                <button
-                                                    onClick={() => {
-                                                        setSelectedItemForPrint(group.instances[0]);
-                                                        setShowPrintModal(true);
-                                                    }}
-                                                    className="p-1 hover:bg-primary-50 rounded transition-colors"
-                                                    title="Print barcode label"
-                                                >
-                                                    <Printer className="w-3 h-3 text-gray-500 hover:text-primary-600" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-gray-400">No barcode</span>
-                                        )}
-                                    </td>
-                                    <td className="table-cell">
-                                        <div className="flex items-center space-x-1">
-                                            <button
-                                                onClick={() => onEdit(buildGroupEditItem(group))}
-                                                className="p-2.5 hover:bg-primary-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
-                                                title="Edit item"
-                                            >
-                                                <Edit className="w-4 h-4 text-gray-400 group-hover:text-primary-600 transition-colors" />
-                                            </button>
-                                            <button
-                                                onClick={() => onViewRequestHistory && onViewRequestHistory(group.instances[0])}
-                                                className="p-2.5 hover:bg-info-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
-                                                title="View request history"
-                                            >
-                                                <History className="w-4 h-4 text-gray-400 group-hover:text-info-600 transition-colors" />
-                                            </button>
-                                            <button
-                                                onClick={() => onDelete(group.instances[0])}
-                                                className="p-2.5 hover:bg-danger-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
-                                                title="Delete item"
-                                            >
-                                                <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-danger-600 transition-colors" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {expandedGroups[group.id] && group.instances.map(instance => (
-                                    <tr key={instance.id} className={getRowClassName(instance)}>
-                                        <td className="table-cell">
-                                            <input
-                                                type="checkbox"
-                                                className="checkbox"
-                                                checked={selectedItems.has(instance.id)}
-                                                onChange={(e) => handleSelectItem(instance.id, e.target.checked)}
-                                            />
-                                        </td>
-                                        <td className="table-cell pl-16">
-                                            <div className="text-sm text-secondary-700 space-y-1">
-                                                <div>
-                                                    <span className="text-secondary-500">Location:</span> {instance.primary_location?.full_path || instance.location?.full_path || instance.location?.name || 'N/A'}
-                                                </div>
-                                                {Array.isArray(instance.location_summary) && instance.location_summary.length > 1 && (
-                                                    <div className="text-xs text-secondary-500">
-                                                        {instance.location_summary.map((summary) => (
-                                                            <div key={`${instance.id}-${summary.location_id}`}>
-                                                                {summary.full_path}: {summary.quantity}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="table-cell">
-                                            <div className="text-sm text-secondary-600">
-                                                <span className="text-secondary-500">Owner:</span> {instance.owner?.username || 'N/A'}
-                                            </div>
-                                        </td>
-                                        <td className="table-cell">
-                                            {instance.fund_name ? (
-                                                <span className="badge badge-info text-xs">{instance.fund_name}</span>
-                                            ) : (
-                                                <span className="text-secondary-400 text-xs">No Fund</span>
-                                            )}
-                                        </td>
-                                        <td className="table-cell">
-                                            <div className="text-sm">
-                                                <span className="font-medium text-secondary-900">{parseFloat(instance.quantity).toFixed(2)}</span>
-                                                <span className="text-secondary-500 ml-1">{instance.unit}</span>
-                                            </div>
-                                        </td>
-                                        <td className="table-cell">
-                                            {getExpirationBadge(instance)}
-                                        </td>
-                                        <td className="table-cell">
-                                            <span className="badge badge-secondary text-xs">{group.item_type?.name || 'N/A'}</span>
-                                        </td>
-                                        <td className="table-cell">
-                                            {instance.barcode ? (
-                                                <div className="flex items-center space-x-2">
-                                                    <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
-                                                        {instance.barcode}
-                                                    </code>
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedItemForPrint(instance);
-                                                            setShowPrintModal(true);
-                                                        }}
-                                                        className="p-1 hover:bg-primary-50 rounded transition-colors"
-                                                        title="Print barcode label"
-                                                    >
-                                                        <Printer className="w-3 h-3 text-gray-500 hover:text-primary-600" />
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-gray-400">No barcode</span>
-                                            )}
-                                        </td>
-                                        <td className="table-cell">
-                                            <div className="flex items-center space-x-1">
-                                                <button
-                                                    onClick={() => onEdit(instance)}
-                                                    className="p-2.5 hover:bg-primary-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
-                                                    title="Edit instance"
-                                                >
-                                                    <Edit className="w-4 h-4 text-gray-400 group-hover:text-primary-600 transition-colors" />
-                                                </button>
-                                                <button
-                                                    onClick={() => onViewRequestHistory && onViewRequestHistory(instance)}
-                                                    className="p-2.5 hover:bg-info-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
-                                                    title="View request history"
-                                                >
-                                                    <History className="w-4 h-4 text-gray-400 group-hover:text-info-600 transition-colors" />
-                                                </button>
-                                                <button
-                                                    onClick={() => onDelete(instance)}
-                                                    className="p-2.5 hover:bg-danger-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
-                                                    title="Delete instance"
-                                                >
-                                                    <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-danger-600 transition-colors" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </React.Fragment>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Centralized Print Modal */}
-            {selectedItemForPrint?.barcode && (
-                <PrintBarcodeModal
-                    isOpen={showPrintModal}
-                    onClose={() => {
-                        setShowPrintModal(false);
-                        setSelectedItemForPrint(null);
-                    }}
-                    itemName={selectedItemForPrint.name}
-                    barcode={selectedItemForPrint.barcode}
-                    itemId={selectedItemForPrint.id}
-                    allowTextEdit={true}
-                    priority="normal"
-                />
-            )}
-        </div>
-    );
+      {selectedItemForPrint?.barcode && (
+        <PrintBarcodeModal
+          isOpen={showPrintModal}
+          onClose={() => {
+            setShowPrintModal(false);
+            setSelectedItemForPrint(null);
+          }}
+          itemName={selectedItemForPrint.name}
+          barcode={selectedItemForPrint.barcode}
+          itemId={selectedItemForPrint.id}
+          allowTextEdit={true}
+          priority="normal"
+        />
+      )}
+    </div>
+  );
 };
 
 export default InventoryTable;

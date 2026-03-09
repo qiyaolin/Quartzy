@@ -41,7 +41,7 @@ class LocationSerializer(serializers.ModelSerializer):
 class ItemTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemType
-        fields = ['id', 'name', 'custom_fields_schema']
+        fields = ['id', 'name', 'custom_fields_schema', 'tracking_mode', 'label_mode']
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -89,6 +89,14 @@ class ItemSerializer(serializers.ModelSerializer):
     primary_location = serializers.SerializerMethodField()
     location_summary = serializers.SerializerMethodField()
     fund_name = serializers.SerializerMethodField()
+    resolved_tracking_mode = serializers.ReadOnlyField()
+    resolved_label_mode = serializers.ReadOnlyField()
+    open_unit_count = serializers.ReadOnlyField()
+    tracking_summary = serializers.ReadOnlyField()
+    can_scan_consume = serializers.ReadOnlyField()
+    request_state = serializers.SerializerMethodField()
+    request_state_label = serializers.SerializerMethodField()
+    request_state_count = serializers.SerializerMethodField()
 
     owner_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='owner', write_only=True)
     vendor_id = serializers.PrimaryKeyRelatedField(queryset=Vendor.objects.all(), source='vendor', write_only=True, allow_null=True, required=False)
@@ -99,6 +107,43 @@ class ItemSerializer(serializers.ModelSerializer):
     expiration_status = serializers.ReadOnlyField()
     is_low_stock = serializers.ReadOnlyField()
     needs_attention = serializers.ReadOnlyField()
+
+    REQUEST_STATE_PRIORITY = ('ORDERED', 'APPROVED', 'NEW')
+
+    @staticmethod
+    def _build_request_lookup_key(name, catalog_number, vendor_id):
+        return (
+            (name or '').strip().lower(),
+            (catalog_number or '').strip().lower(),
+            str(vendor_id or ''),
+        )
+
+    def _get_request_state_cache(self):
+        cache = self.context.get('_request_state_cache')
+        if cache is not None:
+            return cache
+
+        lookup = {}
+        try:
+            from inventory_requests.models import Request
+
+            active_requests = Request.objects.filter(
+                status__in=self.REQUEST_STATE_PRIORITY
+            ).select_related('vendor')
+            for request in active_requests:
+                key = self._build_request_lookup_key(
+                    request.item_name,
+                    request.catalog_number,
+                    request.vendor_id,
+                )
+                entry = lookup.setdefault(key, {'states': set(), 'count': 0})
+                entry['states'].add(request.status)
+                entry['count'] += 1
+        except Exception:
+            lookup = {}
+
+        self.context['_request_state_cache'] = lookup
+        return lookup
 
     def get_fund_name(self, obj):
         if obj.fund_id:
@@ -143,6 +188,36 @@ class ItemSerializer(serializers.ModelSerializer):
                 }
             ]
         return []
+
+    def get_request_state(self, obj):
+        cache = self._get_request_state_cache()
+        key = self._build_request_lookup_key(obj.name, obj.catalog_number, obj.vendor_id)
+        entry = cache.get(key)
+        if not entry:
+            if obj.is_low_stock:
+                return 'LOW_STOCK'
+            return 'NONE'
+
+        for status in self.REQUEST_STATE_PRIORITY:
+            if status in entry['states']:
+                return status
+        return 'NONE'
+
+    def get_request_state_label(self, obj):
+        labels = {
+            'NONE': 'No action',
+            'LOW_STOCK': 'Low stock',
+            'NEW': 'Request submitted',
+            'APPROVED': 'Approved',
+            'ORDERED': 'Ordered',
+        }
+        return labels.get(self.get_request_state(obj), 'No action')
+
+    def get_request_state_count(self, obj):
+        cache = self._get_request_state_cache()
+        key = self._build_request_lookup_key(obj.name, obj.catalog_number, obj.vendor_id)
+        entry = cache.get(key)
+        return entry['count'] if entry else 0
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -287,6 +362,8 @@ class ItemSerializer(serializers.ModelSerializer):
             'unit',
             'location',
             'location_id',
+            'tracking_mode',
+            'label_mode',
             'location_allocations',
             'primary_location',
             'location_summary',
@@ -310,6 +387,14 @@ class ItemSerializer(serializers.ModelSerializer):
             'expiration_status',
             'is_low_stock',
             'needs_attention',
+            'resolved_tracking_mode',
+            'resolved_label_mode',
+            'open_unit_count',
+            'tracking_summary',
+            'can_scan_consume',
+            'request_state',
+            'request_state_label',
+            'request_state_count',
             'fund_id',
             'fund_name',
             'barcode',
@@ -325,4 +410,12 @@ class ItemSerializer(serializers.ModelSerializer):
             'fund_name',
             'primary_location',
             'location_summary',
+            'resolved_tracking_mode',
+            'resolved_label_mode',
+            'open_unit_count',
+            'tracking_summary',
+            'can_scan_consume',
+            'request_state',
+            'request_state_label',
+            'request_state_count',
         ]

@@ -20,6 +20,7 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
     const bulkPrintLockRef = useRef(false);
 
     const remainingQty = Number(request?.remaining_quantity ?? request?.quantity ?? 1);
+    const labelEligibleItems = createdItems.filter((item) => item?.can_scan_consume && item?.barcode);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -110,7 +111,7 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
     };
 
     const handleBulkPrint = async () => {
-        if (bulkPrintLockRef.current || isBulkPrinting || !createdItems.length) return;
+        if (bulkPrintLockRef.current || isBulkPrinting || !labelEligibleItems.length) return;
         bulkPrintLockRef.current = true;
         setIsBulkPrinting(true);
         let successCount = 0;
@@ -118,7 +119,7 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
         try {
             const dedupedItems = [];
             const seenItemIds = new Set();
-            for (const item of createdItems) {
+            for (const item of labelEligibleItems) {
                 const itemId = item?.id;
                 if (itemId !== null && itemId !== undefined) {
                     const itemKey = String(itemId);
@@ -272,19 +273,19 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                                     Items Successfully Received
                                 </h3>
                                 <p className="text-green-700">
-                                    <strong>{request?.item_name}</strong> has been received and split into {createdItems.length} inventory items.
+                                    <strong>{request?.item_name}</strong> has been received and added to active inventory as {createdItems.length} tracked record(s).
                                 </p>
                             </div>
 
                             <div className="border-t pt-6">
                                 <div className="flex items-center justify-between mb-4">
                                     <h3 className="text-lg font-semibold text-gray-900">
-                                        Print Barcode Labels
+                                        Label Handling
                                     </h3>
                                     <Printer className="w-5 h-5 text-gray-500" />
                                 </div>
 
-                                {createdItems.length > 0 ? (
+                                {labelEligibleItems.length > 0 ? (
                                     <div className="space-y-3">
                                         <button
                                             type="button"
@@ -292,7 +293,7 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                                             disabled={isBulkPrinting}
                                             className="btn btn-primary w-full"
                                         >
-                                            {isBulkPrinting ? 'Queueing Print Jobs...' : `Print All (${createdItems.length})`}
+                                            {isBulkPrinting ? 'Queueing Print Jobs...' : `Print Labels Now (${labelEligibleItems.length})`}
                                         </button>
 
                                         <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-md">
@@ -300,34 +301,49 @@ const MarkReceivedModal = ({ isOpen, onClose, onSave, token, request }) => {
                                                 <div key={item.id || item.barcode || index} className="flex items-center justify-between p-3 border-b last:border-b-0">
                                                     <div className="text-sm">
                                                         <p className="font-medium text-gray-900">Piece {index + 1}</p>
-                                                        <p className="font-mono text-xs text-gray-600">{item.barcode}</p>
+                                                        <p className="text-xs text-gray-600">{item.tracking_summary || 'Tracked inventory record'}</p>
+                                                        <p className="font-mono text-xs text-gray-600">{item.barcode || 'No physical barcode label'}</p>
                                                         {item.location_name && (
                                                             <p className="text-xs text-gray-500">Location: {item.location_name}</p>
                                                         )}
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setSelectedPrintItem(item);
-                                                            setShowPrintModal(true);
-                                                        }}
-                                                        className="btn btn-secondary btn-sm flex items-center space-x-1"
-                                                    >
-                                                        <Printer className="w-3 h-3" />
-                                                        <span>Print</span>
-                                                    </button>
+                                                    {item.can_scan_consume && item.barcode ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedPrintItem(item);
+                                                                setShowPrintModal(true);
+                                                            }}
+                                                            className="btn btn-secondary btn-sm flex items-center space-x-1"
+                                                        >
+                                                            <Printer className="w-3 h-3" />
+                                                            <span>Print</span>
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs font-medium text-gray-400">Inventory only</span>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="bg-gray-50 rounded-lg p-4 text-center">
-                                        <p className="text-gray-500">No barcode labels available for this receive action.</p>
+                                        <p className="text-gray-500">This receive action created inventory records without physical barcode labels.</p>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="flex justify-end">
+                            <div className="flex flex-wrap justify-end gap-3">
+                                <button
+                                    onClick={() => {
+                                        onClose();
+                                        window.history.pushState(null, '', '/inventory');
+                                        window.dispatchEvent(new PopStateEvent('popstate'));
+                                    }}
+                                    className="btn btn-secondary"
+                                >
+                                    Go to Inventory
+                                </button>
                                 <button
                                     onClick={onClose}
                                     className="btn btn-primary"

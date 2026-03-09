@@ -184,15 +184,17 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
             if (response.ok) {
                 const data = await response.json();
                 console.log('API Response:', data);
-                if (data.results && data.results.length > 0) {
-                    const item = data.results[0];
-                    // Only allow checkout if the item is not archived
+                const items = data.results || data;
+                const matchingItems = Array.isArray(items) ? items.filter((item) => item.barcode === barcode) : [];
+                if (matchingItems.length > 0) {
+                    const item = matchingItems[0];
+                    // Only allow consume for active labeled items
                     if (!item.is_archived) {
                         setItemData(item);
                         setShowConfirmation(true);
                         onScan(barcode);
                     } else {
-                        setError('Item has already been checked out');
+                        setError('Item has already been consumed');
                     }
                 } else {
                     setError('No item found with this barcode');
@@ -250,7 +252,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                             <div className="flex items-center mb-2">
                                 <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                                <span className="font-semibold text-green-800">Item Available for Checkout</span>
+                                <span className="font-semibold text-green-800">Labeled Item Ready to Consume</span>
                             </div>
                             <div className="space-y-2 text-sm">
                                 <p><strong>Item:</strong> {itemData.name}</p>
@@ -273,7 +275,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                 onClick={handleConfirm}
                                 className="flex-1 btn btn-primary"
                             >
-                                Confirm Checkout
+                                Confirm Consume
                             </button>
                             <button
                                 onClick={() => {
@@ -311,7 +313,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                             Scanning...
                                         </div>
                                     ) : (
-                                        <span className="text-white text-sm font-medium">Position barcode here</span>
+                                        <span className="text-white text-sm font-medium">Position labeled item barcode here</span>
                                     )}
                                 </div>
                             </div>

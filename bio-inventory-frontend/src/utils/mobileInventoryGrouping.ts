@@ -16,6 +16,10 @@ export interface MobileInventoryGroup {
   groupThreshold: number | null;
   stockLevel: InventoryGroupStockLevel;
   thresholdMismatch: boolean;
+  trackingSummary: string;
+  requestStateLabel: string;
+  labeledCount: number;
+  openUnitCount: number;
 }
 
 type MutableInventoryGroup = MobileInventoryGroup & {
@@ -104,6 +108,10 @@ export const buildMobileInventoryGroups = (items: MobileInventoryItem[]): Mobile
         groupThreshold: null,
         stockLevel: 'in',
         thresholdMismatch: false,
+        trackingSummary: item.tracking_summary || 'Tracked item',
+        requestStateLabel: item.request_state_label || 'No action',
+        labeledCount: item.can_scan_consume ? 1 : 0,
+        openUnitCount: item.open_unit_count || 0,
         thresholds
       });
       return;
@@ -119,6 +127,8 @@ export const buildMobileInventoryGroups = (items: MobileInventoryItem[]): Mobile
     if (isExpiringSoon(item.expiry_date)) {
       existing.expiringSoonCount += 1;
     }
+    existing.labeledCount += item.can_scan_consume ? 1 : 0;
+    existing.openUnitCount += item.open_unit_count || 0;
   });
 
   return Array.from(groupMap.values())
@@ -157,7 +167,11 @@ export const buildMobileInventoryGroups = (items: MobileInventoryItem[]): Mobile
         expiringSoonCount: group.expiringSoonCount,
         groupThreshold,
         stockLevel: getGroupStockLevel(group.totalQuantity, groupThreshold),
-        thresholdMismatch
+        thresholdMismatch,
+        trackingSummary: group.trackingSummary,
+        requestStateLabel: group.requestStateLabel,
+        labeledCount: group.labeledCount,
+        openUnitCount: group.openUnitCount,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

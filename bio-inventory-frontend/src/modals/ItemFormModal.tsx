@@ -17,6 +17,9 @@ const buildEmptyForm = () => ({
     lot_number: '',
     received_date: '',
     expiration_alert_days: '30',
+    tracking_mode: '',
+    label_mode: '',
+    open_unit_count: '0',
     storage_temperature: '',
     storage_conditions: '',
 });
@@ -97,6 +100,9 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                 lot_number: initialData.lot_number || '',
                 received_date: initialData.received_date || '',
                 expiration_alert_days: String(initialData.expiration_alert_days || '30'),
+                tracking_mode: initialData.tracking_mode || initialData.resolved_tracking_mode || '',
+                label_mode: initialData.label_mode || initialData.resolved_label_mode || '',
+                open_unit_count: String(initialData.properties?.open_unit_count || initialData.open_unit_count || '0'),
                 storage_temperature: initialData.storage_temperature || '',
                 storage_conditions: initialData.storage_conditions || '',
             });
@@ -151,6 +157,16 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
 
     const handleChange = (event) => {
         const { name, value } = event.target;
+        if (name === 'item_type_id') {
+            const selectedType = dropdownData.itemTypes.find((type: any) => String(type.id) === value);
+            setFormData((prev) => ({
+                ...prev,
+                [name]: value,
+                tracking_mode: prev.tracking_mode || selectedType?.tracking_mode || '',
+                label_mode: prev.label_mode || selectedType?.label_mode || '',
+            }));
+            return;
+        }
         setFormData((prev) => ({ ...prev, [name]: value }));
         if (name === 'vendor_id' && value !== 'custom') {
             setCustomVendor('');
@@ -230,6 +246,12 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
             price: formData.price || null,
             expiration_date: formData.expiration_date || null,
             received_date: formData.received_date || null,
+            tracking_mode: formData.tracking_mode || '',
+            label_mode: formData.label_mode || '',
+            properties: {
+                ...(initialData?.properties || {}),
+                open_unit_count: Math.max(parseInt(formData.open_unit_count || '0', 10) || 0, 0),
+            },
             location_id: trimmedAllocations[0].location_id,
             location_allocations: trimmedAllocations.map((allocation) => ({
                 ...allocation,
@@ -371,6 +393,22 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                         <label htmlFor="lot_number" className="block text-sm font-semibold text-gray-700 mb-2">Lot Number</label>
                                         <input id="lot_number" name="lot_number" value={formData.lot_number} onChange={handleChange} className="input" />
                                     </div>
+                                    <div>
+                                        <label htmlFor="tracking_mode" className="block text-sm font-semibold text-gray-700 mb-2">Tracking Mode</label>
+                                        <select id="tracking_mode" name="tracking_mode" value={formData.tracking_mode} onChange={handleChange} className="select">
+                                            <option value="">Inherit from item type</option>
+                                            <option value="pack_managed">Pack-managed</option>
+                                            <option value="instance_tracked">Instance-tracked</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="label_mode" className="block text-sm font-semibold text-gray-700 mb-2">Label Mode</label>
+                                        <select id="label_mode" name="label_mode" value={formData.label_mode} onChange={handleChange} className="select">
+                                            <option value="">Inherit from item type</option>
+                                            <option value="none">No physical barcode</option>
+                                            <option value="item_barcode">Barcode on item</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </section>
 
@@ -388,6 +426,10 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                     <div>
                                         <label htmlFor="price" className="block text-sm font-semibold text-gray-700 mb-2">Unit Price</label>
                                         <input id="price" name="price" type="number" step="0.01" value={formData.price} onChange={handleChange} className="input" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="open_unit_count" className="block text-sm font-semibold text-gray-700 mb-2">Open Units</label>
+                                        <input id="open_unit_count" name="open_unit_count" type="number" step="1" min="0" value={formData.open_unit_count} onChange={handleChange} className="input" />
                                     </div>
                                 </div>
 

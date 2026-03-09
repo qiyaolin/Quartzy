@@ -151,6 +151,10 @@ class RequestViewSet(viewsets.ModelViewSet):
                 'barcode': item.barcode,
                 'location_id': item.location_id,
                 'location_name': item.location.name if item.location else None,
+                'tracking_mode': item.resolved_tracking_mode,
+                'label_mode': item.resolved_label_mode,
+                'tracking_summary': item.tracking_summary,
+                'can_scan_consume': item.can_scan_consume,
             }
             for item in created_items
         ]

@@ -1,3 +1,4 @@
+from decimal import Decimal
 from datetime import date, timedelta
 
 from django.db.models import Count, F, Prefetch, Q, Sum
@@ -91,7 +92,24 @@ class ItemViewSet(viewsets.ModelViewSet):
     serializer_class = ItemSerializer
     filterset_class = ItemFilter
     filter_backends = [SearchFilter, filters.DjangoFilterBackend]
-    search_fields = ['name', 'catalog_number', 'vendor__name', 'barcode', 'location__name', 'location__parent__name']
+    search_fields = ['name', 'catalog_number', 'vendor__name', 'barcode', 'lot_number', 'serial_number', 'location__name', 'location__parent__name']
+
+    def _consume_item(self, item, request, barcode=None):
+        if item.is_archived:
+            return Response({'error': 'Item has already been consumed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.is_archived = True
+        item.last_used_date = date.today()
+        item.save(update_fields=['is_archived', 'last_used_date', 'updated_at'])
+
+        serializer = self.get_serializer(item)
+        return Response({
+            'status': 'Item consumed successfully',
+            'item': serializer.data,
+            'consumed_by': request.user.username,
+            'consume_date': date.today(),
+            'barcode': barcode or item.barcode,
+        })
     
     @action(detail=False, methods=['get'])
     def alerts(self, request):
@@ -241,37 +259,33 @@ class ItemViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def checkout(self, request, pk=None):
         """
-        Custom action to checkout an item by marking it as archived.
+        Backward-compatible alias for consume.
+        """
+        return self.consume(request, pk=pk)
+
+    @action(detail=True, methods=['post'])
+    def consume(self, request, pk=None):
+        """
+        Consume a single inventory instance by archiving it from the active list.
         """
         item = self.get_object()
-        
-        if item.is_archived:
-            return Response({'error': 'Item is already checked out.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        barcode = request.data.get('barcode')
-        notes = request.data.get('notes', f'Checked out via barcode scan: {barcode}')
-
-        # Mark item as archived (checked out)
-        item.is_archived = True
-        item.last_used_date = date.today()
-        item.save()
-
-        return Response({
-            'status': 'Item checked out successfully',
-            'item_id': item.id,
-            'barcode': item.barcode,
-            'checked_out_by': request.user.username,
-            'checkout_date': date.today()
-        })
+        if item.resolved_tracking_mode == ItemType.TrackingMode.PACK_MANAGED:
+            return Response({'error': 'Pack-managed items should use pack actions instead of full instance consume.'}, status=status.HTTP_400_BAD_REQUEST)
+        return self._consume_item(item, request)
 
     @action(detail=False, methods=['post'])
     def checkout_by_barcode(self, request):
         """
-        Checkout an item by barcode without knowing the item ID.
-        This searches for an active (non-archived) item with the given barcode.
+        Backward-compatible alias for consume_by_barcode.
+        """
+        return self.consume_by_barcode(request)
+
+    @action(detail=False, methods=['post'])
+    def consume_by_barcode(self, request):
+        """
+        Consume an item by scanning a lab-generated barcode for a labeled instance.
         """
         barcode = request.data.get('barcode')
-        notes = request.data.get('notes', f'Checked out via barcode scan: {barcode}')
 
         if not barcode:
             return Response({'error': 'Barcode is required.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -284,16 +298,76 @@ class ItemViewSet(viewsets.ModelViewSet):
         except Item.MultipleObjectsReturned:
             return Response({'error': 'Multiple items found with this barcode.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Mark item as archived (checked out)
-        item.is_archived = True
-        item.last_used_date = date.today()
-        item.save()
+        if not item.can_scan_consume:
+            return Response(
+                {'error': 'This inventory item is not configured for labeled barcode consume.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        # Return the item details
-        serializer = self.get_serializer(item)
+        return self._consume_item(item, request, barcode=barcode)
+
+    @action(detail=True, methods=['post'])
+    def mark_open(self, request, pk=None):
+        item = self.get_object()
+        if item.resolved_tracking_mode != ItemType.TrackingMode.PACK_MANAGED:
+            return Response({'error': 'Only pack-managed items can be marked open.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        total_units = int(Decimal(str(item.quantity or 0)))
+        if total_units <= 0:
+            return Response({'error': 'No remaining packs are available to mark as open.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        next_open_count = min(item.open_unit_count + 1, total_units)
+        if next_open_count == item.open_unit_count:
+            return Response({'error': 'All tracked packs are already marked as open.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        properties = dict(item.properties or {})
+        properties['open_unit_count'] = next_open_count
+        item.properties = properties
+        item.save(update_fields=['properties', 'updated_at'])
+
         return Response({
-            'status': 'Item checked out successfully',
-            'item': serializer.data,
-            'checked_out_by': request.user.username,
-            'checkout_date': date.today()
+            'status': 'Pack marked as open.',
+            'item': self.get_serializer(item).data,
         })
+
+    @action(detail=True, methods=['post'])
+    def subtract_pack(self, request, pk=None):
+        item = self.get_object()
+        if item.resolved_tracking_mode != ItemType.TrackingMode.PACK_MANAGED:
+            return Response({'error': 'Only pack-managed items support subtracting packs.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        current_quantity = Decimal(str(item.quantity or 0))
+        if current_quantity < Decimal('1'):
+            return Response({'error': 'No packs remain to subtract.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.quantity = current_quantity - Decimal('1')
+        item.last_used_date = date.today()
+        properties = dict(item.properties or {})
+        properties['open_unit_count'] = min(item.open_unit_count, max(int(item.quantity), 0))
+        item.properties = properties
+        item.save(update_fields=['quantity', 'last_used_date', 'properties', 'updated_at'])
+
+        return Response({
+            'status': 'Pack quantity reduced by one.',
+            'item': self.get_serializer(item).data,
+        })
+
+    @action(detail=False, methods=['post'])
+    def batch_archive(self, request):
+        item_ids = request.data.get('item_ids', [])
+        if not isinstance(item_ids, list) or not item_ids:
+            return Response({'error': 'A non-empty item_ids list is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        updated_count = Item.objects.filter(id__in=item_ids, is_archived=False).update(is_archived=True)
+        return Response({'updated_count': updated_count})
+
+    @action(detail=False, methods=['post'])
+    def batch_delete(self, request):
+        item_ids = request.data.get('item_ids', [])
+        if not isinstance(item_ids, list) or not item_ids:
+            return Response({'error': 'A non-empty item_ids list is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        queryset = Item.objects.filter(id__in=item_ids)
+        deleted_count = queryset.count()
+        queryset.delete()
+        return Response({'deleted_count': deleted_count})
