@@ -260,7 +260,11 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ isOpen, onClose, onScan
                                 {itemData.owner && <p><strong>Owner:</strong> {itemData.owner.username}</p>}
                                 {itemData.vendor && <p><strong>Vendor:</strong> {itemData.vendor.name}</p>}
                                 {itemData.catalog_number && <p><strong>Catalog #:</strong> {itemData.catalog_number}</p>}
-                                {itemData.location && <p><strong>Location:</strong> {itemData.location.name}</p>}
+                                {(itemData.primary_location || itemData.location) && (
+                                    <p>
+                                        <strong>Location:</strong> {itemData.primary_location?.full_path || itemData.location?.full_path || itemData.location?.name}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         

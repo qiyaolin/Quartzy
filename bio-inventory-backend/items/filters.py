@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from .models import Item
+from .models import Item, Location
 from django.db import models
 from datetime import date, timedelta
 
@@ -68,7 +68,30 @@ class ItemFilter(filters.FilterSet):
             )
         return queryset
 
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        requested_locations = self.request.query_params.getlist('location')
+        if not requested_locations:
+            return queryset
+
+        location_ids = set()
+        for raw_location_id in requested_locations:
+            try:
+                location = Location.objects.get(pk=raw_location_id)
+            except (Location.DoesNotExist, ValueError, TypeError):
+                continue
+            location_ids.add(location.id)
+            location_ids.update(location.get_descendant_ids())
+
+        if not location_ids:
+            return queryset.none()
+
+        return queryset.filter(
+            models.Q(location_id__in=location_ids) |
+            models.Q(location_allocations__location_id__in=location_ids)
+        ).distinct()
+
     class Meta:
         model = Item
         # Define the fields that can be filtered with an exact match.
-        fields = ['location', 'item_type', 'vendor', 'owner', 'is_archived'] 
+        fields = ['item_type', 'vendor', 'owner', 'is_archived'] 

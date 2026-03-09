@@ -24,7 +24,7 @@ export const validateFilterOptions = (data: any[]): FilterOption[] => {
     .filter(item => item && typeof item === 'object')
     .map(item => {
       // 尝试多种可能的字段名组合
-      const label = item.name || item.label || item.title || item.username || String(item.id || '');
+      const label = item.full_path || item.name || item.label || item.title || item.username || String(item.id || '');
       const value = item.id || item.value || item.name || item.label;
 
       if (!label || (value === undefined || value === null)) {

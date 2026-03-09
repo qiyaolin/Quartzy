@@ -319,7 +319,11 @@ const ZBarBarcodeScanner: React.FC<ZBarBarcodeScannerProps> = ({
                   {itemData.owner && <p><strong>Owner:</strong> {itemData.owner.username}</p>}
                   {itemData.vendor && <p><strong>Vendor:</strong> {typeof itemData.vendor === 'object' ? itemData.vendor.name : itemData.vendor}</p>}
                   {itemData.catalog_number && <p><strong>Catalog #:</strong> {itemData.catalog_number}</p>}
-                  {itemData.location && <p><strong>Location:</strong> {typeof itemData.location === 'object' ? itemData.location.name : itemData.location}</p>}
+                  {(itemData.primary_location || itemData.location) && (
+                    <p>
+                      <strong>Location:</strong> {itemData.primary_location?.full_path || itemData.location?.full_path || (typeof itemData.location === 'object' ? itemData.location.name : itemData.location)}
+                    </p>
+                  )}
                 </div>
               </div>
               

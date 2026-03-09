@@ -20,7 +20,7 @@ const SidebarFilter = ({ title, options, selected, onFilterChange }) => {
                                 onChange={() => onFilterChange(option.id)}
                                 className="checkbox" />
                             <label htmlFor={`${title}-${option.id}`} className="ml-2 text-secondary-600 group-hover:text-secondary-900 cursor-pointer transition-colors text-sm">
-                                {option.username || option.name || option.email || option.id}
+                                {option.full_path || option.label || option.username || option.name || option.email || option.id}
                             </label>
                         </div>
                     ))}

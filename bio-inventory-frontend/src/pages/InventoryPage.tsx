@@ -104,7 +104,7 @@ const InventoryPage = ({ onEditItem, onDeleteItem, refreshKey, filters }) => {
                     'Total Value': item.total_value ? `$${item.total_value}` : '',
                     'Vendor': item.vendor?.name || '',
                     'Catalog Number': item.catalog_number || '',
-                    'Location': item.location || '',
+                    'Location': item.primary_location?.full_path || item.location?.full_path || item.location?.name || '',
                     'Item Type': item.item_type || '',
                     'Expiration Date': item.expiration_date ? new Date(item.expiration_date).toLocaleDateString('en-US') : '',
                     'Minimum Stock': item.minimum_quantity || '',

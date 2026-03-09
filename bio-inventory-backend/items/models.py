@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.utils import timezone
-from datetime import date, timedelta
+from datetime import date
 import uuid
 
 # A helper function to generate a unique serial number for items.
@@ -20,17 +19,60 @@ class Vendor(models.Model):
 
 class Location(models.Model):
     """Represents a physical location in the lab, supports hierarchy."""
+    TYPE_AREA = 'area'
+    TYPE_STORAGE_GROUP = 'storage_group'
+    TYPE_CONTAINER = 'container'
+    TYPE_SLOT = 'slot'
+    TYPE_CHOICES = (
+        (TYPE_AREA, 'Area'),
+        (TYPE_STORAGE_GROUP, 'Storage Group'),
+        (TYPE_CONTAINER, 'Container'),
+        (TYPE_SLOT, 'Slot'),
+    )
+
     name = models.CharField(max_length=255, help_text="Name of the location (e.g., -80°C Freezer, Shelf A, Chemical Cabinet)")
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children', help_text="Parent location for creating a hierarchy (e.g., a specific shelf inside a freezer)")
     description = models.TextField(blank=True, null=True)
+    code = models.CharField(max_length=50, blank=True, help_text="Optional stable code for imports and integrations.")
+    location_type = models.CharField(max_length=32, choices=TYPE_CHOICES, default=TYPE_SLOT)
+    is_leaf = models.BooleanField(default=True, help_text="Whether this location is a final storable slot.")
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    aliases = models.JSONField(default=list, blank=True, help_text="Alternative names used for this location.")
+    notes = models.TextField(blank=True, help_text="Optional operational notes for this location.")
 
     def __str__(self):
+        return self.full_path
+
+    @property
+    def full_path_labels(self):
         path = [self.name]
         p = self.parent
         while p is not None:
             path.insert(0, p.name)
             p = p.parent
-        return ' > '.join(path)
+        return path
+
+    @property
+    def full_path(self):
+        return ' > '.join(self.full_path_labels)
+
+    @property
+    def has_children(self):
+        return self.children.exists()
+
+    def get_descendant_ids(self):
+        descendant_ids = []
+        for child in self.children.all():
+            descendant_ids.append(child.id)
+            descendant_ids.extend(child.get_descendant_ids())
+        return descendant_ids
+
+    class Meta:
+        ordering = ['parent__id', 'sort_order', 'name', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['parent', 'name'], name='items_location_unique_name_per_parent'),
+        ]
 
 class ItemType(models.Model):
     """Represents the category of an item (e.g., Antibody, Plasmid, Chemical)."""
@@ -128,3 +170,24 @@ class Item(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+
+
+class ItemLocationAllocation(models.Model):
+    """Tracks how a single item quantity is distributed across storage slots."""
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='location_allocations')
+    location = models.ForeignKey(Location, on_delete=models.PROTECT, related_name='item_allocations')
+    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    note = models.CharField(max_length=255, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.item.name} @ {self.location.full_path} ({self.quantity})"
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['item', 'location'], name='items_itemallocation_unique_item_location'),
+            models.CheckConstraint(check=models.Q(quantity__gt=0), name='items_itemallocation_quantity_positive'),
+        ]

@@ -1,146 +1,313 @@
-import React, { useState, useEffect } from 'react';
-import { X, Package, DollarSign, Calendar, MapPin, Tag, Beaker, Save, AlertCircle } from 'lucide-react';
-import { buildApiUrl, API_ENDPOINTS } from '../config/api.ts';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, MapPin, Package, Plus, Save, Trash2, X } from 'lucide-react';
+
+import { API_ENDPOINTS, buildApiUrl } from '../config/api.ts';
+
+const buildEmptyForm = () => ({
+    name: '',
+    item_type_id: '',
+    vendor_id: '',
+    owner_id: '1',
+    catalog_number: '',
+    quantity: '1.00',
+    unit: '',
+    price: '',
+    fund_id: '',
+    expiration_date: '',
+    lot_number: '',
+    received_date: '',
+    expiration_alert_days: '30',
+    storage_temperature: '',
+    storage_conditions: '',
+});
+
+const buildEmptyAllocation = () => ({
+    location_id: '',
+    quantity: '',
+    note: '',
+});
+
+const formatApiError = (payload: any) => {
+    if (!payload) {
+        return 'Submission failed.';
+    }
+    if (typeof payload === 'string') {
+        return payload;
+    }
+    if (Array.isArray(payload)) {
+        return payload.map((entry) => formatApiError(entry)).join(' ');
+    }
+    if (typeof payload === 'object') {
+        return Object.entries(payload)
+            .map(([key, value]) => `${key}: ${formatApiError(value)}`)
+            .join(' ');
+    }
+    return String(payload);
+};
+
+const buildInitialAllocations = (initialData: any) => {
+    const source = initialData?.location_allocations?.length
+        ? initialData.location_allocations
+        : initialData?.location_summary || [];
+
+    if (!source.length && initialData?.location?.id) {
+        return [{
+            location_id: String(initialData.location.id),
+            quantity: String(initialData.quantity || '1.00'),
+            note: '',
+        }];
+    }
+
+    return source.map((allocation: any) => ({
+        location_id: String(allocation.location?.id || allocation.location_id || ''),
+        quantity: String(allocation.quantity || ''),
+        note: allocation.note || '',
+    }));
+};
 
 const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {
-    const [formData, setFormData] = useState<any>({});
+    const [formData, setFormData] = useState<any>(buildEmptyForm());
+    const [allocations, setAllocations] = useState<any[]>([buildEmptyAllocation()]);
     const [dropdownData, setDropdownData] = useState<any>({ vendors: [], locations: [], itemTypes: [], funds: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [customVendor, setCustomVendor] = useState('');
     const isEditMode = initialData !== null;
 
+    const totalAllocated = useMemo(
+        () => allocations.reduce((sum, allocation) => sum + (parseFloat(allocation.quantity) || 0), 0),
+        [allocations],
+    );
+    const targetQuantity = parseFloat(formData.quantity || '0') || 0;
+    const remainingQuantity = Number((targetQuantity - totalAllocated).toFixed(2));
+
     useEffect(() => {
-        const emptyForm = { name: '', item_type_id: '', vendor_id: '', owner_id: '1', catalog_number: '', quantity: '1.00', unit: '', location_id: '', price: '', fund_id: '', expiration_date: '', lot_number: '', received_date: '', expiration_alert_days: '30', storage_temperature: '', storage_conditions: '' };
-        if (isEditMode) {
+        if (isEditMode && initialData) {
             setFormData({
-                name: initialData.name || '', item_type_id: initialData.item_type?.id || '', vendor_id: initialData.vendor?.id || '',
-                owner_id: initialData.owner?.id || '1', catalog_number: initialData.catalog_number || '', quantity: initialData.quantity || '1.00',
-                unit: initialData.unit || '', location_id: initialData.location?.id || '', price: initialData.price || '',
-                fund_id: initialData.fund_id || '', expiration_date: initialData.expiration_date || '', lot_number: initialData.lot_number || '', received_date: initialData.received_date || '',
-                expiration_alert_days: initialData.expiration_alert_days || '30', storage_temperature: initialData.storage_temperature || '', storage_conditions: initialData.storage_conditions || ''
+                name: initialData.name || '',
+                item_type_id: initialData.item_type?.id ? String(initialData.item_type.id) : '',
+                vendor_id: initialData.vendor?.id ? String(initialData.vendor.id) : '',
+                owner_id: initialData.owner?.id ? String(initialData.owner.id) : '1',
+                catalog_number: initialData.catalog_number || '',
+                quantity: String(initialData.quantity || '1.00'),
+                unit: initialData.unit || '',
+                price: initialData.price ? String(initialData.price) : '',
+                fund_id: initialData.fund_id ? String(initialData.fund_id) : '',
+                expiration_date: initialData.expiration_date || '',
+                lot_number: initialData.lot_number || '',
+                received_date: initialData.received_date || '',
+                expiration_alert_days: String(initialData.expiration_alert_days || '30'),
+                storage_temperature: initialData.storage_temperature || '',
+                storage_conditions: initialData.storage_conditions || '',
             });
-        } else { setFormData(emptyForm); }
+            const nextAllocations = buildInitialAllocations(initialData);
+            setAllocations(nextAllocations.length ? nextAllocations : [buildEmptyAllocation()]);
+        } else {
+            setFormData(buildEmptyForm());
+            setAllocations([buildEmptyAllocation()]);
+        }
+        setCustomVendor('');
+        setError(null);
     }, [initialData, isEditMode]);
 
     useEffect(() => {
-        if (isOpen) {
-            const fetchDropdownData = async () => {
-                try {
-                    const headers = { 'Authorization': `Token ${token}` };
-                    const [vendorsRes, locationsRes, itemTypesRes, fundsRes] = await Promise.all([
-                        fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
-                        fetch(buildApiUrl(API_ENDPOINTS.LOCATIONS), { headers }),
-                        fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
-                        fetch(buildApiUrl(API_ENDPOINTS.FUNDS), { headers }),
-                    ]);
-                    const vendors = await vendorsRes.json(); const locations = await locationsRes.json(); const itemTypes = await itemTypesRes.json();
-                    
-                    // Handle funds response, as it might not exist or might fail
-                    let funds = [];
-                    if (fundsRes.ok) {
-                        const fundsData = await fundsRes.json();
-                        funds = (fundsData.results || fundsData).filter(fund => !fund.is_archived);
-                    }
-                    
-                    setDropdownData({ vendors, locations, itemTypes, funds });
-                } catch (e) { setError('Could not load form data.'); }
-            };
-            fetchDropdownData();
+        if (!isOpen) {
+            return;
         }
+
+        const fetchDropdownData = async () => {
+            try {
+                const headers = { Authorization: `Token ${token}` };
+                const [vendorsRes, locationsRes, itemTypesRes, fundsRes] = await Promise.all([
+                    fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
+                    fetch(buildApiUrl(`${API_ENDPOINTS.LOCATIONS}?leaf_only=true`), { headers }),
+                    fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
+                    fetch(buildApiUrl(API_ENDPOINTS.FUNDS), { headers }),
+                ]);
+
+                const vendors = await vendorsRes.json();
+                const locations = await locationsRes.json();
+                const itemTypes = await itemTypesRes.json();
+
+                let funds = [];
+                if (fundsRes.ok) {
+                    const fundsData = await fundsRes.json();
+                    funds = (fundsData.results || fundsData).filter((fund: any) => !fund.is_archived);
+                }
+
+                setDropdownData({
+                    vendors,
+                    locations: Array.isArray(locations) ? locations : [],
+                    itemTypes,
+                    funds,
+                });
+            } catch (fetchError) {
+                setError('Could not load form data.');
+            }
+        };
+
+        fetchDropdownData();
     }, [isOpen, token]);
 
-    const handleChange = (e) => { 
-        const { name, value } = e.target; 
-        setFormData(prev => ({ ...prev, [name]: value })); 
+    const handleChange = (event) => {
+        const { name, value } = event.target;
+        setFormData((prev) => ({ ...prev, [name]: value }));
         if (name === 'vendor_id' && value !== 'custom') {
             setCustomVendor('');
         }
     };
 
-    const createVendor = async (vendorName) => {
-        try {
-            const response = await fetch(buildApiUrl(API_ENDPOINTS.VENDORS), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Token ${token}`
-                },
-                body: JSON.stringify({ name: vendorName })
-            });
-            if (response.ok) {
-                const newVendor = await response.json();
-                return newVendor.id;
-            }
-            throw new Error('Failed to create vendor');
-        } catch (error) {
-            throw error;
-        }
-    };
-    const handleSubmit = async (e) => {
-        e.preventDefault(); setIsSubmitting(true); setError(null);
-        
-        let finalFormData = { ...formData };
-        
-        // Handle custom vendor creation
-        if (formData.vendor_id === 'custom' && customVendor.trim()) {
-            try {
-                const newVendorId = await createVendor(customVendor.trim());
-                finalFormData.vendor_id = newVendorId;
-            } catch (error) {
-                setError('Failed to create new vendor');
-                setIsSubmitting(false);
-                return;
-            }
-        }
-        
-        const url = isEditMode ? buildApiUrl(`/api/items/${initialData.id}/`) : buildApiUrl(API_ENDPOINTS.ITEMS);
-        const method = isEditMode ? 'PUT' : 'POST';
-        try {
-            const response = await fetch(url, { 
-                method: method, 
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` }, 
-                body: JSON.stringify(finalFormData) 
-            });
-            if (!response.ok) { 
-                const errorData = await response.json(); 
-                throw new Error(JSON.stringify(errorData)); 
-            }
-            
-            // If creating a new item with a fund and price, create a transaction for fund deduction
-            if (!isEditMode && finalFormData.fund_id && finalFormData.price && finalFormData.quantity) {
-                try {
-                    const totalCost = parseFloat(finalFormData.price) * parseFloat(finalFormData.quantity);
-                    if (totalCost > 0) {
-                        await fetch(buildApiUrl(API_ENDPOINTS.TRANSACTIONS), {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Token ${token}` },
-                            body: JSON.stringify({
-                                fund_id: finalFormData.fund_id,
-                                amount: totalCost,
-                                transaction_type: 'purchase',
-                                item_name: finalFormData.name,
-                                description: `Purchase of ${finalFormData.name} - ${finalFormData.quantity} ${finalFormData.unit || 'units'}`,
-                                transaction_date: new Date().toISOString().split('T')[0]
-                            })
-                        });
-                    }
-                } catch (transactionError) {
-                    console.error('Failed to create transaction:', transactionError);
-                    // Don't fail the item creation if transaction fails
-                }
-            }
-            
-            onSave(); onClose();
-        } catch (e) { setError(`Submission failed: ${e.message}`); } finally { setIsSubmitting(false); }
+    const handleAllocationChange = (index: number, field: string, value: string) => {
+        setAllocations((prev) => prev.map((allocation, currentIndex) => (
+            currentIndex === index ? { ...allocation, [field]: value } : allocation
+        )));
     };
 
-    if (!isOpen) return null;
+    const addAllocationRow = () => {
+        setAllocations((prev) => [...prev, buildEmptyAllocation()]);
+    };
+
+    const removeAllocationRow = (index: number) => {
+        setAllocations((prev) => (prev.length === 1 ? prev : prev.filter((_, currentIndex) => currentIndex !== index)));
+    };
+
+    const createVendor = async (vendorName: string) => {
+        const response = await fetch(buildApiUrl(API_ENDPOINTS.VENDORS), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Token ${token}`,
+            },
+            body: JSON.stringify({ name: vendorName }),
+        });
+        if (!response.ok) {
+            throw new Error('Failed to create vendor');
+        }
+        const newVendor = await response.json();
+        return newVendor.id;
+    };
+
+    const buildPayload = async () => {
+        const trimmedAllocations = allocations
+            .map((allocation, index) => ({
+                location_id: allocation.location_id,
+                quantity: allocation.quantity,
+                note: allocation.note?.trim?.() || '',
+                sort_order: index,
+            }))
+            .filter((allocation) => allocation.location_id || allocation.quantity || allocation.note);
+
+        if (!trimmedAllocations.length) {
+            throw new Error('At least one location allocation is required.');
+        }
+
+        if (trimmedAllocations.some((allocation) => !allocation.location_id || !allocation.quantity)) {
+            throw new Error('Each allocation row needs both a location and a quantity.');
+        }
+
+        const duplicateLocationIds = new Set<string>();
+        for (const allocation of trimmedAllocations) {
+            if (duplicateLocationIds.has(allocation.location_id)) {
+                throw new Error('Duplicate locations are not allowed in allocations.');
+            }
+            duplicateLocationIds.add(allocation.location_id);
+        }
+
+        const roundedRemaining = Number((targetQuantity - totalAllocated).toFixed(2));
+        if (roundedRemaining !== 0) {
+            throw new Error('Allocated quantity must match total quantity exactly.');
+        }
+
+        let vendorId = formData.vendor_id;
+        if (formData.vendor_id === 'custom' && customVendor.trim()) {
+            vendorId = String(await createVendor(customVendor.trim()));
+        }
+
+        return {
+            ...formData,
+            vendor_id: vendorId || null,
+            fund_id: formData.fund_id || null,
+            price: formData.price || null,
+            expiration_date: formData.expiration_date || null,
+            received_date: formData.received_date || null,
+            location_id: trimmedAllocations[0].location_id,
+            location_allocations: trimmedAllocations.map((allocation) => ({
+                ...allocation,
+                location_id: Number(allocation.location_id),
+            })),
+        };
+    };
+
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+            const payload = await buildPayload();
+            const isGroupEdit = Array.isArray(initialData?.group_item_ids) && initialData.group_item_ids.length > 1;
+            const url = isGroupEdit
+                ? buildApiUrl('/api/items/merge_group/')
+                : isEditMode
+                    ? buildApiUrl(`/api/items/${initialData.id}/`)
+                    : buildApiUrl(API_ENDPOINTS.ITEMS);
+            const method = isGroupEdit ? 'POST' : isEditMode ? 'PUT' : 'POST';
+            const requestBody = isGroupEdit
+                ? { ...payload, item_ids: initialData.group_item_ids }
+                : payload;
+
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Token ${token}`,
+                },
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+                const errorPayload = await response.json().catch(() => null);
+                throw new Error(formatApiError(errorPayload));
+            }
+
+            if (!isEditMode && payload.fund_id && payload.price && payload.quantity) {
+                const totalCost = (parseFloat(payload.price) || 0) * (parseFloat(payload.quantity) || 0);
+                if (totalCost > 0) {
+                    await fetch(buildApiUrl(API_ENDPOINTS.TRANSACTIONS), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Token ${token}`,
+                        },
+                        body: JSON.stringify({
+                            fund_id: payload.fund_id,
+                            amount: totalCost,
+                            transaction_type: 'purchase',
+                            item_name: payload.name,
+                            description: `Purchase of ${payload.name} - ${payload.quantity} ${payload.unit || 'units'}`,
+                            transaction_date: new Date().toISOString().split('T')[0],
+                        }),
+                    });
+                }
+            }
+
+            onSave();
+            onClose();
+        } catch (submitError: any) {
+            setError(submitError.message || 'Submission failed.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (!isOpen) {
+        return null;
+    }
+
     return (
         <div className="modal-backdrop animate-fade-in">
             <div className="flex min-h-full items-center justify-center p-4">
                 <div className="modal-panel modal-panel-large animate-scale-in">
-                    {/* Enhanced Header */}
                     <div className="bg-gradient-to-r from-primary-50 to-primary-100 px-6 py-5 border-b border-primary-200 rounded-t-2xl">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-3">
@@ -148,204 +315,181 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                     <Package className="w-5 h-5 text-white" />
                                 </div>
                                 <div>
-                                    <h2 className="text-2xl font-bold text-gray-900">
-                                        {isEditMode ? 'Edit Item' : 'Add New Item'}
-                                    </h2>
-                                    <p className="text-sm text-primary-700">
-                                        {isEditMode ? 'Update the item details below' : 'Fill in the details for your new inventory item'}
-                                    </p>
+                                    <h2 className="text-2xl font-bold text-gray-900">{isEditMode ? 'Edit Item' : 'Add New Item'}</h2>
+                                    <p className="text-sm text-primary-700">Manage item details and exact slot allocations.</p>
                                 </div>
                             </div>
-                            <button 
-                                onClick={onClose} 
-                                className="p-2.5 rounded-xl hover:bg-primary-200 transition-all duration-200 group hover:scale-105"
-                            >
-                                <X className="w-5 h-5 text-gray-600 group-hover:text-gray-800" />
+                            <button onClick={onClose} className="p-2.5 rounded-xl hover:bg-primary-200 transition-all duration-200">
+                                <X className="w-5 h-5 text-gray-600" />
                             </button>
                         </div>
                     </div>
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Form Content */}
-                        <div className="px-6 py-4 space-y-6 max-h-[60vh] overflow-y-auto scrollbar-thin">
-                            {/* Basic Information Section */}
-                            <div className="space-y-4">
-                                <div className="flex items-center space-x-2 mb-4">
-                                    <Package className="w-5 h-5 text-primary-600" />
-                                    <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
-                                </div>
-                                
-                                <div className="space-y-4">
-                                    <div>
-                                        <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Item Name *
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="name" 
-                                            id="name" 
-                                            value={formData.name} 
-                                            onChange={handleChange} 
-                                            required 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                            placeholder="Enter item name" 
-                                        />
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label htmlFor="item_type_id" className="block text-sm font-semibold text-gray-700 mb-2">
-                                                <div className="flex items-center space-x-1">
-                                                    <Tag className="w-4 h-4" />
-                                                    <span>Type *</span>
-                                                </div>
-                                            </label>
-                                            <select 
-                                                name="item_type_id" 
-                                                id="item_type_id" 
-                                                value={formData.item_type_id} 
-                                                onChange={handleChange} 
-                                                required 
-                                                className="select focus:ring-primary-500 focus:border-primary-500"
-                                            >
-                                                <option value="">Select type...</option>
-                                                {dropdownData.itemTypes.map(type => (
-                                                    <option key={type.id} value={type.id}>{type.name}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        
-                                        <div>
-                                            <label htmlFor="vendor_id" className="block text-sm font-semibold text-gray-700 mb-2">
-                                                <div className="flex items-center space-x-1">
-                                                    <Package className="w-4 h-4" />
-                                                    <span>Vendor</span>
-                                                </div>
-                                            </label>
-                                            <select 
-                                                name="vendor_id" 
-                                                id="vendor_id" 
-                                                value={formData.vendor_id} 
-                                                onChange={handleChange} 
-                                                className="select focus:ring-primary-500 focus:border-primary-500"
-                                            >
-                                                <option value="">Select vendor...</option>
-                                                {dropdownData.vendors.map(vendor => (
-                                                    <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
-                                                ))}
-                                                <option value="custom" className="text-primary-600 font-medium">+ Add New Vendor</option>
-                                            </select>
-                                            {formData.vendor_id === 'custom' && (
-                                                <div className="mt-3 animate-fade-in">
-                                                    <input 
-                                                        type="text" 
-                                                        value={customVendor} 
-                                                        onChange={(e) => setCustomVendor(e.target.value)}
-                                                        placeholder="Enter new vendor name"
-                                                        className="input focus:ring-primary-500 focus:border-primary-500"
-                                                        required
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Inventory Details Section */}
-                            <div className="space-y-4 pt-4 border-t border-gray-100">
-                                <div className="flex items-center space-x-2 mb-4">
-                                    <Beaker className="w-5 h-5 text-primary-600" />
-                                    <h3 className="text-lg font-semibold text-gray-900">Inventory Details</h3>
-                                </div>
-                                
-                                <div className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="px-6 py-4 space-y-6 max-h-[70vh] overflow-y-auto">
+                            <section className="space-y-4">
+                                <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">Item Name *</label>
+                                        <input id="name" name="name" value={formData.name} onChange={handleChange} required className="input" />
+                                    </div>
                                     <div>
-                                        <label htmlFor="location_id" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            <div className="flex items-center space-x-1">
-                                                <MapPin className="w-4 h-4" />
-                                                <span>Location</span>
-                                            </div>
-                                        </label>
-                                        <select 
-                                            name="location_id" 
-                                            id="location_id" 
-                                            value={formData.location_id} 
-                                            onChange={handleChange} 
-                                            className="select focus:ring-primary-500 focus:border-primary-500"
-                                        >
-                                            <option value="">Select location...</option>
-                                            {dropdownData.locations.map(loc => (
-                                                <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                        <label htmlFor="item_type_id" className="block text-sm font-semibold text-gray-700 mb-2">Type *</label>
+                                        <select id="item_type_id" name="item_type_id" value={formData.item_type_id} onChange={handleChange} required className="select">
+                                            <option value="">Select type...</option>
+                                            {dropdownData.itemTypes.map((type: any) => (
+                                                <option key={type.id} value={type.id}>{type.name}</option>
                                             ))}
                                         </select>
                                     </div>
-                                    
                                     <div>
-                                        <label htmlFor="quantity" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Quantity
-                                        </label>
-                                        <input 
-                                            type="number" 
-                                            name="quantity" 
-                                            id="quantity" 
-                                            value={formData.quantity} 
-                                            onChange={handleChange} 
-                                            step="0.01" 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                            placeholder="1.00" 
-                                        />
+                                        <label htmlFor="vendor_id" className="block text-sm font-semibold text-gray-700 mb-2">Vendor</label>
+                                        <select id="vendor_id" name="vendor_id" value={formData.vendor_id} onChange={handleChange} className="select">
+                                            <option value="">Select vendor...</option>
+                                            {dropdownData.vendors.map((vendor: any) => (
+                                                <option key={vendor.id} value={vendor.id}>{vendor.name}</option>
+                                            ))}
+                                            <option value="custom">+ Add New Vendor</option>
+                                        </select>
+                                        {formData.vendor_id === 'custom' && (
+                                            <input
+                                                type="text"
+                                                value={customVendor}
+                                                onChange={(event) => setCustomVendor(event.target.value)}
+                                                className="input mt-3"
+                                                placeholder="Enter new vendor name"
+                                                required
+                                            />
+                                        )}
                                     </div>
-                                    
                                     <div>
-                                        <label htmlFor="unit" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Unit
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="unit" 
-                                            id="unit" 
-                                            placeholder="e.g., box, kg, mL" 
-                                            value={formData.unit} 
-                                            onChange={handleChange} 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                        />
+                                        <label htmlFor="catalog_number" className="block text-sm font-semibold text-gray-700 mb-2">Catalog Number</label>
+                                        <input id="catalog_number" name="catalog_number" value={formData.catalog_number} onChange={handleChange} className="input" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="lot_number" className="block text-sm font-semibold text-gray-700 mb-2">Lot Number</label>
+                                        <input id="lot_number" name="lot_number" value={formData.lot_number} onChange={handleChange} className="input" />
                                     </div>
                                 </div>
-                                
+                            </section>
+
+                            <section className="space-y-4 pt-4 border-t border-gray-100">
+                                <h3 className="text-lg font-semibold text-gray-900">Stock and Locations</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label htmlFor="quantity" className="block text-sm font-semibold text-gray-700 mb-2">Total Quantity *</label>
+                                        <input id="quantity" name="quantity" type="number" step="0.01" min="0.01" value={formData.quantity} onChange={handleChange} required className="input" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="unit" className="block text-sm font-semibold text-gray-700 mb-2">Unit *</label>
+                                        <input id="unit" name="unit" value={formData.unit} onChange={handleChange} required className="input" placeholder="e.g. box, bottle, mL" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="price" className="block text-sm font-semibold text-gray-700 mb-2">Unit Price</label>
+                                        <input id="price" name="price" type="number" step="0.01" value={formData.price} onChange={handleChange} className="input" />
+                                    </div>
+                                </div>
+
+                                <div className="rounded-2xl border border-primary-100 bg-primary-50/60 p-4 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h4 className="font-semibold text-gray-900 flex items-center"><MapPin className="w-4 h-4 mr-2 text-primary-600" />Location Allocations</h4>
+                                            <p className="text-sm text-gray-600">Choose exact leaf slots and assign quantities.</p>
+                                        </div>
+                                        <button type="button" onClick={addAllocationRow} className="btn btn-secondary btn-sm">
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Add Slot
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-12 gap-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                        <div className="col-span-5">Location</div>
+                                        <div className="col-span-2">Qty</div>
+                                        <div className="col-span-4">Note</div>
+                                        <div className="col-span-1"> </div>
+                                    </div>
+
+                                    {allocations.map((allocation, index) => (
+                                        <div key={index} className="grid grid-cols-12 gap-3 items-start">
+                                            <div className="col-span-5">
+                                                <select
+                                                    value={allocation.location_id}
+                                                    onChange={(event) => handleAllocationChange(index, 'location_id', event.target.value)}
+                                                    className="select"
+                                                    required
+                                                >
+                                                    <option value="">Select slot...</option>
+                                                    {dropdownData.locations.map((location: any) => (
+                                                        <option key={location.id} value={location.id}>
+                                                            {location.full_path || location.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0.01"
+                                                    value={allocation.quantity}
+                                                    onChange={(event) => handleAllocationChange(index, 'quantity', event.target.value)}
+                                                    className="input"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="col-span-4">
+                                                <input
+                                                    type="text"
+                                                    value={allocation.note}
+                                                    onChange={(event) => handleAllocationChange(index, 'note', event.target.value)}
+                                                    className="input"
+                                                    placeholder="Optional note"
+                                                />
+                                            </div>
+                                            <div className="col-span-1">
+                                                <button type="button" onClick={() => removeAllocationRow(index)} className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg">
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <div className="flex items-center justify-between rounded-xl bg-white/80 px-4 py-3 text-sm">
+                                        <span className="text-gray-600">Allocated: <strong>{totalAllocated.toFixed(2)}</strong> / {targetQuantity.toFixed(2)}</span>
+                                        <span className={remainingQuantity === 0 ? 'text-success-700 font-semibold' : 'text-warning-700 font-semibold'}>
+                                            Remaining: {remainingQuantity.toFixed(2)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="space-y-4 pt-4 border-t border-gray-100">
+                                <h3 className="text-lg font-semibold text-gray-900">Storage and Dates</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label htmlFor="price" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            <div className="flex items-center space-x-1">
-                                                <DollarSign className="w-4 h-4" />
-                                                <span>Unit Price</span>
-                                            </div>
-                                        </label>
-                                        <input 
-                                            type="number" 
-                                            name="price" 
-                                            id="price" 
-                                            placeholder="0.00" 
-                                            value={formData.price} 
-                                            onChange={handleChange} 
-                                            step="0.01" 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                        />
+                                        <label htmlFor="storage_temperature" className="block text-sm font-semibold text-gray-700 mb-2">Storage Temperature</label>
+                                        <input id="storage_temperature" name="storage_temperature" value={formData.storage_temperature} onChange={handleChange} className="input" />
                                     </div>
-                                    
                                     <div>
-                                        <label htmlFor="fund_id" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            <div className="flex items-center space-x-1">
-                                                <DollarSign className="w-4 h-4" />
-                                                <span>Funding Source</span>
-                                            </div>
-                                        </label>
-                                        <select 
-                                            name="fund_id" 
-                                            id="fund_id" 
-                                            value={formData.fund_id} 
-                                            onChange={handleChange} 
-                                            className="select focus:ring-primary-500 focus:border-primary-500"
-                                        >
+                                        <label htmlFor="expiration_alert_days" className="block text-sm font-semibold text-gray-700 mb-2">Alert Days</label>
+                                        <input id="expiration_alert_days" name="expiration_alert_days" type="number" min="1" max="365" value={formData.expiration_alert_days} onChange={handleChange} className="input" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="expiration_date" className="block text-sm font-semibold text-gray-700 mb-2">Expiration Date</label>
+                                        <input id="expiration_date" name="expiration_date" type="date" value={formData.expiration_date} onChange={handleChange} className="input" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="received_date" className="block text-sm font-semibold text-gray-700 mb-2">Received Date</label>
+                                        <input id="received_date" name="received_date" type="date" value={formData.received_date} onChange={handleChange} className="input" />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label htmlFor="storage_conditions" className="block text-sm font-semibold text-gray-700 mb-2">Storage Conditions</label>
+                                        <textarea id="storage_conditions" name="storage_conditions" value={formData.storage_conditions} onChange={handleChange} rows={3} className="input resize-none" />
+                                    </div>
+                                    <div>
+                                        <label htmlFor="fund_id" className="block text-sm font-semibold text-gray-700 mb-2">Funding Source</label>
+                                        <select id="fund_id" name="fund_id" value={formData.fund_id} onChange={handleChange} className="select">
                                             <option value="">No funding source</option>
                                             {dropdownData.funds.map((fund: any) => (
                                                 <option key={fund.id} value={fund.id}>
@@ -353,170 +497,28 @@ const ItemFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) =
                                                 </option>
                                             ))}
                                         </select>
-                                        {dropdownData.funds.length === 0 && (
-                                            <p className="text-sm text-gray-500 mt-1">No active funds available</p>
-                                        )}
                                     </div>
                                 </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label htmlFor="catalog_number" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Catalog Number
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="catalog_number" 
-                                            id="catalog_number" 
-                                            placeholder="e.g., C1234" 
-                                            value={formData.catalog_number} 
-                                            onChange={handleChange} 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label htmlFor="lot_number" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Lot/Batch Number
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="lot_number" 
-                                            id="lot_number" 
-                                            placeholder="e.g., LOT123456" 
-                                            value={formData.lot_number} 
-                                            onChange={handleChange} 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Dates and Storage Section */}
-                            <div className="space-y-4 pt-4 border-t border-gray-100">
-                                <div className="flex items-center space-x-2 mb-4">
-                                    <Calendar className="w-5 h-5 text-primary-600" />
-                                    <h3 className="text-lg font-semibold text-gray-900">Dates & Storage</h3>
-                                </div>
-                                
-                                <div className="space-y-4">
-                                    <div>
-                                        <label htmlFor="expiration_date" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Expiration Date
-                                        </label>
-                                        <input 
-                                            type="date" 
-                                            name="expiration_date" 
-                                            id="expiration_date" 
-                                            value={formData.expiration_date} 
-                                            onChange={handleChange} 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label htmlFor="received_date" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Received Date
-                                        </label>
-                                        <input 
-                                            type="date" 
-                                            name="received_date" 
-                                            id="received_date" 
-                                            value={formData.received_date} 
-                                            onChange={handleChange} 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label htmlFor="expiration_alert_days" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Alert Days Before Expiration
-                                        </label>
-                                        <input 
-                                            type="number" 
-                                            name="expiration_alert_days" 
-                                            id="expiration_alert_days" 
-                                            value={formData.expiration_alert_days} 
-                                            onChange={handleChange} 
-                                            min="1" 
-                                            max="365" 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                            placeholder="30" 
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label htmlFor="storage_temperature" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Storage Temperature
-                                        </label>
-                                        <input 
-                                            type="text" 
-                                            name="storage_temperature" 
-                                            id="storage_temperature" 
-                                            placeholder="e.g., -80°C, 4°C, RT" 
-                                            value={formData.storage_temperature} 
-                                            onChange={handleChange} 
-                                            className="input focus:ring-primary-500 focus:border-primary-500" 
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label htmlFor="storage_conditions" className="block text-sm font-semibold text-gray-700 mb-2">
-                                            Storage Conditions
-                                        </label>
-                                        <textarea 
-                                            name="storage_conditions" 
-                                            id="storage_conditions" 
-                                            rows="3" 
-                                            placeholder="Additional storage requirements..." 
-                                            value={formData.storage_conditions} 
-                                            onChange={handleChange} 
-                                            className="input resize-none focus:ring-primary-500 focus:border-primary-500"
-                                        />
-                                    </div>
-                                </div>
+                            </section>
                         </div>
 
-                        {/* Enhanced Error Display */}
                         {error && (
-                            <div className="mx-6 mb-4 animate-fade-in">
-                                <div className="bg-danger-50 border border-danger-200 rounded-xl p-4">
-                                    <div className="flex items-start space-x-3">
-                                        <AlertCircle className="w-5 h-5 text-danger-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <h4 className="text-danger-900 font-semibold">Error</h4>
-                                            <p className="text-danger-700 text-sm mt-1">{error}</p>
-                                        </div>
-                                    </div>
+                            <div className="mx-6">
+                                <div className="bg-danger-50 border border-danger-200 rounded-xl p-4 flex items-start space-x-3">
+                                    <AlertCircle className="w-5 h-5 text-danger-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-danger-700 text-sm">{error}</p>
                                 </div>
                             </div>
                         )}
 
-                        {/* Enhanced Footer */}
                         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-t border-gray-200 rounded-b-2xl">
                             <div className="flex items-center justify-between">
-                                <p className="text-sm text-gray-600">
-                                    * Required fields
-                                </p>
+                                <p className="text-sm text-gray-600">Primary location will be the first allocation row.</p>
                                 <div className="flex space-x-3">
-                                    <button 
-                                        type="button" 
-                                        onClick={onClose} 
-                                        className="btn btn-secondary hover:scale-105 transition-transform"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button 
-                                        type="submit" 
-                                        disabled={isSubmitting} 
-                                        className="btn btn-primary hover:scale-105 transition-transform disabled:hover:scale-100"
-                                    >
-                                        {isSubmitting && <div className="loading-spinner w-4 h-4 mr-2"></div>}
+                                    <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+                                    <button type="submit" disabled={isSubmitting} className="btn btn-primary">
                                         <Save className="w-4 h-4 mr-2" />
-                                        {isEditMode ? 'Update Item' : 'Save Item'}
+                                        {isSubmitting ? 'Saving...' : isEditMode ? 'Update Item' : 'Save Item'}
                                     </button>
                                 </div>
                             </div>

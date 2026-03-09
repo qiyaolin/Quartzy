@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Vendor, Location, ItemType, Item
+
+from .models import Item, ItemLocationAllocation, ItemType, Location, Vendor
 
 @admin.register(Vendor)
 class VendorAdmin(admin.ModelAdmin):
@@ -8,9 +9,16 @@ class VendorAdmin(admin.ModelAdmin):
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ('__str__', 'parent', 'description')
-    search_fields = ('name',)
-    list_filter = ('parent',)
+    list_display = ('name', 'full_path', 'location_type', 'is_leaf', 'is_active', 'parent', 'sort_order')
+    search_fields = ('name', 'code', 'aliases')
+    list_filter = ('location_type', 'is_leaf', 'is_active')
+    raw_id_fields = ('parent',)
+
+
+class ItemLocationAllocationInline(admin.TabularInline):
+    model = ItemLocationAllocation
+    extra = 0
+    raw_id_fields = ('location',)
 
 @admin.register(ItemType)
 class ItemTypeAdmin(admin.ModelAdmin):
@@ -22,6 +30,7 @@ class ItemAdmin(admin.ModelAdmin):
     list_display = ('name', 'serial_number', 'item_type', 'vendor', 'quantity', 'unit', 'location', 'owner', 'barcode', 'updated_at')
     list_filter = ('item_type', 'vendor', 'location', 'owner', 'is_archived')
     search_fields = ('name', 'serial_number', 'catalog_number', 'properties__icontains')
+    inlines = [ItemLocationAllocationInline]
 
     # Use raw_id_fields for better performance with large numbers of foreign keys
     raw_id_fields = ('item_type', 'vendor', 'location', 'owner')

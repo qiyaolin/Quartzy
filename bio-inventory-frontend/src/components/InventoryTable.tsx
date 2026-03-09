@@ -156,6 +156,75 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
             </div>
         );
     };
+
+    const getLocationSummaryText = (item) => {
+        if (Array.isArray(item.location_summary) && item.location_summary.length > 0) {
+            if (item.location_summary.length === 1) {
+                return item.location_summary[0].full_path;
+            }
+            return `${item.location_summary.length} locations`;
+        }
+        return item.location?.full_path || item.primary_location?.full_path || item.location?.name || 'N/A';
+    };
+
+    const buildGroupEditItem = (group) => {
+        const allocationMap = new Map();
+
+        group.instances.forEach((instance) => {
+            const summaries = Array.isArray(instance.location_summary) && instance.location_summary.length > 0
+                ? instance.location_summary
+                : [{
+                    location_id: instance.primary_location?.id || instance.location?.id,
+                    location_name: instance.primary_location?.name || instance.location?.name,
+                    full_path: instance.primary_location?.full_path || instance.location?.full_path || instance.location?.name || 'N/A',
+                    quantity: instance.quantity,
+                    note: '',
+                }];
+
+            summaries.forEach((summary) => {
+                if (!summary.location_id) {
+                    return;
+                }
+                const key = String(summary.location_id);
+                const existing = allocationMap.get(key);
+                const quantity = parseFloat(summary.quantity) || 0;
+                if (existing) {
+                    existing.quantity = (parseFloat(existing.quantity) + quantity).toFixed(2);
+                    if (summary.note && !existing.note.includes(summary.note)) {
+                        existing.note = existing.note ? `${existing.note}; ${summary.note}` : summary.note;
+                    }
+                } else {
+                    allocationMap.set(key, {
+                        location_id: summary.location_id,
+                        location: {
+                            id: summary.location_id,
+                            name: summary.location_name,
+                            full_path: summary.full_path,
+                        },
+                        quantity: quantity.toFixed(2),
+                        note: summary.note || '',
+                    });
+                }
+            });
+        });
+
+        const primaryInstance = group.instances[0];
+        return {
+            ...primaryInstance,
+            quantity: group.totalQuantity.toFixed(2),
+            group_item_ids: group.instances.map((instance) => instance.id),
+            is_group_edit: group.instances.length > 1,
+            location_allocations: Array.from(allocationMap.values()),
+            location_summary: Array.from(allocationMap.values()).map((allocation) => ({
+                location_id: allocation.location_id,
+                location_name: allocation.location.name,
+                full_path: allocation.location.full_path,
+                quantity: allocation.quantity,
+                note: allocation.note,
+            })),
+            primary_location: Array.from(allocationMap.values())[0]?.location || primaryInstance.primary_location || primaryInstance.location,
+        };
+    };
     return (
         <div className="card overflow-hidden">
             {/* Enhanced Selection Bar */}
@@ -257,8 +326,13 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                         )}
                                     </td>
                                     <td className="table-cell">
-                                        <span className="font-medium text-secondary-900">{group.totalQuantity.toFixed(2)}</span>
-                                        <span className="text-secondary-500 ml-1">{group.instances[0]?.unit}</span>
+                                        <div className="flex flex-col">
+                                            <div>
+                                                <span className="font-medium text-secondary-900">{group.totalQuantity.toFixed(2)}</span>
+                                                <span className="text-secondary-500 ml-1">{group.instances[0]?.unit}</span>
+                                            </div>
+                                            <span className="text-xs text-secondary-500 mt-1">{getLocationSummaryText(group.instances[0])}</span>
+                                        </div>
                                     </td>
                                     <td className="table-cell">
                                         <div className="flex flex-wrap gap-1">
@@ -295,7 +369,7 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                     <td className="table-cell">
                                         <div className="flex items-center space-x-1">
                                             <button
-                                                onClick={() => onEdit(group.instances[0])}
+                                                onClick={() => onEdit(buildGroupEditItem(group))}
                                                 className="p-2.5 hover:bg-primary-50 rounded-xl transition-all duration-200 group hover:scale-105 hover:shadow-md"
                                                 title="Edit item"
                                             >
@@ -329,8 +403,19 @@ const InventoryTable = ({ groupedData, onEdit, onDelete, onViewRequestHistory, o
                                             />
                                         </td>
                                         <td className="table-cell pl-16">
-                                            <div className="text-sm text-secondary-700">
-                                                <span className="text-secondary-500">Location:</span> {instance.location?.name || 'N/A'}
+                                            <div className="text-sm text-secondary-700 space-y-1">
+                                                <div>
+                                                    <span className="text-secondary-500">Location:</span> {instance.primary_location?.full_path || instance.location?.full_path || instance.location?.name || 'N/A'}
+                                                </div>
+                                                {Array.isArray(instance.location_summary) && instance.location_summary.length > 1 && (
+                                                    <div className="text-xs text-secondary-500">
+                                                        {instance.location_summary.map((summary) => (
+                                                            <div key={`${instance.id}-${summary.location_id}`}>
+                                                                {summary.full_path}: {summary.quantity}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="table-cell">

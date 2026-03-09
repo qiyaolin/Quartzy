@@ -1,13 +1,15 @@
-from rest_framework import viewsets, permissions, status
-from rest_framework.filters import SearchFilter # Import SearchFilter
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django_filters import rest_framework as filters # Import django_filters
-from django.db.models import Q, Count, Sum, F
 from datetime import date, timedelta
-from .models import Vendor, Location, ItemType, Item
-from .serializers import VendorSerializer, LocationSerializer, ItemTypeSerializer, ItemSerializer
-from .filters import ItemFilter # Import our filter class
+
+from django.db.models import Count, F, Prefetch, Q, Sum
+from django_filters import rest_framework as filters
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter
+from rest_framework.response import Response
+
+from .filters import ItemFilter
+from .models import Item, ItemLocationAllocation, ItemType, Location, Vendor
+from .serializers import ItemSerializer, ItemTypeSerializer, LocationSerializer, VendorSerializer
 
 class VendorViewSet(viewsets.ModelViewSet):
     """
@@ -20,8 +22,48 @@ class LocationViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows locations to be viewed or edited.
     """
-    queryset = Location.objects.all()
+    queryset = Location.objects.select_related('parent').all()
     serializer_class = LocationSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.request.query_params.get('leaf_only', '').lower() == 'true':
+            queryset = queryset.filter(is_leaf=True)
+        if self.request.query_params.get('active_only', '').lower() != 'false':
+            queryset = queryset.filter(is_active=True)
+        if parent_id := self.request.query_params.get('parent'):
+            queryset = queryset.filter(parent_id=parent_id)
+        return queryset.order_by('parent_id', 'sort_order', 'name', 'id')
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        if request.query_params.get('tree', '').lower() == 'true':
+            return Response(self._build_tree(serializer.data))
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def descendants(self, request, pk=None):
+        location = self.get_object()
+        descendant_ids = location.get_descendant_ids()
+        queryset = self.get_queryset().filter(id__in=descendant_ids)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def _build_tree(self, serialized_locations):
+        node_map = {}
+        roots = []
+        for location in serialized_locations:
+            node = {**location, 'children': []}
+            node_map[location['id']] = node
+
+        for location in node_map.values():
+            parent_id = location['parent']
+            if parent_id and parent_id in node_map:
+                node_map[parent_id]['children'].append(location)
+            else:
+                roots.append(location)
+        return roots
 
 class ItemTypeViewSet(viewsets.ModelViewSet):
     """
@@ -34,11 +76,22 @@ class ItemViewSet(viewsets.ModelViewSet):
     """
     API endpoint that allows items to be viewed or edited.
     """
-    queryset = Item.objects.filter(is_archived=False)
+    queryset = Item.objects.filter(is_archived=False).select_related(
+        'item_type',
+        'vendor',
+        'owner',
+        'location',
+        'location__parent',
+    ).prefetch_related(
+        Prefetch(
+            'location_allocations',
+            queryset=ItemLocationAllocation.objects.select_related('location', 'location__parent').order_by('sort_order', 'id'),
+        )
+    )
     serializer_class = ItemSerializer
-    filterset_class = ItemFilter # Connect the filter class
-    filter_backends = [SearchFilter, filters.DjangoFilterBackend] # Add SearchFilter
-    search_fields = ['name', 'catalog_number', 'vendor__name', 'barcode'] # Define fields that the SearchFilter will search across
+    filterset_class = ItemFilter
+    filter_backends = [SearchFilter, filters.DjangoFilterBackend]
+    search_fields = ['name', 'catalog_number', 'vendor__name', 'barcode', 'location__name', 'location__parent__name']
     
     @action(detail=False, methods=['get'])
     def alerts(self, request):
@@ -46,18 +99,20 @@ class ItemViewSet(viewsets.ModelViewSet):
         today = date.today()
         
         # Get expired items
-        expired_items = self.queryset.filter(
+        queryset = self.filter_queryset(self.get_queryset())
+
+        expired_items = queryset.filter(
             expiration_date__lt=today
         ).exclude(expiration_date__isnull=True)
         
         # Get expiring soon items
-        expiring_soon_items = self.queryset.filter(
+        expiring_soon_items = queryset.filter(
             expiration_date__gte=today,
             expiration_date__lte=F('expiration_alert_days') + today
         ).exclude(expiration_date__isnull=True)
         
         # Get low stock items
-        low_stock_items = self.queryset.filter(
+        low_stock_items = queryset.filter(
             quantity__lte=F('low_stock_threshold')
         ).exclude(low_stock_threshold__isnull=True)
         
@@ -82,34 +137,42 @@ class ItemViewSet(viewsets.ModelViewSet):
         today = date.today()
         
         # Basic inventory stats
-        total_items = self.queryset.count()
-        total_value = self.queryset.aggregate(total=Sum('price'))['total'] or 0
+        queryset = self.filter_queryset(self.get_queryset())
+        total_items = queryset.count()
+        total_value = queryset.aggregate(total=Sum('price'))['total'] or 0
         
         # Expiration stats
-        expired_count = self.queryset.filter(expiration_date__lt=today).exclude(expiration_date__isnull=True).count()
-        expiring_30_days = self.queryset.filter(
+        expired_count = queryset.filter(expiration_date__lt=today).exclude(expiration_date__isnull=True).count()
+        expiring_30_days = queryset.filter(
             expiration_date__gte=today,
             expiration_date__lte=today + timedelta(days=30)
         ).exclude(expiration_date__isnull=True).count()
         
         # Stock stats
-        low_stock_count = self.queryset.filter(
+        low_stock_count = queryset.filter(
             quantity__lte=F('low_stock_threshold')
         ).exclude(low_stock_threshold__isnull=True).count()
         
         # Items by type
-        items_by_type = self.queryset.values('item_type__name').annotate(
+        items_by_type = queryset.values('item_type__name').annotate(
             count=Count('id'),
             total_value=Sum('price')
         ).order_by('-count')
         
         # Items by location
-        items_by_location = self.queryset.filter(location__isnull=False).values('location__name').annotate(
-            count=Count('id')
-        ).order_by('-count')
+        items_by_location = ItemLocationAllocation.objects.filter(
+            item__in=queryset,
+            item__is_archived=False,
+        ).values(
+            'location__name',
+            'location__parent__name',
+        ).annotate(
+            count=Count('item_id', distinct=True),
+            total_quantity=Sum('quantity'),
+        ).order_by('-count', 'location__parent__name', 'location__name')
         
         # Items by vendor
-        items_by_vendor = self.queryset.filter(vendor__isnull=False).values('vendor__name').annotate(
+        items_by_vendor = queryset.filter(vendor__isnull=False).values('vendor__name').annotate(
             count=Count('id'),
             total_value=Sum('price')
         ).order_by('-count')
@@ -136,7 +199,8 @@ class ItemViewSet(viewsets.ModelViewSet):
         end_of_month = today.replace(day=1) + timedelta(days=32)
         end_of_month = end_of_month.replace(day=1) - timedelta(days=1)
         
-        expiring_items = self.queryset.filter(
+        queryset = self.filter_queryset(self.get_queryset())
+        expiring_items = queryset.filter(
             expiration_date__gte=today,
             expiration_date__lte=end_of_month
         ).exclude(expiration_date__isnull=True).order_by('expiration_date')
@@ -146,6 +210,33 @@ class ItemViewSet(viewsets.ModelViewSet):
             'count': expiring_items.count(),
             'items': serializer.data
         })
+
+    @action(detail=False, methods=['post'])
+    def merge_group(self, request):
+        item_ids = request.data.get('item_ids', [])
+        if not isinstance(item_ids, list) or not item_ids:
+            return Response({'item_ids': 'A non-empty item_ids list is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        items = list(
+            Item.objects.filter(id__in=item_ids, is_archived=False).order_by('id')
+        )
+        if not items:
+            return Response({'item_ids': 'No matching active items found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        primary_item = items[0]
+        payload = request.data.copy()
+        payload.pop('item_ids', None)
+        payload.pop('group_item_ids', None)
+        payload.pop('is_group_edit', None)
+
+        serializer = self.get_serializer(primary_item, data=payload)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        for item in items[1:]:
+            item.delete()
+
+        return Response(self.get_serializer(primary_item).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def checkout(self, request, pk=None):

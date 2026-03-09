@@ -144,9 +144,10 @@ const MobileInventoryCard: React.FC<MobileInventoryCardProps> = ({
             <MapPin size={16} className="text-gray-400 flex-shrink-0" />
             <span className="font-medium min-w-0">Location:</span>
             <span className="truncate">
-              {typeof item.location === 'object' && item.location !== null
-                ? (item.location as any).name || 'Unknown Location'
-                : item.location}
+              {((item as any).primary_location?.full_path) ||
+                (typeof item.location === 'object' && item.location !== null
+                  ? (item.location as any).full_path || (item.location as any).name || 'Unknown Location'
+                  : item.location)}
             </span>
           </div>
           
