@@ -168,38 +168,34 @@ const RequestsPage = ({ onAddRequestClick, refreshKey, filters, onFilterChange, 
                 // Prepare formatted data for Excel
                 const formattedRequests = selectedRequestsData.map(req => ({
                     'Request ID': req.id,
-                    'Product Name': req.product_name,
-                    'Specifications': req.specifications,
+                    'Item Name': req.item_name,
+                    'Item Type': req.item_type?.name || '',
                     'Quantity': req.quantity,
+                    'Remaining Quantity': req.remaining_quantity ?? req.quantity,
+                    'Unit Size': req.unit_size || '',
                     'Unit Price': req.unit_price ? `$${req.unit_price}` : '',
-                    'Total Price': req.total_price ? `$${req.total_price}` : '',
-                    'Status': req.status === 'pending' ? 'Pending' : 
-                             req.status === 'approved' ? 'Approved' : 
-                             req.status === 'ordered' ? 'Ordered' : 
-                             req.status === 'received' ? 'Received' : 
-                             req.status === 'rejected' ? 'Rejected' : req.status,
-                    'Requester': req.requester_name,
-                    'Department': req.department,
-                    'Laboratory': req.lab,
-                    'Vendor': req.vendor,
-                    'Product Link': req.product_link,
-                    'Urgency': req.urgency === 'high' ? 'High' : 
-                              req.urgency === 'medium' ? 'Medium' : 
-                              req.urgency === 'low' ? 'Low' : req.urgency,
-                    'Request Date': req.requested_date ? new Date(req.requested_date).toLocaleDateString('en-US') : '',
-                    'Expected Delivery': req.expected_delivery_date ? new Date(req.expected_delivery_date).toLocaleDateString('en-US') : '',
+                    'Total Price': req.unit_price ? `$${(parseFloat(req.unit_price) * parseFloat(req.quantity || 0)).toFixed(2)}` : '',
+                    'Status': req.status,
+                    'Requester': req.requested_by_name || req.requested_by?.username || '',
+                    'Vendor': req.vendor?.name || '',
+                    'Catalog Number': req.catalog_number || '',
+                    'Fund ID': req.fund_id || '',
+                    'Product Link': req.url || '',
+                    'Request Date': req.created_at ? new Date(req.created_at).toLocaleDateString('en-US') : '',
+                    'Approved By': req.approved_by_name || '',
+                    'Received By': req.received_by_name || '',
                     'Notes': req.notes || ''
                 }));
                 
                 const summary = {
                     'Export Time': new Date().toLocaleString('en-US'),
                     'Export Count': selectedRequestsData.length,
-                    'Pending': selectedRequestsData.filter(r => r.status === 'pending').length,
-                    'Approved': selectedRequestsData.filter(r => r.status === 'approved').length,
-                    'Ordered': selectedRequestsData.filter(r => r.status === 'ordered').length,
-                    'Received': selectedRequestsData.filter(r => r.status === 'received').length,
-                    'Rejected': selectedRequestsData.filter(r => r.status === 'rejected').length,
-                    'Total Value': `$${selectedRequestsData.reduce((sum, req) => sum + (parseFloat(req.total_price) || 0), 0).toFixed(2)}`
+                    'New': selectedRequestsData.filter(r => r.status === 'NEW').length,
+                    'Approved': selectedRequestsData.filter(r => r.status === 'APPROVED').length,
+                    'Ordered': selectedRequestsData.filter(r => r.status === 'ORDERED').length,
+                    'Received': selectedRequestsData.filter(r => r.status === 'RECEIVED').length,
+                    'Rejected': selectedRequestsData.filter(r => r.status === 'REJECTED').length,
+                    'Total Value': `$${selectedRequestsData.reduce((sum, req) => sum + ((parseFloat(req.unit_price) || 0) * (parseFloat(req.quantity) || 0)), 0).toFixed(2)}`
                 };
                 
                 exportToExcel({

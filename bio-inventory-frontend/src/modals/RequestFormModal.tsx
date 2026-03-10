@@ -6,6 +6,7 @@ const buildInitialFormData = (initialData = null) => ({
     item_name: initialData?.item_name || initialData?.name || '',
     item_type_id: initialData?.item_type?.id ? String(initialData.item_type.id) : '',
     vendor_id: initialData?.vendor?.id ? String(initialData.vendor.id) : '',
+    fund_id: initialData?.fund_id ? String(initialData.fund_id) : '',
     catalog_number: initialData?.catalog_number || '',
     quantity: initialData?.quantity ? Number(initialData.quantity) : 1,
     unit_size: initialData?.unit_size || initialData?.unit || '',
@@ -16,7 +17,7 @@ const buildInitialFormData = (initialData = null) => ({
 
 const RequestFormModal = ({ isOpen, onClose, onSave, token, initialData = null }) => {
     const [formData, setFormData] = useState(buildInitialFormData(initialData));
-    const [dropdownData, setDropdownData] = useState({ vendors: [], itemTypes: [] });
+    const [dropdownData, setDropdownData] = useState({ vendors: [], itemTypes: [], funds: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState(null);
     const [customVendor, setCustomVendor] = useState('');
@@ -35,13 +36,16 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token, initialData = null }
             const fetchDropdownData = async () => {
                 try {
                     const headers = { 'Authorization': `Token ${token}` };
-                    const [vendorsRes, itemTypesRes] = await Promise.all([
+                    const [vendorsRes, itemTypesRes, fundsRes] = await Promise.all([
                         fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
-                        fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers })
+                        fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.FUNDS), { headers })
                     ]);
                     const vendors = await vendorsRes.json();
                     const itemTypes = await itemTypesRes.json();
-                    setDropdownData({ vendors, itemTypes });
+                    const fundsPayload = fundsRes.ok ? await fundsRes.json() : [];
+                    const funds = (fundsPayload?.results || fundsPayload || []).filter((fund) => !fund.is_archived);
+                    setDropdownData({ vendors, itemTypes, funds });
                 } catch (e) { setError('Could not load form data.'); }
             };
             fetchDropdownData();
@@ -78,7 +82,15 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token, initialData = null }
     const handleSubmit = async (e) => {
         e.preventDefault(); setIsSubmitting(true); setError(null);
         
-        let finalFormData = { ...formData };
+        let finalFormData = {
+            ...formData,
+            item_type_id: formData.item_type_id || null,
+            vendor_id: formData.vendor_id || null,
+            fund_id: formData.fund_id || null,
+            catalog_number: formData.catalog_number?.trim() || '',
+            url: formData.url?.trim() || '',
+            notes: formData.notes?.trim() || '',
+        };
         
         // Handle custom vendor creation
         if (formData.vendor_id === 'other' && customVendor.trim()) {
@@ -292,6 +304,24 @@ const RequestFormModal = ({ isOpen, onClose, onSave, token, initialData = null }
                                             placeholder="e.g., C1234" 
                                             className="input focus:ring-primary-500 focus:border-primary-500" 
                                         />
+                                    </div>
+
+                                    <div>
+                                        <label htmlFor="fund_id" className="block text-sm font-semibold text-gray-700 mb-2">
+                                            Funding Source
+                                        </label>
+                                        <select
+                                            name="fund_id"
+                                            id="fund_id"
+                                            value={formData.fund_id}
+                                            onChange={handleChange}
+                                            className="select focus:ring-primary-500 focus:border-primary-500"
+                                        >
+                                            <option value="">Select fund...</option>
+                                            {dropdownData.funds.map((fund) => (
+                                                <option key={fund.id} value={fund.id}>{fund.name}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     
                                     <div>

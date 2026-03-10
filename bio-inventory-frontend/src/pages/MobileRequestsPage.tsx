@@ -13,14 +13,16 @@ import MobileMarkReceivedModal from '../modals/MobileMarkReceivedModal.tsx';
 interface RequestItem {
   id: number;
   item_name: string;
+  item_type?: { id: number; name: string; tracking_mode?: string; label_mode?: string } | null;
   quantity: number;
-  unit: string;
-  requested_by: string;
-  request_date: string;
+  remaining_quantity?: number;
+  unit_size?: string;
+  requested_by: string | { username?: string; name?: string; first_name?: string; email?: string } | null;
+  requested_by_name?: string;
+  created_at?: string;
   status: string;
-  vendor?: string;
+  vendor?: string | { id?: number; name?: string };
   notes?: string;
-  urgency?: string;
   received_by_name?: string;
   approved_by_name?: string;
 }

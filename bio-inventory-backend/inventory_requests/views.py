@@ -1,14 +1,18 @@
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.filters import SearchFilter # Import SearchFilter
-from django_filters import rest_framework as filters # Import django_filters
-from rest_framework.permissions import IsAdminUser # Import this
+from decimal import Decimal
+
 from django.db import IntegrityError, transaction
+from django.utils.dateparse import parse_date
+from django_filters import rest_framework as filters # Import django_filters
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.filters import SearchFilter # Import SearchFilter
+from rest_framework.permissions import IsAdminUser # Import this
+from rest_framework.response import Response
+
 from .models import Request, RequestHistory
 from .serializers import RequestSerializer, RequestHistorySerializer
 from .filters import RequestFilter # Import our filter class
-from items.models import Item, ItemType, Location
+from items.models import Item, ItemLocationAllocation, ItemType, Location
 from notifications.email_service import EmailNotificationService
 import logging
 
@@ -41,11 +45,48 @@ class RequestViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    def _normalize_receive_metadata(self, payload):
+        metadata = payload.get('receive_metadata') or {}
+        if not isinstance(metadata, dict):
+            return None, 'receive_metadata must be an object.'
+
+        normalized = {
+            'lot_number': str(metadata.get('lot_number') or '').strip(),
+            'storage_temperature': str(metadata.get('storage_temperature') or '').strip(),
+            'storage_conditions': str(metadata.get('storage_conditions') or '').strip(),
+        }
+
+        for field in ('received_date', 'expiration_date'):
+            raw_value = metadata.get(field)
+            if raw_value in (None, ''):
+                normalized[field] = None
+                continue
+            parsed_value = parse_date(str(raw_value))
+            if not parsed_value:
+                return None, f'{field} must be a valid ISO date.'
+            normalized[field] = parsed_value
+
+        for field in ('low_stock_threshold', 'open_unit_count'):
+            raw_value = metadata.get(field)
+            if raw_value in (None, ''):
+                normalized[field] = None
+                continue
+            try:
+                parsed_value = int(raw_value)
+            except (TypeError, ValueError):
+                return None, f'{field} must be a whole number.'
+            if parsed_value < 0:
+                return None, f'{field} cannot be negative.'
+            normalized[field] = parsed_value
+
+        return normalized, None
+
     def _normalize_receipts_payload(self, payload):
         """
-        Normalize receive payload into a list of {'location_id': int}.
+        Normalize receive payload into a list of
+        {'location_id': int, 'quantity': int, 'note': str}.
         Supports new payload:
-          {'receipts': [{'location_id': 1}, ...]}
+          {'receipts': [{'location_id': 1, 'quantity': 2, 'note': '...'}, ...]}
         and legacy payload:
           {'location_id': 1, 'quantity_received': 3}
         """
@@ -57,11 +98,19 @@ class RequestViewSet(viewsets.ModelViewSet):
                 if not isinstance(entry, dict):
                     return None, 'Each receipt must be an object.'
                 location_id = entry.get('location_id')
+                quantity = entry.get('quantity', 1)
                 try:
                     location_id = int(location_id)
+                    quantity = int(quantity)
                 except (TypeError, ValueError):
-                    return None, 'Each receipt must include a valid location_id.'
-                normalized.append({'location_id': location_id})
+                    return None, 'Each receipt must include a valid location_id and quantity.'
+                if quantity <= 0:
+                    return None, 'Each receipt quantity must be greater than zero.'
+                normalized.append({
+                    'location_id': location_id,
+                    'quantity': quantity,
+                    'note': str(entry.get('note') or '').strip(),
+                })
         else:
             location_id = payload.get('location_id')
             quantity_received_raw = payload.get('quantity_received', 0)
@@ -74,17 +123,94 @@ class RequestViewSet(viewsets.ModelViewSet):
             if quantity_received <= 0:
                 return None, 'Location and valid quantity are required.'
 
-            normalized = [{'location_id': location_id} for _ in range(quantity_received)]
+            normalized = [{
+                'location_id': location_id,
+                'quantity': quantity_received,
+                'note': str(payload.get('note') or '').strip(),
+            }]
 
         if not normalized:
             return None, 'At least one receipt entry is required.'
 
         return normalized, None
 
-    def _process_request_receipts(self, req_id, receipts, actor):
+    def _get_request_item_type(self, req_object):
+        if req_object.item_type_id:
+            return req_object.item_type
+        item_type, _ = ItemType.objects.get_or_create(name='General Supply')
+        return item_type
+
+    def _build_item_payload(self, req_object, item_type, location, metadata, quantity):
+        properties = {}
+        if metadata.get('open_unit_count') is not None:
+            properties['open_unit_count'] = metadata['open_unit_count']
+
+        return {
+            'name': req_object.item_name,
+            'vendor': req_object.vendor,
+            'catalog_number': req_object.catalog_number,
+            'item_type': item_type,
+            'owner': req_object.requested_by,
+            'quantity': Decimal(str(quantity)),
+            'unit': req_object.unit_size or 'unit',
+            'location': location,
+            'price': req_object.unit_price,
+            'fund_id': req_object.fund_id,
+            'tracking_mode': item_type.tracking_mode,
+            'label_mode': item_type.label_mode,
+            'lot_number': metadata.get('lot_number', ''),
+            'received_date': metadata.get('received_date'),
+            'expiration_date': metadata.get('expiration_date'),
+            'storage_temperature': metadata.get('storage_temperature', ''),
+            'storage_conditions': metadata.get('storage_conditions', ''),
+            'low_stock_threshold': metadata.get('low_stock_threshold'),
+            'properties': properties,
+        }
+
+    def _create_inventory_from_receipts(self, req_object, receipts, metadata):
+        item_type = self._get_request_item_type(req_object)
+        created_items = []
+
+        if item_type.tracking_mode == ItemType.TrackingMode.PACK_MANAGED:
+            for entry in receipts:
+                location = entry['location']
+                item = Item.objects.create(
+                    **self._build_item_payload(req_object, item_type, location, metadata, entry['quantity'])
+                )
+                ItemLocationAllocation.objects.create(
+                    item=item,
+                    location=location,
+                    quantity=Decimal(str(entry['quantity'])),
+                    note=entry.get('note', ''),
+                    sort_order=0,
+                )
+                created_items.append(item)
+            return created_items
+
+        for entry in receipts:
+            location = entry['location']
+            for _ in range(entry['quantity']):
+                item = Item.objects.create(
+                    **self._build_item_payload(req_object, item_type, location, metadata, 1)
+                )
+                ItemLocationAllocation.objects.create(
+                    item=item,
+                    location=location,
+                    quantity=Decimal('1'),
+                    note=entry.get('note', ''),
+                    sort_order=0,
+                )
+                created_items.append(item)
+        return created_items
+
+    def _process_request_receipts(self, req_id, receipts, metadata, actor):
         try:
             with transaction.atomic():
-                req_object = Request.objects.select_for_update().get(pk=req_id)
+                req_object = Request.objects.select_for_update().select_related(
+                    'item_type',
+                    'vendor',
+                    'requested_by',
+                ).get(pk=req_id)
 
                 if req_object.status != 'ORDERED':
                     return None, 'Only ordered items can be marked as received.'
@@ -94,38 +220,29 @@ class RequestViewSet(viewsets.ModelViewSet):
                     remaining = req_object.quantity
                     req_object.remaining_quantity = remaining
 
-                if len(receipts) > remaining:
+                total_received = sum(entry['quantity'] for entry in receipts)
+                if total_received > remaining:
                     return None, 'Received quantity cannot exceed remaining ordered quantity.'
 
                 location_ids = list({entry['location_id'] for entry in receipts})
                 locations = {
                     location.id: location
-                    for location in Location.objects.filter(id__in=location_ids)
+                    for location in Location.objects.filter(id__in=location_ids, is_active=True)
                 }
                 missing_location_ids = [location_id for location_id in location_ids if location_id not in locations]
                 if missing_location_ids:
                     return None, 'Selected location does not exist.'
+                non_leaf_locations = [location.full_path for location in locations.values() if not location.is_leaf]
+                if non_leaf_locations:
+                    return None, 'Selected location must be a leaf storage slot.'
 
-                item_type_id = req_object.item_type_id or ItemType.objects.get_or_create(name='General Supply')[0].id
-                created_items = []
                 for entry in receipts:
-                    location = locations[entry['location_id']]
-                    created_item = Item.objects.create(
-                        name=req_object.item_name,
-                        vendor=req_object.vendor,
-                        catalog_number=req_object.catalog_number,
-                        item_type_id=item_type_id,
-                        owner=req_object.requested_by,
-                        quantity=1,
-                        unit=req_object.unit_size or 'unit',
-                        location=location,
-                        price=req_object.unit_price,
-                        fund_id=req_object.fund_id,
-                    )
-                    created_items.append(created_item)
+                    entry['location'] = locations[entry['location_id']]
+
+                created_items = self._create_inventory_from_receipts(req_object, receipts, metadata)
 
                 old_status = req_object.status
-                req_object.remaining_quantity = max(remaining - len(created_items), 0)
+                req_object.remaining_quantity = max(remaining - total_received, 0)
                 req_object.status = 'RECEIVED' if req_object.remaining_quantity == 0 else 'ORDERED'
                 req_object.save(update_fields=['remaining_quantity', 'status', 'updated_at'])
 
@@ -135,7 +252,7 @@ class RequestViewSet(viewsets.ModelViewSet):
                     old_status=old_status,
                     new_status=req_object.status,
                     notes=(
-                        f"Marked as received - Quantity: {len(created_items)}, "
+                        f"Marked as received - Quantity: {total_received}, "
                         f"Remaining: {req_object.remaining_quantity}"
                     ),
                 )
@@ -149,12 +266,16 @@ class RequestViewSet(viewsets.ModelViewSet):
             {
                 'id': item.id,
                 'barcode': item.barcode,
+                'quantity': item.quantity,
                 'location_id': item.location_id,
-                'location_name': item.location.name if item.location else None,
+                'location_name': item.location.full_path if item.location else None,
                 'tracking_mode': item.resolved_tracking_mode,
                 'label_mode': item.resolved_label_mode,
                 'tracking_summary': item.tracking_summary,
                 'can_scan_consume': item.can_scan_consume,
+                'lot_number': item.lot_number,
+                'received_date': item.received_date,
+                'expiration_date': item.expiration_date,
             }
             for item in created_items
         ]
@@ -207,6 +328,24 @@ class RequestViewSet(viewsets.ModelViewSet):
             'fund_id': req_object.fund_id,
             'budget_validation': validation if fund_id else None
         })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def reject(self, request, pk=None):
+        req_object = self.get_object()
+        if req_object.status != 'NEW':
+            return Response({'error': 'Request cannot be rejected.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        RequestHistory.objects.create(
+            request=req_object,
+            user=request.user,
+            old_status=req_object.status,
+            new_status='REJECTED',
+            notes=request.data.get('notes', ''),
+        )
+
+        req_object.status = 'REJECTED'
+        req_object.save(update_fields=['status', 'updated_at'])
+        return Response({'status': 'Request rejected'})
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def place_order(self, request, pk=None):
@@ -263,7 +402,10 @@ class RequestViewSet(viewsets.ModelViewSet):
         receipts, error = self._normalize_receipts_payload(request.data)
         if error:
             return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
-        result, error = self._process_request_receipts(req_base.id, receipts, request.user)
+        metadata, error = self._normalize_receive_metadata(request.data)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+        result, error = self._process_request_receipts(req_base.id, receipts, metadata, request.user)
         if error:
             return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -301,6 +443,7 @@ class RequestViewSet(viewsets.ModelViewSet):
         original_request = self.get_object()
         new_request = Request.objects.create(
             item_name=original_request.item_name,
+            item_type=original_request.item_type,
             requested_by=request.user,
             vendor=original_request.vendor,
             catalog_number=original_request.catalog_number,
@@ -308,6 +451,8 @@ class RequestViewSet(viewsets.ModelViewSet):
             quantity=original_request.quantity,
             unit_size=original_request.unit_size,
             unit_price=original_request.unit_price,
+            fund_id=original_request.fund_id,
+            notes=original_request.notes,
             status='NEW'
         )
         
@@ -499,7 +644,12 @@ class RequestViewSet(viewsets.ModelViewSet):
                 errors.append({'request_id': request_id, 'error': error})
                 continue
 
-            result, error = self._process_request_receipts(request_id, receipts, request.user)
+            metadata, error = self._normalize_receive_metadata(entry)
+            if error:
+                errors.append({'request_id': request_id, 'error': error})
+                continue
+
+            result, error = self._process_request_receipts(request_id, receipts, metadata, request.user)
             if error:
                 errors.append({'request_id': request_id, 'error': error})
                 continue
@@ -549,6 +699,7 @@ class RequestViewSet(viewsets.ModelViewSet):
             try:
                 new_request = Request.objects.create(
                     item_name=original_request.item_name,
+                    item_type=original_request.item_type,
                     requested_by=request.user,
                     vendor=original_request.vendor,
                     catalog_number=original_request.catalog_number,
@@ -556,6 +707,8 @@ class RequestViewSet(viewsets.ModelViewSet):
                     quantity=original_request.quantity,
                     unit_size=original_request.unit_size,
                     unit_price=original_request.unit_price,
+                    fund_id=original_request.fund_id,
+                    notes=original_request.notes,
                     status='NEW'
                 )
                 new_request_ids.append(new_request.id)

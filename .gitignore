@@ -62,12 +62,14 @@ Thumbs.db
 # Logs
 *.log
 logs/
+logs/local-server/
 
 # Runtime data
 pids
 *.pid
 *.seed
 *.pid.lock
+.local-server-state/
 
 # Coverage directory used by tools like istanbul
 coverage/

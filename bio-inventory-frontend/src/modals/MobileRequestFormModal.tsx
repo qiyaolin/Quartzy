@@ -14,6 +14,7 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
         item_name: '', 
         item_type_id: '', 
         vendor_id: '', 
+        fund_id: '',
         catalog_number: '', 
         quantity: 1, 
         unit_size: '', 
@@ -21,7 +22,7 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
         url: '', 
         notes: '' 
     });
-    const [dropdownData, setDropdownData] = useState<any>({ vendors: [], itemTypes: [] });
+    const [dropdownData, setDropdownData] = useState<any>({ vendors: [], itemTypes: [], funds: [] });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -30,13 +31,16 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
             const fetchDropdownData = async () => {
                 try {
                     const headers = { 'Authorization': `Token ${token}` };
-                    const [vendorsRes, itemTypesRes] = await Promise.all([
+                    const [vendorsRes, itemTypesRes, fundsRes] = await Promise.all([
                         fetch(buildApiUrl(API_ENDPOINTS.VENDORS), { headers }),
                         fetch(buildApiUrl(API_ENDPOINTS.ITEM_TYPES), { headers }),
+                        fetch(buildApiUrl(API_ENDPOINTS.FUNDS), { headers }),
                     ]);
                     const vendors = await vendorsRes.json();
                     const itemTypes = await itemTypesRes.json();
-                    setDropdownData({ vendors, itemTypes });
+                    const fundsPayload = fundsRes.ok ? await fundsRes.json() : [];
+                    const funds = (fundsPayload?.results || fundsPayload || []).filter((fund: any) => !fund.is_archived);
+                    setDropdownData({ vendors, itemTypes, funds });
                 } catch (e) {
                     setError('Could not load form data.');
                 }
@@ -56,13 +60,20 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
         setError(null);
 
         try {
+            const payload = {
+                ...formData,
+                item_type_id: formData.item_type_id || null,
+                vendor_id: formData.vendor_id || null,
+                fund_id: formData.fund_id || null,
+            };
+
             const response = await fetch(buildApiUrl(API_ENDPOINTS.REQUESTS), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Token ${token}`
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
@@ -77,6 +88,7 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
                 item_name: '', 
                 item_type_id: '', 
                 vendor_id: '', 
+                fund_id: '',
                 catalog_number: '', 
                 quantity: 1, 
                 unit_size: '', 
@@ -274,6 +286,24 @@ const MobileRequestFormModal = ({ isOpen, onClose, onSave, token }: MobileReques
                                 <h3 className="text-lg font-semibold text-gray-900">Additional Information</h3>
                             </div>
                             
+                            <div>
+                                <label htmlFor="fund_id" className="block text-sm font-semibold text-gray-700 mb-2">
+                                    Funding Source
+                                </label>
+                                <select
+                                    name="fund_id"
+                                    id="fund_id"
+                                    value={formData.fund_id}
+                                    onChange={handleChange}
+                                    className="w-full px-3 py-3 text-base border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                                >
+                                    <option value="">Select fund...</option>
+                                    {dropdownData.funds.map((fund: any) => (
+                                        <option key={fund.id} value={fund.id}>{fund.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
                             <div>
                                 <label htmlFor="url" className="block text-sm font-semibold text-gray-700 mb-2">
                                     <div className="flex items-center space-x-1">

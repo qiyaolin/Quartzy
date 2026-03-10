@@ -5,9 +5,11 @@ interface RequestItem {
   id: number;
   item_name: string;
   quantity: number;
-  unit: string;
+  remaining_quantity?: number;
+  unit_size?: string;
   requested_by: string | { username?: string; name?: string; first_name?: string; email?: string } | null;
-  request_date: string;
+  requested_by_name?: string;
+  created_at?: string;
   status: string;
   vendor?: string | { name?: string };
   notes?: string;
@@ -50,6 +52,14 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
           bgColor: 'bg-success-100',
           icon: CheckCircle,
           label: 'Approved'
+        };
+      case 'ORDERED':
+        return {
+          color: 'border-l-primary-500 bg-primary-50',
+          textColor: 'text-primary-700',
+          bgColor: 'bg-primary-100',
+          icon: ShoppingCart,
+          label: 'Ordered'
         };
       case 'REJECTED':
         return {
@@ -122,7 +132,6 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
           });
         }
         break;
-      case 'APPROVED':
       case 'ORDERED':
         if (onMarkReceived) {
           buttons.push({
@@ -174,9 +183,9 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
           <div className="flex items-center space-x-1">
             <Package size={16} className="text-gray-500" />
             <span className="text-lg font-bold text-gray-900">
-              {request.quantity}
+              {request.remaining_quantity ?? request.quantity}
             </span>
-            <span className="text-sm text-gray-500">{request.unit}</span>
+            <span className="text-sm text-gray-500">/ {request.quantity} {request.unit_size || 'units'}</span>
           </div>
           
           <div className="flex items-center space-x-2">
@@ -208,6 +217,9 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
               }
               
               // Handle different data structures for requested_by
+              if (request.requested_by_name) {
+                return request.requested_by_name;
+              }
               if (typeof request.requested_by === 'string' && request.requested_by) {
                 return request.requested_by;
               } else if (typeof request.requested_by === 'object' && request.requested_by !== null) {
@@ -223,7 +235,7 @@ const MobileRequestCard: React.FC<MobileRequestCardProps> = ({
         <div className="flex items-center space-x-3 text-sm text-gray-600">
           <Calendar size={16} className="text-gray-400 flex-shrink-0" />
           <span className="font-medium min-w-0">Request date:</span>
-          <span className="truncate">{new Date(request.request_date).toLocaleDateString('en-US')}</span>
+          <span className="truncate">{new Date(request.created_at || Date.now()).toLocaleDateString('en-US')}</span>
         </div>
         
         {request.vendor && (

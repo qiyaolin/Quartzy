@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { Button } from '../../components/ui/button.tsx';
 import { Input } from '../../components/ui/input.tsx';
-import { Search, Plus, Clock, CheckCircle, XCircle, User, Package, Eye, History, RotateCcw, ShoppingCart, FileDown, Calendar, DollarSign, Building, Zap } from 'lucide-react';
+import { Search, Plus, Clock, CheckCircle, XCircle, User, Package, Eye, History, RotateCcw, ShoppingCart, FileDown, DollarSign } from 'lucide-react';
 import { AuthContext } from '../../components/AuthContext.tsx';
 import { buildApiUrl, API_ENDPOINTS } from '../../config/api.ts';
 import MobileRequestFormModal from '../../modals/MobileRequestFormModal.tsx';
@@ -14,30 +14,25 @@ import { exportToExcel } from '../../utils/excelExport.ts';
 
 interface Request {
   id: number;
-  product_name?: string;
   item_name: string;
+  item_type?: { id: number; name: string; tracking_mode?: string; label_mode?: string } | null;
   barcode?: string;
-  specifications?: string;
   quantity: number;
+  unit_size?: string;
   remaining_quantity?: number;
   unit_price?: number;
-  total_price?: number;
   status: string;
-  requester_name?: string;
   requested_by_name: string;
-  requested_by: number;
+  requested_by: number | { id?: number; username?: string };
   approved_by_name?: string;
   received_by_name?: string;
   created_at: string;
   updated_at: string;
-  requested_date?: string;
-  expected_delivery_date?: string;
   notes?: string;
   vendor?: string | { id: number; name: string; website?: string };
-  product_link?: string;
-  urgency?: string;
-  department?: string;
-  lab?: string;
+  catalog_number?: string;
+  fund_id?: number | null;
+  url?: string;
 }
 
 const MobileRequestsPage = () => {
@@ -106,13 +101,12 @@ const MobileRequestsPage = () => {
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter(req =>
-        (req.item_name || req.product_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (req.requested_by_name || req.requester_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (req.specifications || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (req.item_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (req.requested_by_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (typeof req.vendor === 'object' && req.vendor !== null
           ? req.vendor.name || ''
           : req.vendor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (req.department || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (req.catalog_number || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -180,35 +174,6 @@ const MobileRequestsPage = () => {
           dotColor: 'bg-gray-500',
           borderColor: 'border-gray-200'
         };
-    }
-  };
-
-  const getUrgencyConfig = (urgency?: string) => {
-    switch (urgency?.toLowerCase()) {
-      case 'high':
-      case 'urgent':
-        return {
-          text: 'Urgent',
-          color: 'text-red-600',
-          bg: 'bg-gradient-to-r from-red-100 to-red-200',
-          icon: Zap
-        };
-      case 'medium':
-        return {
-          text: 'Medium',
-          color: 'text-orange-600',
-          bg: 'bg-gradient-to-r from-orange-100 to-orange-200',
-          icon: Clock
-        };
-      case 'low':
-        return {
-          text: 'Low',
-          color: 'text-green-600',
-          bg: 'bg-gradient-to-r from-green-100 to-green-200',
-          icon: Clock
-        };
-      default:
-        return null;
     }
   };
 
@@ -404,23 +369,24 @@ const MobileRequestsPage = () => {
   const handleBatchExport = () => {
     const formattedRequests = filteredRequests.map(req => ({
       'Request ID': req.id,
-      'Product Name': req.product_name || req.item_name,
-      'Specifications': req.specifications || '',
+      'Item Name': req.item_name,
+      'Item Type': req.item_type?.name || '',
       'Quantity': req.quantity,
+      'Remaining Quantity': getRemainingQty(req),
+      'Unit Size': req.unit_size || '',
       'Unit Price': req.unit_price ? `$${req.unit_price}` : '',
-      'Total Price': req.total_price ? `$${req.total_price}` : '',
+      'Total Price': req.unit_price ? `$${((parseFloat(String(req.unit_price)) || 0) * req.quantity).toFixed(2)}` : '',
       'Status': getStatusConfig(req.status).text,
-      'Requester': req.requester_name || req.requested_by_name,
-      'Department': req.department || '',
-      'Laboratory': req.lab || '',
+      'Requester': req.requested_by_name,
       'Vendor': typeof req.vendor === 'object' && req.vendor !== null
         ? req.vendor.name || 'Unknown Vendor'
         : req.vendor || '',
-      'Product Link': req.product_link || '',
-      'Urgency': req.urgency || '',
-      'Request Date': req.requested_date ? new Date(req.requested_date).toLocaleDateString('en-US') : 
-                      req.created_at ? new Date(req.created_at).toLocaleDateString('en-US') : '',
-      'Expected Delivery': req.expected_delivery_date ? new Date(req.expected_delivery_date).toLocaleDateString('en-US') : '',
+      'Catalog Number': req.catalog_number || '',
+      'Fund ID': req.fund_id || '',
+      'Product Link': req.url || '',
+      'Request Date': req.created_at ? new Date(req.created_at).toLocaleDateString('en-US') : '',
+      'Approved By': req.approved_by_name || '',
+      'Received By': req.received_by_name || '',
       'Notes': req.notes || ''
     }));
 
@@ -428,7 +394,7 @@ const MobileRequestsPage = () => {
       'Export Time': new Date().toLocaleString('en-US'),
       'Export Count': filteredRequests.length,
       'Status Filter': getStatusConfig(activeTab).text,
-      'Total Value': `$${filteredRequests.reduce((sum, req) => sum + (parseFloat(req.total_price) || 0), 0).toFixed(2)}`
+      'Total Value': `$${filteredRequests.reduce((sum, req) => sum + ((parseFloat(String(req.unit_price)) || 0) * req.quantity), 0).toFixed(2)}`
     };
 
     exportToExcel({
@@ -557,7 +523,6 @@ const MobileRequestsPage = () => {
         <div className="space-y-4">
           {filteredRequests.map((request) => {
             const statusConfig = getStatusConfig(request.status);
-            const urgencyConfig = getUrgencyConfig(request.urgency);
             // const StatusIcon = statusConfig.icon;
             
             return (
@@ -570,10 +535,10 @@ const MobileRequestsPage = () => {
                     </div>
                     <div className="min-w-0 flex-1 ml-3">
                       <h3 className="font-bold text-gray-800 text-lg cursor-pointer hover:text-purple-600 transition-colors min-w-0 overflow-hidden leading-tight">
-                        <span className="block truncate" title={request.product_name || request.item_name}>
-                          {(request.product_name || request.item_name).length > 20 
-                            ? `${(request.product_name || request.item_name).substring(0, 20)}...`
-                            : (request.product_name || request.item_name)
+                        <span className="block truncate" title={request.item_name}>
+                          {request.item_name.length > 20
+                            ? `${request.item_name.substring(0, 20)}...`
+                            : request.item_name
                           }
                         </span>
                       </h3>
@@ -584,34 +549,6 @@ const MobileRequestsPage = () => {
                       <div className={`w-2 h-2 ${statusConfig.dotColor} rounded-full mr-1 flex-shrink-0`}></div>
                       <span className="truncate text-center">{statusConfig.text}</span>
                     </div>
-                    {urgencyConfig && (
-                      <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${urgencyConfig.bg} ${urgencyConfig.color} border border-white/20 w-full justify-center`}>
-                        <urgencyConfig.icon className="w-3 h-3 mr-1 flex-shrink-0" />
-                        <span className="truncate text-center">{urgencyConfig.text}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Specifications - moved outside header */}
-                <div className="mb-4" onClick={() => handleViewDetails(request)}>
-                  <div className="flex-1">
-                    {request.specifications && (
-                      <div className="ml-13 bg-gradient-to-r from-gray-50 to-blue-50 p-2 rounded-lg overflow-hidden">
-                        <p className="text-sm text-gray-600 overflow-hidden" style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          lineHeight: '1.4rem',
-                          maxHeight: '2.8rem'
-                        }} title={request.specifications}>
-                          {request.specifications.length > 80 
-                            ? `${request.specifications.substring(0, 80)}...`
-                            : request.specifications
-                          }
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </div>
                 
@@ -632,15 +569,15 @@ const MobileRequestsPage = () => {
                   </div>
                   
                   <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl">
-                    <User className="w-4 h-4 text-purple-600" />
-                    <span className="font-medium text-gray-700">
-                      {request.status === 'RECEIVED' ? (
-                        `Received by: ${request.received_by_name || 'Unknown'}`
-                      ) : (
-                        `By: ${request.requester_name || request.requested_by_name}`
-                      )}
-                    </span>
-                  </div>
+                      <User className="w-4 h-4 text-purple-600" />
+                      <span className="font-medium text-gray-700">
+                        {request.status === 'RECEIVED' ? (
+                          `Received by: ${request.received_by_name || 'Unknown'}`
+                        ) : (
+                          `By: ${request.requested_by_name}`
+                        )}
+                      </span>
+                    </div>
                   
                   {request.vendor && (
                     <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl">
@@ -653,28 +590,12 @@ const MobileRequestsPage = () => {
                     </div>
                   )}
                   
-                  {request.department && (
-                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-orange-50 to-red-50 rounded-xl">
-                      <Building className="w-4 h-4 text-orange-600" />
-                      <span className="font-medium text-gray-700">Dept: {request.department}</span>
-                    </div>
-                  )}
-                  
                   <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-gray-50 to-slate-50 rounded-xl">
                     <Clock className="w-4 h-4 text-gray-600" />
                     <span className="font-medium text-gray-700">
                       Created: {new Date(request.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  
-                  {request.expected_delivery_date && (
-                    <div className="flex items-center space-x-2 p-3 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl">
-                      <Calendar className="w-4 h-4 text-teal-600" />
-                      <span className="font-medium text-gray-700">
-                        Expected: {new Date(request.expected_delivery_date).toLocaleDateString()}
-                      </span>
-                    </div>
-                  )}
                   
                   {request.approved_by_name && (
                     <div className="p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
