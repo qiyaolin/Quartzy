@@ -76,6 +76,69 @@ start_local_server.bat
 
 如果数据库连接失败，脚本会直接停止后端启动并输出明确错误，不会继续迁移。
 
+## 本地 Ops Console（新）
+
+现在仓库内包含一个本机专用的图形化运维控制台，用于统一管理：
+
+- Quartzy 后端 / 前端 / DYMO / Ops Console
+- CellStorage Windows 服务 / 打印代理
+
+### 打开控制台
+
+在仓库根目录执行：
+
+```bash
+start_ops_console.bat
+```
+
+默认访问地址：
+
+```text
+http://127.0.0.1:3210
+```
+
+控制台支持：
+
+- 实时状态监控
+- 日志流查看
+- Quartzy 启动 / 停止 / 重启 / Release
+- CellStorage 启动 / 停止 / 重启
+- 一键修复 Quartzy 开机启动任务
+
+### 修复 Quartzy 开机启动任务
+
+在仓库根目录执行：
+
+```bash
+repair_startup_tasks.bat
+```
+
+该脚本会注册以下启动任务：
+
+- `QuartzyBackend`
+- `QuartzyFrontend`
+- `QuartzyPrintAgent`
+- `QuartzyOpsConsole`
+
+同时会检查 `CellStorageApp` 和 `CellStorage Print Agent` 是否存在。
+
+## Quartzy Runtime / Release 分离
+
+为了让 Quartzy 更适合开机常驻，本地运行现在区分为两条链路：
+
+- `boot/runtime start`
+  - 启动 Quartzy 后端
+  - 启动最近一次成功构建的前端静态文件
+  - 启动 Quartzy DYMO
+  - 不做前端 build，不做数据库 migrate
+- `release`
+  - 前端 build
+  - 后端 migrate
+  - 重启 Quartzy 运行时组件
+  - 做健康检查
+
+Quartzy 后端的长运行模式现在优先使用 `waitress`，不再以 Django `runserver` 作为常驻启动方式。
+
 ## 本地对外发布前端（Cloudflare Tunnel）
 
 当 `inventory.hayerlab.org` 通过 Cloudflare Tunnel 指向本机 `localhost:3000` 时，建议使用生产静态包而不是 `npm start` 开发包，以避免移动端缓存旧 `bundle.js`。

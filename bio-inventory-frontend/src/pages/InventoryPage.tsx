@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Clock3,
   Filter,
+  MoreHorizontal,
   Package,
   QrCode,
   Search,
@@ -32,8 +33,9 @@ const defaultVisibleColumns = {
   tracking: true,
   requestState: true,
 };
-const toolbarButtonClass = 'inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-900';
-const toolbarPrimaryButtonClass = 'inline-flex h-9 items-center justify-center rounded-xl bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-slate-800';
+const toolbarButtonClass = 'inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900';
+const toolbarPrimaryButtonClass = 'inline-flex h-10 items-center justify-center rounded-xl bg-sky-600 px-4 text-sm font-semibold text-white shadow-[0_12px_24px_-14px_rgba(2,132,199,0.8)] transition hover:bg-sky-500';
+const actionSecondaryButtonClass = 'inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900';
 
 const formatQuantity = (value) => {
   const numeric = parseFloat(value || 0);
@@ -214,9 +216,11 @@ const InventoryPage = ({
   const [selectedPrintItem, setSelectedPrintItem] = useState(null);
   const [showColumnsPanel, setShowColumnsPanel] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showMoreActions, setShowMoreActions] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState(defaultVisibleColumns);
   const columnsButtonRef = useRef(null);
   const advancedFiltersButtonRef = useRef(null);
+  const moreActionsButtonRef = useRef(null);
 
   const fetchInventory = useCallback(async () => {
     if (!token) {
@@ -433,6 +437,20 @@ const InventoryPage = ({
     return filteredGroups.slice(startIndex, startIndex + itemsPerPage);
   }, [currentPage, filteredGroups]);
 
+  const activeFilterCount = useMemo(
+    () => ['location', 'item_type', 'vendor', 'expired', 'low_stock']
+      .reduce((count, key) => count + ((filters[key] || []).length), 0),
+    [filters],
+  );
+  const showingScopedResults = savedView !== 'all'
+    || activeTaskChip !== 'all'
+    || Boolean(filters.search)
+    || activeFilterCount > 0;
+  const inventorySummary = showingScopedResults
+    ? `Showing ${filteredGroups.length} of ${groupedInventory.length} inventory groups.`
+    : `Ready to review ${groupedInventory.length} inventory groups.`;
+  const activeFiltersLabel = activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filters';
+
   useEffect(() => {
     setCurrentPage(1);
   }, [savedView, activeTaskChip, filters]);
@@ -453,6 +471,7 @@ const InventoryPage = ({
       return;
     }
     setShowAdvancedFilters(false);
+    setShowMoreActions(false);
   }, [showColumnsPanel]);
 
   useEffect(() => {
@@ -460,12 +479,26 @@ const InventoryPage = ({
       return;
     }
     setShowColumnsPanel(false);
+    setShowMoreActions(false);
   }, [showAdvancedFilters]);
+
+  useEffect(() => {
+    if (!showMoreActions) {
+      return;
+    }
+    setShowColumnsPanel(false);
+    setShowAdvancedFilters(false);
+  }, [showMoreActions]);
 
   const handleViewRequestHistory = (item) => {
     setSelectedHistoryItem(item);
     setIsRequestHistoryOpen(true);
   };
+
+  const handleNavigateToReceive = useCallback(() => {
+    window.history.pushState(null, '', '/requests');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, []);
 
   const exportGroups = useCallback((groupsToExport) => {
     const rows = groupsToExport.flatMap((group) => group.instances.map((item) => ({
@@ -655,133 +688,226 @@ const InventoryPage = ({
     { key: 'item_type', label: 'Type', options: filterOptions?.itemTypes || [] },
     { key: 'vendor', label: 'Vendor', options: filterOptions?.vendors || [] },
   ];
+  const quickFilterStyles = {
+    low_stock: {
+      active: 'border-amber-200 bg-amber-50 text-amber-900',
+      inactive: 'border-transparent bg-amber-50/60 text-amber-700 hover:border-amber-200 hover:bg-white hover:text-amber-800',
+      icon: 'text-amber-500',
+      badgeActive: 'bg-white text-amber-700',
+      badgeInactive: 'bg-white text-amber-500',
+    },
+  };
 
   return (
     <main className="flex-grow bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.08),_transparent_40%),linear-gradient(180deg,#f8fafc,#f1f5f9)] p-4 md:p-6 lg:p-8">
       <div className="mx-auto max-w-[1600px] space-y-4">
         <section className="rounded-[22px] border border-slate-200 bg-white shadow-[0_18px_50px_-34px_rgba(15,23,42,0.34)]">
-          <div className="border-b border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(240,249,255,0.88))] px-5 py-4">
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="inline-flex h-9 items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-3 text-xs font-semibold uppercase tracking-[0.2em] text-sky-700">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Inventory
-                  </div>
-                  <div className="min-w-0">
-                    <h1 className="truncate text-xl font-black tracking-tight text-slate-900">Inventory</h1>
-                    <p className="text-xs text-slate-500">
-                      {filteredGroups.length} groups · {groupedInventory.filter((group) => group.hasLowStock).length} low stock
-                    </p>
+          <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0.98),rgba(241,245,249,0.9))] px-5 py-5">
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-[1.75rem] font-black tracking-tight text-slate-950">Inventory</h1>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm leading-6 text-slate-700">
+                    <span>{inventorySummary}</span>
+                    {savedView !== 'all' && (
+                      <span className="text-slate-500">View: {activeSavedView.label}</span>
+                    )}
+                    {activeFilterCount > 0 && (
+                      <span className="text-slate-500">{activeFilterCount} filters active</span>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => onAddItemClick?.()} className={toolbarButtonClass}>
+                <div className="flex flex-wrap items-center gap-2 xl:justify-end xl:flex-nowrap">
+                  <button type="button" onClick={() => onAddItemClick?.()} className={`${toolbarPrimaryButtonClass} hidden md:inline-flex`}>
                     <Package className="mr-2 h-4 w-4" />
                     Add Item
                   </button>
-                  <button type="button" onClick={() => setIsScannerOpen(true)} className={toolbarPrimaryButtonClass}>
-                    <QrCode className="mr-2 h-4 w-4" />
+                  <button type="button" onClick={() => setIsScannerOpen(true)} className={`${actionSecondaryButtonClass} hidden md:inline-flex`}>
+                    <QrCode className="mr-2 h-4 w-4 text-slate-500" />
                     Scan Labeled Item
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.history.pushState(null, '', '/requests');
-                      window.dispatchEvent(new PopStateEvent('popstate'));
-                    }}
-                    className={toolbarButtonClass}
-                  >
-                    <Warehouse className="mr-2 h-4 w-4" />
+                  <button type="button" onClick={handleNavigateToReceive} className={`${actionSecondaryButtonClass} hidden md:inline-flex`}>
+                    <Warehouse className="mr-2 h-4 w-4 text-slate-500" />
                     Receive
                   </button>
-                  <button type="button" onClick={() => exportGroups(filteredGroups)} className={toolbarButtonClass}>
-                    <Package className="mr-2 h-4 w-4" />
+                  <button type="button" onClick={() => exportGroups(filteredGroups)} className={`${actionSecondaryButtonClass} hidden md:inline-flex`}>
+                    <Package className="mr-2 h-4 w-4 text-slate-500" />
                     Export
                   </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex flex-wrap gap-2">
-                  {savedViews.map((view) => (
-                    <button
-                      key={view.id}
-                      type="button"
-                      onClick={() => setSavedView(view.id)}
-                      className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition ${
-                        savedView === view.id
-                          ? 'bg-slate-950 text-white shadow-sm'
-                          : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                      }`}
-                    >
-                      {view.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                  <div className="flex w-full min-w-[260px] max-w-2xl items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                    <Search className="h-4 w-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={filters.search || ''}
-                      onChange={(event) => onFilterChange?.('search', event.target.value)}
-                      placeholder="Search item, catalog, lot, barcode, vendor, location..."
-                      className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                    />
-                    <Filter className="h-4 w-4 text-slate-300" />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      ref={columnsButtonRef}
-                      type="button"
-                      onClick={() => setShowColumnsPanel((previous) => !previous)}
-                      className={toolbarButtonClass}
-                    >
-                      Columns
-                      <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${showColumnsPanel ? 'rotate-180' : ''}`} />
-                    </button>
-                    <button
-                      ref={advancedFiltersButtonRef}
-                      type="button"
-                      onClick={() => setShowAdvancedFilters((previous) => !previous)}
-                      className={toolbarButtonClass}
-                    >
-                      Advanced Filters
-                      <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-5 py-3">
-            <div className="flex flex-wrap gap-2">
-              {taskChips.map((chip) => {
-                const ChipIcon = chip.icon;
-                return (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() => setActiveTaskChip(chip.id)}
-                    className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition ${
-                      activeTaskChip === chip.id
-                        ? 'border-sky-200 bg-sky-50 text-sky-700'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                    }`}
-                  >
-                    <ChipIcon className="h-3.5 w-3.5" />
-                    {chip.label}
-                    <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] text-slate-500">{chip.count}</span>
+                  <button type="button" onClick={() => setIsScannerOpen(true)} className={`${toolbarPrimaryButtonClass} md:hidden`}>
+                    <QrCode className="mr-2 h-4 w-4" />
+                    Scan
                   </button>
-                );
-              })}
+                  <button
+                    ref={moreActionsButtonRef}
+                    type="button"
+                    onClick={() => setShowMoreActions((previous) => !previous)}
+                    className={`${toolbarButtonClass} md:hidden`}
+                  >
+                    <MoreHorizontal className="mr-2 h-4 w-4" />
+                    More
+                    <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${showMoreActions ? 'rotate-180' : ''}`} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-[24px] bg-white px-4 py-4 shadow-[0_26px_52px_-34px_rgba(15,23,42,0.28),0_2px_8px_-6px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/5">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(500px,1.2fr)] xl:items-center">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5 rounded-2xl bg-slate-50 p-1.5 ring-1 ring-slate-200/80">
+                      {savedViews.map((view) => (
+                        <button
+                          key={view.id}
+                          type="button"
+                          onClick={() => setSavedView(view.id)}
+                          className={`inline-flex h-10 items-center justify-center rounded-xl px-3 text-sm font-semibold transition ${
+                            savedView === view.id
+                              ? 'bg-slate-200 text-slate-950 shadow-sm'
+                              : 'text-slate-500 hover:bg-white hover:text-slate-800'
+                          }`}
+                        >
+                          {view.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center lg:justify-end">
+                    <div className="flex w-full min-w-0 items-center gap-3 rounded-2xl border border-slate-200/90 bg-slate-50 px-4 py-3 shadow-sm">
+                      <Search className="h-4 w-4 text-slate-500" />
+                      <input
+                        type="text"
+                        value={filters.search || ''}
+                        onChange={(event) => onFilterChange?.('search', event.target.value)}
+                        placeholder="Search item, catalog, lot, barcode, vendor, location..."
+                        className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                      />
+                      <Filter className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-nowrap">
+                      <button
+                        ref={columnsButtonRef}
+                        type="button"
+                        onClick={() => setShowColumnsPanel((previous) => !previous)}
+                        className={toolbarButtonClass}
+                      >
+                        Columns
+                        <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${showColumnsPanel ? 'rotate-180' : ''}`} />
+                      </button>
+                      <button
+                        ref={advancedFiltersButtonRef}
+                        type="button"
+                        onClick={() => setShowAdvancedFilters((previous) => !previous)}
+                        className={toolbarButtonClass}
+                      >
+                        {activeFiltersLabel}
+                        <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4 lg:flex-row lg:items-center">
+                  <div className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Quick Filters
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {taskChips.map((chip) => {
+                      const ChipIcon = chip.icon;
+                      const style = quickFilterStyles[chip.id];
+                      const activeClasses = style?.active || 'border-slate-300 bg-slate-100 text-slate-900';
+                      const inactiveClasses = style?.inactive || 'border-transparent bg-slate-50 text-slate-500 hover:border-slate-200 hover:bg-white hover:text-slate-800';
+                      const iconClasses = style?.icon || 'text-slate-400';
+                      const badgeActive = style?.badgeActive || 'bg-white text-slate-700';
+                      const badgeInactive = style?.badgeInactive || 'bg-white text-slate-400';
+                      return (
+                        <button
+                          key={chip.id}
+                          type="button"
+                          onClick={() => setActiveTaskChip(chip.id)}
+                          className={`inline-flex h-9 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition ${
+                            activeTaskChip === chip.id
+                              ? activeClasses
+                              : inactiveClasses
+                          }`}
+                        >
+                          <ChipIcon className={`h-3.5 w-3.5 ${iconClasses}`} />
+                          {chip.label}
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] ${
+                            activeTaskChip === chip.id
+                              ? badgeActive
+                              : badgeInactive
+                          }`}
+                          >
+                            {chip.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
+
+        <ToolbarPopover
+          anchorRef={moreActionsButtonRef}
+          isOpen={showMoreActions}
+          onClose={() => setShowMoreActions(false)}
+          widthClass="w-60"
+        >
+          <div className="p-2">
+            <p className="px-3 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">More Actions</p>
+            <div className="space-y-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMoreActions(false);
+                  setIsScannerOpen(true);
+                }}
+                className="hidden w-full items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:flex"
+              >
+                <QrCode className="mr-3 h-4 w-4 text-slate-400" />
+                Scan Labeled Item
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMoreActions(false);
+                  handleNavigateToReceive();
+                }}
+                className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <Warehouse className="mr-3 h-4 w-4 text-slate-400" />
+                Receive
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMoreActions(false);
+                  exportGroups(filteredGroups);
+                }}
+                className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                <Package className="mr-3 h-4 w-4 text-slate-400" />
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMoreActions(false);
+                  onAddItemClick?.();
+                }}
+                className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 md:hidden"
+              >
+                <Package className="mr-3 h-4 w-4 text-slate-400" />
+                Add Item
+              </button>
+            </div>
+          </div>
+        </ToolbarPopover>
 
         <ToolbarPopover
           anchorRef={columnsButtonRef}

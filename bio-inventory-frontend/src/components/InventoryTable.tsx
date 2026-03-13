@@ -42,7 +42,7 @@ const getRequestTone = (requestState) => {
 };
 
 const StatusPill = ({ children, tone }) => (
-  <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}>{children}</span>
+  <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-3 py-1 text-xs font-semibold leading-none ${tone}`}>{children}</span>
 );
 
 const InventoryTable = ({
@@ -205,9 +205,11 @@ const InventoryTable = ({
                         >
                           <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </button>
-                        <button type="button" className="text-left" onClick={() => onSelectGroup?.(group)}>
-                          <div className="flex items-center gap-2">
-                            <Package className="h-4 w-4 text-sky-600" />
+                        <button type="button" className="min-w-0 text-left" onClick={() => onSelectGroup?.(group)}>
+                          <div className="flex min-w-0 items-start gap-2">
+                            <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center">
+                              <Package className="h-4 w-4 shrink-0 text-sky-600" />
+                            </span>
                             <span className="font-semibold text-slate-900">{group.name}</span>
                           </div>
                           <p className="mt-2 text-sm text-slate-500">
@@ -238,17 +240,19 @@ const InventoryTable = ({
                     )}
                     {visibleColumns?.lastUsed !== false && (
                       <td className="px-5 py-4 align-top">
-                        <p className="text-sm font-semibold text-slate-900">
-                          {group.latestLastUsedDate ? formatDate(group.latestLastUsedDate) : 'Not used yet'}
-                        </p>
-                        <p className="mt-2 text-sm text-slate-500">
-                          {group.latestReceivedDate ? `Received ${formatDate(group.latestReceivedDate)}` : 'No receive history'}
-                        </p>
+                        <div className="min-w-[150px]">
+                          <p className="whitespace-nowrap text-sm font-semibold text-slate-900">
+                            {group.latestLastUsedDate ? formatDate(group.latestLastUsedDate) : 'Not used yet'}
+                          </p>
+                          <p className="mt-2 whitespace-nowrap text-sm text-slate-500">
+                            {group.latestReceivedDate ? `Received ${formatDate(group.latestReceivedDate)}` : 'No receive history'}
+                          </p>
+                        </div>
                       </td>
                     )}
                     {visibleColumns?.tracking !== false && (
                       <td className="px-5 py-4 align-top">
-                        <div className="space-y-2">
+                        <div className="min-w-[128px] space-y-2">
                           <StatusPill tone="bg-slate-50 text-slate-700 border-slate-200">{group.trackingSummary}</StatusPill>
                           {group.hasLabeledInstances && (
                             <div className="flex items-center gap-2 text-sm text-slate-500">

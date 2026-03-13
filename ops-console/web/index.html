@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quartzy Ops Console</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Local Ops Console</p>
+          <h1>Quartzy + CellStorage Control Deck</h1>
+          <p class="hero-copy">
+            Live runtime telemetry, log streaming, and one-click actions for both projects on this machine.
+          </p>
+        </div>
+        <div class="hero-meta">
+          <div class="meta-card">
+            <span>Access</span>
+            <strong>127.0.0.1 only</strong>
+          </div>
+          <div class="meta-card">
+            <span>Mode</span>
+            <strong>Operational</strong>
+          </div>
+          <button id="refreshButton" class="button button-primary">Refresh Status</button>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="projects" id="projects"></section>
+
+        <section class="panel timeline-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Action Timeline</p>
+              <h2>Current and Recent Operations</h2>
+            </div>
+            <span class="badge" id="actionState">Idle</span>
+          </div>
+          <div id="actionFeed" class="action-feed"></div>
+        </section>
+
+        <section class="panel logs-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Live Logs</p>
+              <h2>Real-Time Tail</h2>
+            </div>
+            <select id="logSelector" class="log-selector"></select>
+          </div>
+          <pre id="logOutput" class="log-output">Connecting...</pre>
+        </section>
+      </main>
+    </div>
+
+    <template id="projectTemplate">
+      <section class="panel project-panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow project-tag"></p>
+            <h2 class="project-title"></h2>
+          </div>
+          <div class="button-row project-actions"></div>
+        </div>
+        <div class="component-grid"></div>
+      </section>
+    </template>
+
+    <template id="componentTemplate">
+      <article class="component-card">
+        <div class="component-top">
+          <div>
+            <h3 class="component-name"></h3>
+            <p class="component-message"></p>
+          </div>
+          <span class="badge component-status"></span>
+        </div>
+        <div class="component-meta"></div>
+      </article>
+    </template>
+
+    <script src="/assets/app.js"></script>
+  </body>
+  </html>
